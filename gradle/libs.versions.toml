@@ -1,0 +1,37 @@
+[versions]
+activityKtx = "1.9.0"
+minSdk = "21"
+compileSdk = "34"
+targetSdk = "34"
+rxjava = "2.2.19"
+rxandroid = "2.1.1"
+jvm-version = "1.8"
+
+android-gradle-plugin = "8.5.0"
+ksp = "1.9.24-1.0.20"
+kotlin = "1.9.24"
+coreKtx = "1.13.1"
+lifecycle-process = "2.6.2"
+
+appcompat = "1.7.0"
+coroutines-android = "1.8.0"
+material = "1.12.0"
+constraintlayout = "2.1.4"
+
+[libraries]
+activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
+core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
+material = { module = "com.google.android.material:material", version.ref = "material" }
+constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
+lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle-process" }
+
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }
+android-lib = { id = "com.android.library", version.ref = "android-gradle-plugin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+
