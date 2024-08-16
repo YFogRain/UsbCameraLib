@@ -359,6 +359,18 @@ public class UvcCamera {
         return CameraNativeUtils.nativeSetPreviewSize(nativeId, supportSize.getWidth(), supportSize.getHeight(), supportSize.getFps(), supportSize.isMjpeg());
     }
 
+
+    /**
+     * 获取当前分辨率列表信息
+     * 只有打开摄像头后此方法才有数据
+     *
+     * @return 返回对应的分辨率列表信息
+     */
+    public HashMap<PreviewModeState, List<SupportSize>> getSupportPreviewSizes() {
+
+        return supportSizes;
+    }
+
     /**
      * 获取当前宽高对应使用的分辨率属性
      *
