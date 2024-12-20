@@ -345,11 +345,10 @@ public class UvcCamera {
     public boolean setPreviewSize(int width, int height, FormatModeState formatState) {
         long nativeId = uvcNativeId.get();
         if (nativeId == 0L) return false;
-        CameraSize cameraSize = CameraUtils.loadUseCameraSize(supportSizes, width, height, formatState);
-        if (cameraSize == null) {
+        if (!CameraUtils.isUsePreviewSize(supportSizes, width, height, formatState)) {
             return false;
         }
-        return CameraNativeUtils.nativeSetPreviewSize(nativeId, cameraSize.getWidth(), cameraSize.getHeight(), 4);
+        return CameraNativeUtils.nativeSetPreviewSize(nativeId, width, height, formatState.getValue());
     }
 
     /**

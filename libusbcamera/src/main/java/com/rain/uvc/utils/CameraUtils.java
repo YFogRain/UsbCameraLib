@@ -3,8 +3,6 @@ package com.rain.uvc.utils;
 import com.rain.uvc.mode.CameraSize;
 import com.rain.uvc.mode.FormatModeState;
 
-import java.util.HashMap;
-import java.util.List;
 
 /**
  * @author yuan
@@ -19,16 +17,16 @@ public class CameraUtils {
      * @param height 高
      * @return 返回当前可使用的分辨率参数
      */
-    public static CameraSize loadUseCameraSize(CameraSize[] cameraSizes, int width, int height, FormatModeState formatState) {
+    public static boolean isUsePreviewSize(CameraSize[] cameraSizes, int width, int height, FormatModeState formatState) {
         if (cameraSizes == null) {
-            return null;
+            return false;
         }
         for (CameraSize size : cameraSizes) {
             if (size.getWidth() == width && size.getHeight() == height && size.getFormat() == formatState) {
-                return size;
+                return true;
             }
         }
-        return null;
+        return false;
 
     }
 }
