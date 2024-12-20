@@ -2,8 +2,8 @@
 // Created by MI T on 2024/8/1.
 //
 
-#include "../UvcPreview.h"
-#include "../state/CameraParameterState.h"
+#include "UvcPreview.h"
+#include "CameraParameterState.h"
 
 UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         theVM(nullptr),
@@ -14,7 +14,6 @@ UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         frameMode(DEFAULT_PREVIEW_MODE),
         requestWidth(DEFAULT_PREVIEW_WIDTH),
         requestHeight(DEFAULT_PREVIEW_HEIGHT),
-        requestFps(DEFAULT_PREVIEW_FPS),
         mPreviewWindow(nullptr),
         frameBytes(DEFAULT_PREVIEW_WIDTH * DEFAULT_PREVIEW_HEIGHT * 2),
         mIsRunning(false) {
@@ -57,8 +56,7 @@ void UvcPreview::initFrame() {
     }
     requestWidth = width;
     requestHeight = height;
-    requestFps = fps;
-    LOG_D("实际使用-宽高:%d-%d;fps:%d", requestWidth, requestHeight, requestFps);
+    LOG_D("实际使用-宽高:%d-%d", requestWidth, requestHeight);
 }
 
 int UvcPreview::startPreview() {
@@ -74,9 +72,11 @@ int UvcPreview::startPreview() {
 }
 
 int UvcPreview::prepare_preview(uvc_stream_ctrl_t *ctrl) {
-    LOG_D("获取对应的流控制器-sie:%d-%d,fps:%d", requestWidth, requestHeight, requestFps);
-    uvc_error_t ret = uvc_get_stream_ctrl_format_size(mDeviceHandle, ctrl, frameMode,
-                                                      requestWidth, requestHeight, requestFps);
+    LOG_D("获取对应的流控制器-sie:%d-%d", requestWidth, requestHeight);
+    uvc_error_t ret = uvc_get_stream(mDeviceHandle, ctrl,
+                                     frameMode == UVC_FORMAT_MJPEG ? UVC_FRAME_FORMAT_MJPEG
+                                                                   : UVC_FRAME_FORMAT_YUYV,
+                                     requestWidth, requestHeight);
     LOG_D("获取对应的流控制器-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
@@ -95,10 +95,9 @@ int UvcPreview::prepare_preview(uvc_stream_ctrl_t *ctrl) {
         frameWidth = requestWidth;
         frameHeight = requestHeight;
     }
-    frameBytes = frameWidth * frameHeight * (frameMode == UVC_FRAME_FORMAT_YUYV ? 2 : 4);
+    frameBytes = frameWidth * frameHeight * (frameMode == UVC_FORMAT_NV21 ? 2 : 4);
     return UVC_SUCCESS;
 }
-
 
 int UvcPreview::do_preview(uvc_stream_ctrl_t *ctrl) {
     uvc_error_t ret = uvc_start_streaming(mDeviceHandle, ctrl, uvc_stream_callback, (void *) this,
@@ -137,12 +136,12 @@ void UvcPreview::uvc_stream_callback(uvc_frame_t *frame, void *vptr_args) {
     }
     uvc_frame_format format = frame->frame_format;
     if (!format || (format != UVC_FRAME_FORMAT_MJPEG && format != UVC_FRAME_FORMAT_YUYV)) {
-        LOG_E("当前数据格式错误.metadata_bytes:%d", frame->metadata_bytes);
+        LOG_E("当前数据格式错误.metadata_bytes:%zu", frame->metadata_bytes);
         return;
     }
     if ((format != UVC_FRAME_FORMAT_MJPEG && frame->data_bytes < preview->frameBytes) ||
         !frame->data) {
-        LOG_E("当前数据大小不符合；；data_bytes:%d,frameBytes:%d", frame->data_bytes,
+        LOG_E("当前数据大小不符合；；data_bytes:%zu,frameBytes:%zu", frame->data_bytes,
               preview->frameBytes);
         return;
     }
@@ -177,10 +176,6 @@ void *UvcPreview::capture_thread_func(void *vptr_args) {
     pthread_exit(nullptr);
 }
 
-// Clamp 函数确保颜色值在 0-255 之间
-inline uint8_t clamp(int value) {
-    return (value < 0) ? 0 : (value > 255) ? 255 : value;
-}
 
 void UvcPreview::drawFrame(uvc_frame_t *frame) {
     if (!mPreviewWindow) {
@@ -189,11 +184,11 @@ void UvcPreview::drawFrame(uvc_frame_t *frame) {
     pthread_mutex_lock(&captureMutex);
 //    //获取bgr类型的数据数组
     if (frame) {
-        uint8_t *src = (uint8_t *) frame->data;
+        auto *src = (uint8_t *) frame->data;
         ANativeWindow_Buffer buffer;
         // 锁定缓冲区以获取可以写入的内存区域
         if (ANativeWindow_lock(mPreviewWindow, &buffer, nullptr) == 0) {
-            uint8_t *dst = (uint8_t *) buffer.bits;
+            auto *dst = (uint8_t *) buffer.bits;
             uint32_t height = frame->height;
             uint32_t width = frame->width;
             // 将RGB数据复制到RGBA图像，并设置alpha值为255
@@ -211,28 +206,33 @@ void UvcPreview::drawFrame(uvc_frame_t *frame) {
 }
 
 void UvcPreview::putFrame(uvc_frame_t *frame) {
-    //执行锁定
+    // 执行锁定
     pthread_mutex_lock(&captureMutex);
-    //如果缓存池的数据满了，则吧第一帧的数据删除掉
-    if (previewFrames.size() >= MAX_FRAME) {
-        uvc_frame_t *pFrame = previewFrames.remove(0);
-        uvc_free_frame(pFrame);
+    // 如果缓存池的数据满了，则不加入到当前缓存池，直接释放数据
+    if (mIsRunning && previewFrames.size() < MAX_FRAME) {
+        previewFrames.put(frame);
+        frame = nullptr;
     }
-    previewFrames.put(frame);
     pthread_cond_signal(&captureCond);
     pthread_mutex_unlock(&captureMutex);
+    if (frame) {
+        // 如果没有写入到缓存，则直接释放当前对象
+        uvc_free_frame(frame);
+    }
 }
 
 uvc_frame_t *UvcPreview::waitPreviewFrame() {
     uvc_frame_t *frame = nullptr;
     pthread_mutex_lock(&captureMutex);
-    //如果当前内容为空，则等待获取数据，被唤醒
-    if (previewFrames.isEmpty()) {
-        pthread_cond_wait(&captureCond, &captureMutex);
-    }
-    //如果当前是正在预览，并且预览数据大于0
-    if (mIsRunning && !previewFrames.isEmpty()) {
-        frame = previewFrames.remove(0);
+    {
+        // 如果当前内容为空，则等待获取数据，被唤醒
+        if (previewFrames.isEmpty()) {
+            pthread_cond_wait(&captureCond, &captureMutex);
+        }
+        // 如果当前是正在预览，并且预览数据大于0
+        if (mIsRunning && !previewFrames.isEmpty()) {
+            frame = previewFrames.remove(0);
+        }
     }
     pthread_mutex_unlock(&captureMutex);
     return frame;
@@ -260,21 +260,19 @@ int UvcPreview::stopPreview() {
     return UVC_SUCCESS;
 }
 
-int UvcPreview::setPreviewSize(int width, int height, int fps, bool mode) {
-    LOG_D("setPreviewSize-size:%d*%d,fps:%d", width, height, fps);
-    if ((requestWidth != width) || (requestHeight != height) || (requestFps != fps)) {
+int UvcPreview::setPreviewSize(int width, int height, int format) {
+    LOG_D("setPreviewSize-size:%d*%d,format:%d", width, height, format);
+    if ((requestWidth != width) || (requestHeight != height)) {
         requestWidth = width;
         requestHeight = height;
-        requestFps = fps;
     }
-    if (mode) {
-        frameMode = UVC_FRAME_FORMAT_MJPEG;
-    } else {
-        frameMode = UVC_FRAME_FORMAT_YUYV;
-    }
+    frameMode = format;
+    //可能会出现第一次设置流失败，现在在uvc层进行了两次获取，不知道是否能避免
     uvc_stream_ctrl_t ctrl;
-    uvc_error_t ret = uvc_get_stream_ctrl_format_size(mDeviceHandle, &ctrl, frameMode,
-                                                      requestWidth, requestHeight, requestFps);
+    uvc_error_t ret = uvc_get_stream(mDeviceHandle, &ctrl,
+                                     frameMode == UVC_FORMAT_MJPEG ? UVC_FRAME_FORMAT_MJPEG
+                                                                   : UVC_FRAME_FORMAT_YUYV,
+                                     requestWidth, requestHeight);
     LOG_D("获取对应的流控制器-setPreviewSize-结果:%d", ret);
     return UVC_SUCCESS;
 }
@@ -320,7 +318,7 @@ void *UvcPreview::preview_thread_func(void *vptr_args) {
         JNIEnv *env = nullptr;
         while (preview->mIsRunning) {
             //等待获取预览的数据
-            uvc_frame_t *pFrame = preview->getLastFrame();
+            uvc_frame_t *pFrame = preview->waitLastFrame();
             if (!pFrame)continue;
             //将数据回到给上层
             if (preview->theVM && !env) {
@@ -337,18 +335,22 @@ void *UvcPreview::preview_thread_func(void *vptr_args) {
 }
 
 void UvcPreview::putPreviewFrame(uvc_frame_t *frame) {
-    //执行锁定
+    // 执行锁定
     pthread_mutex_lock(&previewMutex);
-    //如果缓存池的数据满了，则吧第一帧的数据删除掉
-    if (lastFrames) {
-        uvc_free_frame(lastFrames);
+    // 如果缓存池的数据满了，则吧第一帧的数据删除掉
+    if (mIsRunning && !lastFrames) {
+        lastFrames = frame;
+        frame = nullptr;
     }
-    lastFrames = frame;
-    pthread_cond_signal(&previewCond);
+    pthread_cond_broadcast(&previewCond);
     pthread_mutex_unlock(&previewMutex);
+    if (frame) {
+        // 如果没有写入到缓存，则直接释放当前对象
+        uvc_free_frame(frame);
+    }
 }
 
-uvc_frame_t *UvcPreview::getLastFrame() {
+uvc_frame_t *UvcPreview::waitLastFrame() {
     uvc_frame_t *frame = nullptr;
     pthread_mutex_lock(&previewMutex);
     //如果当前内容为空，则等待获取数据，被唤醒
@@ -431,7 +433,7 @@ bool UvcPreview::setDisplayOrientation(int orientation) {
     return true;
 }
 
-int UvcPreview::getDisplayOrientation() {
+int UvcPreview::getDisplayOrientation() const {
     return mDisplayOrientation;
 }
 
@@ -439,10 +441,6 @@ std::pair<int, int> UvcPreview::getPreviewSize() {
     return std::make_pair(requestWidth, requestHeight);
 }
 
-bool UvcPreview::currentFrameModeIsMjpeg() {
-    return frameMode == UVC_FRAME_FORMAT_MJPEG;
-}
-
-int UvcPreview::getCurrentFps() {
-    return requestFps;
+int UvcPreview::loadCurrentFormat() {
+    return frameMode;
 }

@@ -27,11 +27,10 @@ private:
     ANativeWindow *mPreviewWindow;
     volatile bool mIsRunning;
     int requestWidth, requestHeight; //设置的预览数据
-    int requestFps;
     int frameWidth, frameHeight; //实际使用的预览控件的宽高
     size_t frameBytes;//预览数据大小，为了校验数据完整性
 
-    uvc_frame_format frameMode;//使用的类型
+    int frameMode;//使用的类型
     pthread_t captureThread; //捕获预览流，并且绘制到页面的线程
     pthread_mutex_t captureMutex;//捕获线程的互斥锁
     pthread_cond_t captureCond;//等待专用的条件变量
@@ -63,7 +62,7 @@ private:
 
     uvc_frame_t *waitPreviewFrame(); //等待获取数据
 
-    uvc_frame_t *getLastFrame();//获取最后一帧数据
+    uvc_frame_t *waitLastFrame();//获取最后一帧数据
 
     void drawFrame(uvc_frame_t *frame);//将数据绘制到控件上去，
 
@@ -79,7 +78,7 @@ public:
 
     int stopPreview();
 
-    int setPreviewSize(int width, int height, int fps, bool mode);
+    int setPreviewSize(int width, int height,int format);
 
     int setDisplaySurface(ANativeWindow *preview_window);
 
@@ -88,13 +87,11 @@ public:
     //设置预览方向
     bool setDisplayOrientation(int orientation);
 
-    int getDisplayOrientation();
+    int getDisplayOrientation() const;
 
     std::pair<int, int> getPreviewSize();
 
-    bool currentFrameModeIsMjpeg();
-
-    int getCurrentFps();
+    int loadCurrentFormat();
 };
 
 

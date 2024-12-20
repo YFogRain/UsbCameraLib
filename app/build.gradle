@@ -1,0 +1,62 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.kapt)
+}
+
+android {
+    namespace = "com.rain.uvc.demo"
+    compileSdk libs.versions.compileSdk.get().toInteger()
+
+    defaultConfig {
+        applicationId = "com.rain.uvc.demo"
+        minSdk libs.versions.minSdk.get().toInteger()
+        targetSdk libs.versions.targetSdk.get().toInteger()
+        versionCode = 1
+        versionName = "1.0.1"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = libs.versions.jvm.version.get()
+    }
+
+    buildFeatures {
+        buildConfig true
+        dataBinding true
+    }
+    android.applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach {
+            def apkName = "uvcdemo_${variant.versionName}_${releaseTime()}"
+            def buildTypeName = variant.buildType.name
+            if ("release" != buildTypeName) {
+                apkName = apkName + "_${buildTypeName}"
+            }
+            //替换的字符串
+            outputFileName = "${apkName}.apk"
+        }
+    }
+}
+//定义时间
+static def releaseTime() {
+    return new Date().format("YYMMddHHmm", TimeZone.getDefault())
+}
+
+dependencies {
+    implementation libs.core.ktx
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.activity.ktx
+    implementation libs.gson
+    implementation project(":libusbcamera")
+}

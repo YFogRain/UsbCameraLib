@@ -37,7 +37,7 @@ public:
 
     int disConnect();//断开连接释放内存
 
-    int setPreviewSize(int width, int height, int fps, bool mode); //设置预览分辨率
+    int setPreviewSize(int width, int height, int format); //设置预览分辨率
 
     int setPreviewDisplay(ANativeWindow *preview_window); //设置预览控件
 
@@ -63,9 +63,7 @@ public:
 
     void setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener);
 
-    bool  currentFrameModeIsMjpeg();
-
-    int getCurrentFps();
+    int loadCurrentFormat();
 };
 
 

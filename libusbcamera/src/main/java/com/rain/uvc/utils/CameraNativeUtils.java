@@ -1,21 +1,22 @@
 package com.rain.uvc.utils;
 
 import android.text.TextUtils;
-import android.util.Range;
+import android.util.Log;
 import android.view.Surface;
 
 import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.mode.PreviewModeState;
-import com.rain.uvc.mode.SupportSize;
-import com.rain.uvc.state.CameraNativeState;
-import com.rain.uvc.state.CameraRangeState;
+import com.rain.uvc.mode.CameraSize;
+import com.rain.uvc.mode.FormatModeState;
+import com.rain.uvc.state.CameraParameter;
+import com.rain.uvc.state.CameraParameterType;
+import com.rain.uvc.state.CameraSupportParameters;
+import com.rain.uvc.state.IntRange;
 import com.rain.uvc.state.OrientationState;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -29,6 +30,7 @@ public class CameraNativeUtils {
         System.loadLibrary("uvc");
         System.loadLibrary("uvcCamera");
     }
+
 
     /**
      * 创建对应的jni内存地址
@@ -93,11 +95,9 @@ public class CameraNativeUtils {
      * @param nativeId 对应的内存地址值
      * @param width    宽
      * @param height   高
-     * @param fps      对应使用的fps
-     * @param isMjpeg  是否使用mjpeg格式，通过获取分辨率列表获取是否支持
      * @return 是否成功
      */
-    public static native boolean nativeSetPreviewSize(long nativeId, int width, int height, int fps, boolean isMjpeg);
+    public static native boolean nativeSetPreviewSize(long nativeId, int width, int height, int format);
 
     /**
      * 获取是否支持自动曝光
@@ -179,80 +179,32 @@ public class CameraNativeUtils {
     private static native boolean nativeSetIntValue(long nativeId, int type, int value);
 
     /**
-     * 获取当前预览分辨率信息
-     *
-     * @param nativeId 对应的内存地址值
-     * @return 对应的预览分辨率信息
-     */
-    public static SupportSize getCurrentPreviewSize(long nativeId) {
-        if (nativeId == 0L) return null;
-        int[] ints = nativeGetPreviewSize(nativeId);
-        if (ints == null || ints.length != 4) {
-            return null;
-        }
-        return new SupportSize(ints[0], ints[1], ints[2], ints[3] == 1);
-
-    }
-
-    /**
      * 获取当前支持的分辨率列表
      *
      * @param nativeId 对应的内存地址值
      * @return 返回mjpeg和yuv的格式数据列表
      */
-    public static HashMap<PreviewModeState, List<SupportSize>> getSupportPreviewSizes(long nativeId) {
+    public static CameraSize[] getSupportPreviewSizes(long nativeId) {
         if (nativeId == 0L) return null;
         String value = nativeGetSupportPreviewSizes(nativeId);
         if (TextUtils.isEmpty(value)) return null;
-        HashMap<PreviewModeState, List<SupportSize>> maps = new HashMap<>();
         try {
-            JSONObject jsonObject = new JSONObject(value);
-            JSONArray yuvFormats = jsonObject.optJSONArray("yuv_formats");
-            if (yuvFormats != null && yuvFormats.length() > 0) {
-
-                List<SupportSize> yuvSizes = new ArrayList<>();
-                for (int i = 0; i < yuvFormats.length(); i++) {
-                    JSONObject size = yuvFormats.optJSONObject(i);
-                    int width = size.optInt("width");
-                    int height = size.optInt("height");
-                    int fps = size.optInt("fps");
-                    yuvSizes.add(new SupportSize(width, height, fps, false));
-                }
-                maps.put(PreviewModeState.YUV, yuvSizes);
+            JSONArray jsonArray = new JSONArray(value);
+            if (jsonArray.length() <= 0) {
+                return null;
             }
-
-            JSONArray mjpegFormats = jsonObject.optJSONArray("mjpeg_formats");
-            if (mjpegFormats != null && mjpegFormats.length() > 0) {
-                List<SupportSize> mjpegSizes = new ArrayList<>();
-                for (int i = 0; i < mjpegFormats.length(); i++) {
-                    JSONObject size = mjpegFormats.optJSONObject(i);
-                    int width = size.optInt("width");
-                    int height = size.optInt("height");
-                    int fps = size.optInt("fps");
-                    mjpegSizes.add(new SupportSize(width, height, fps, true));
-                }
-                maps.put(PreviewModeState.MJPEG, mjpegSizes);
+            List<CameraSize> lists = new ArrayList<>();
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject jsonObject = jsonArray.optJSONObject(i);
+                int width = jsonObject.optInt("width");
+                int height = jsonObject.optInt("height");
+                int format = jsonObject.optInt("format");
+                lists.add(new CameraSize(width, height, FormatModeState.valueToFormatMode(format)));
             }
-            return maps;
+            return lists.toArray(new CameraSize[0]);
         } catch (Exception e) {
             return null;
         }
-    }
-
-    /**
-     * 获取对应参数的范围
-     *
-     * @param nativeId 对应的内存地址值
-     * @param state    对应支持的参数范围值
-     * @return 参数范围信息，如果不存在，则返回null
-     */
-    public static Range<Integer> getParameterRange(long nativeId, CameraRangeState state) {
-        if (nativeId == 0L) return null;
-        int[] ints = nativeGetParameterRange(nativeId, state.getState());
-        if (ints == null || ints.length != 2) {
-            return null;
-        }
-        return new Range<>(ints[0], ints[1]);
     }
 
     /**
@@ -262,22 +214,26 @@ public class CameraNativeUtils {
      * @param key      对应支持的参数key
      * @return 返回值，如果不支持或者不存在，则返回null
      */
-    public static <T> T getParameter(long nativeId, CameraNativeState.Key<T> key) {
+    public static <T> T getParameter(long nativeId, CameraParameter.Key<T> key) {
         if (nativeId == 0L) return null;
-        Class<T> tClass = key.getmClass();
-        int number = key.getNumber();
-        if (tClass.isAssignableFrom(int.class)) {
-            int value = nativeGetIntValue(nativeId, number);
+        if (CameraSize.class.isAssignableFrom(key.mClass)) {
+            int[] ints = nativeGetPreviewSize(nativeId);
+            if (ints == null || ints.length != 3) {
+                return null;
+            }
+            return (T) new CameraSize(ints[0], ints[1], FormatModeState.valueToFormatMode(ints[2]));
+        }
+        if (OrientationState.class.isAssignableFrom(key.mClass)) {
+            int value = nativeGetIntValue(nativeId, ketTypeToNativeId(key.type));
+            return (T) OrientationState.orientationToState(value);
+        }
+        if (int.class.isAssignableFrom(key.mClass) || Integer.class.isAssignableFrom(key.mClass)) {
+            int value = nativeGetIntValue(nativeId, ketTypeToNativeId(key.type));
             return (T) Integer.valueOf(value);
         }
-        if (tClass.isAssignableFrom(boolean.class)) {
-            boolean value = nativeGetBoolValue(nativeId, number);
+        if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
+            boolean value = nativeGetBoolValue(nativeId, ketTypeToNativeId(key.type));
             return (T) Boolean.valueOf(value);
-        }
-
-        if (tClass.isAssignableFrom(OrientationState.class)) {
-            int value = nativeGetIntValue(nativeId, number);
-            return (T) OrientationState.orientationToState(value);
         }
         return null;
     }
@@ -290,20 +246,64 @@ public class CameraNativeUtils {
      * @param value    对应的值
      * @return 是否支持
      */
-    public static <T> boolean setParameter(long nativeId, CameraNativeState.Key<T> key, T value) {
+    public static <T> boolean setParameter(long nativeId, CameraParameter.Key<T> key, T value) {
         if (nativeId == 0L) return false;
-        Class<T> tClass = key.getmClass();
-        int number = key.getNumber();
-        if (tClass.isAssignableFrom(int.class)) {
-            return nativeSetIntValue(nativeId, number, (int) value);
+        if (int.class.isAssignableFrom(key.mClass) || Integer.class.isAssignableFrom(key.mClass)) {
+            return nativeSetIntValue(nativeId, ketTypeToNativeId(key.type), (int) value);
         }
-        if (tClass.isAssignableFrom(boolean.class)) {
-            return nativeSetBoolValue(nativeId, number, (boolean) value);
+        if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
+            return nativeSetBoolValue(nativeId, ketTypeToNativeId(key.type), (boolean) value);
         }
-        if (tClass.isAssignableFrom(OrientationState.class)) {
-            return nativeSetIntValue(nativeId, number, ((OrientationState) value).getAngle());
+        if (OrientationState.class.isAssignableFrom(key.mClass)) {
+            return nativeSetIntValue(nativeId, ketTypeToNativeId(key.type), ((OrientationState) value).getAngle());
+        }
+        if (CameraSize.class.isAssignableFrom(key.mClass)) {
+            CameraSize size = (CameraSize) value;
+            return nativeSetPreviewSize(nativeId, size.getWidth(), size.getHeight(), size.getFormat().getValue());
         }
         return false;
     }
+
+    private static int ketTypeToNativeId(String type) {
+        if (CameraParameterType.AUTO_EXPOSURE.equals(type)) {
+            return 1;
+        } else if (CameraParameterType.EXPOSURE.equals(type)) {
+            return 2;
+        } else if (CameraParameterType.BRIGHTNESS.equals(type)) {
+            return 3;
+        } else if (CameraParameterType.CONTRAST.equals(type)) {
+            return 4;
+        } else if (CameraParameterType.GAIN.equals(type)) {
+            return 5;
+        } else if (CameraParameterType.SATURATION.equals(type)) {
+            return 6;
+        } else if (CameraParameterType.ZOOM.equals(type)) {
+            return 7;
+        } else if (CameraParameterType.ORIENTATION.equals(type)) {
+            return 8;
+        }
+        return -1;
+    }
+
+
+    public static <T> T getSupportedParameter(long nativeId, CameraSupportParameters.Key<T> key) {
+        if (nativeId == 0L) return null;
+        if (key.type.equals(CameraParameterType.PREVIEW_SIZE)) {
+            return (T) getSupportPreviewSizes(nativeId);
+        }
+        if (key.type.equals(CameraParameterType.AUTO_EXPOSURE)) {
+            return (T) Boolean.valueOf(nativeGetSupportAutoExposure(nativeId));
+        }
+        int stateId = ketTypeToNativeId(key.type);
+        if (stateId != -1) {
+            int[] ints = nativeGetParameterRange(nativeId, stateId);
+            if (ints == null || ints.length != 2) {
+                return null;
+            }
+            return (T) new IntRange(ints[0], ints[1]);
+        }
+        return null;
+    }
+
 }
 

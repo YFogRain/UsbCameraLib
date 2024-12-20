@@ -39,6 +39,7 @@
 #include "libuvc/libuvc.h"
 #include "libuvc/libuvc_internal.h"
 #include "errno.h"
+#include "Log.h"
 
 #ifdef _MSC_VER
 
@@ -465,6 +466,115 @@ uvc_frame_desc_t *uvc_find_frame_desc(uvc_device_handle_t *devh,
     return NULL;
 }
 
+static uvc_error_t prepare_stream_ctrl(uvc_device_handle_t *devh, uvc_stream_ctrl_t *ctrl) {
+    //获取控制器的当前流的值
+    uvc_error_t result = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_CUR);
+    if (LIKELY(!result)) {
+        //获取最小通道流
+        result = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_MIN);
+        if (LIKELY(!result)) {
+            //获取最大通道流
+            result = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_MAX);
+            if (UNLIKELY(result))
+                LOG_E("获取预览流的最大值错误:err=%d", result);
+        } else {
+            LOG_E("获取预览流的最小值错误:err=%d", result);
+        }
+    } else {
+        LOG_E("获取预览流的当前值错误:err=%d", result);
+    }
+    return result;
+}
+
+static uvc_error_t uvc_get_stream_ctrl(uvc_device_handle_t *devh,
+                                       uvc_stream_ctrl_t *ctrl,
+                                       uvc_streaming_interface_t *stream_if,
+                                       uvc_format_desc_t *format,
+                                       int width, int height) {
+    //设置流控制结构体 ctrl 的接口编号为当前流接口编号
+    ctrl->bInterfaceNumber = stream_if->bInterfaceNumber;
+
+    //调用 uvc_claim_if 函数尝试占用该流接口。
+    uvc_error_t result = uvc_claim_if(devh, ctrl->bInterfaceNumber);
+    if (UNLIKELY(result)) {
+        LOG_E("占用流接口失败:err=%d", result);
+        goto fail;
+    }
+    result = prepare_stream_ctrl(devh, ctrl);
+    if (UNLIKELY(result)) {
+        LOG_E("初始化预览流失败:err=%d", result);
+        goto fail;
+    }
+    uvc_frame_desc_t *frame;
+    DL_FOREACH(format->frame_descs, frame) {
+        //检查帧的宽度和高度是否与目标分辨率相符
+        if (frame->wWidth != width || frame->wHeight != height) {
+            continue;
+        }
+        uint32_t *interval;
+        if (frame->intervals) {
+            uint32_t best_interval = -1;
+            for (interval = frame->intervals; *interval; ++interval) {
+                if (UNLIKELY(!(*interval))) continue;
+                if (best_interval == -1 || *interval < best_interval) {
+                    best_interval = *interval;
+                }
+            }
+            ctrl->bmHint = (1 << 0); /* 不协商间隔 */
+            ctrl->bFormatIndex = format->bFormatIndex;
+            ctrl->bFrameIndex = frame->bFrameIndex;
+            ctrl->dwFrameInterval =
+                    best_interval == -1 ? frame->dwDefaultFrameInterval : best_interval;
+            goto found;
+        } else {
+            // 默认选择默认间隔（最高帧率）
+            ctrl->bmHint = (1 << 0);
+            ctrl->bFormatIndex = format->bFormatIndex;
+            ctrl->bFrameIndex = frame->bFrameIndex;
+            ctrl->dwFrameInterval = frame->dwDefaultFrameInterval;
+            goto found;
+        }
+    }
+    fail:
+    uvc_release_if(devh, ctrl->bInterfaceNumber);
+    return UVC_ERROR_INVALID_MODE;
+    found:
+    return UVC_SUCCESS;
+}
+
+uvc_error_t uvc_get_stream(uvc_device_handle_t *devh,
+                           uvc_stream_ctrl_t *ctrl,
+                           enum uvc_frame_format format,
+                           int width, int height) {
+    LOG_D("设置的流类型:%d", format);
+    if (!devh || !devh->info->stream_ifs) {
+        return UVC_ERROR_INVALID_MODE;
+    }
+
+    uvc_streaming_interface_t *stream_if;
+    memset(ctrl, 0, sizeof(*ctrl));    // XXX add
+    //循环查找可以使用的流数据
+    uvc_format_desc_t *fmt_desc;
+    DL_FOREACH(devh->info->stream_ifs, stream_if) {
+        DL_FOREACH(stream_if->format_descs, fmt_desc) {
+            //检查目标帧格式 cf 是否与当前格式描述符的 GUID 相匹配
+            if (!_uvc_frame_format_matches_guid(format, fmt_desc->guidFormat)) {
+                continue;
+            }
+            uvc_error_t result = uvc_get_stream_ctrl(devh, ctrl, stream_if, fmt_desc, width,
+                                                     height);
+            if (!result) {
+                goto found;
+            }
+        }
+
+    }
+    return UVC_ERROR_INVALID_MODE;
+    found:
+    return uvc_probe_stream_ctrl(devh, ctrl);
+}
+
+
 /** Get a negotiated streaming control block for some common parameters.
  * @ingroup streaming
  *
@@ -617,16 +727,23 @@ static int _uvc_stream_params_negotiated(
 uvc_error_t uvc_probe_stream_ctrl(
         uvc_device_handle_t *devh,
         uvc_stream_ctrl_t *ctrl) {
-    uvc_stream_ctrl_t required_ctrl = *ctrl;
 
-    uvc_query_stream_ctrl(devh, ctrl, 1, UVC_SET_CUR);
-    uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_CUR);
-
-    if (!_uvc_stream_params_negotiated(&required_ctrl, ctrl)) {
-        UVC_DEBUG("Unable to negotiate streaming format");
-        return UVC_ERROR_INVALID_MODE;
+    uvc_error_t err;
+    err = uvc_claim_if(devh, ctrl->bInterfaceNumber);
+    if (UNLIKELY(err)) {
+        LOG_E("uvc_claim_if:err=%d", err);
+        return err;
     }
-
+    err = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_SET_CUR);    // probe query
+    if (UNLIKELY(err)) {
+        LOG_E("uvc_query_stream_ctrl(UVC_SET_CUR):err=%d", err);
+        return err;
+    }
+    err = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_CUR);    // probe query ここでエラーが返ってくる
+    if (UNLIKELY(err)) {
+        LOG_E("uvc_query_stream_ctrl(UVC_GET_CUR):err=%d", err);
+        return err;
+    }
     return UVC_SUCCESS;
 }
 
@@ -1081,6 +1198,7 @@ uvc_error_t uvc_stream_open_ctrl(uvc_device_handle_t *devh, uvc_stream_handle_t 
  * @param flags Stream setup flags, currently undefined. Set this to zero. The lower bit
  * is reserved for backward compatibility.
  */
+
 uvc_error_t uvc_stream_start(
         uvc_stream_handle_t *strmh,
         uvc_frame_callback_t *cb,
@@ -1247,9 +1365,8 @@ uvc_error_t uvc_stream_start(
      * with the contents of each frame.
      */
     if (cb) {
-        int i = pthread_create(&strmh->cb_thread, NULL, _uvc_user_caller, (void *) strmh);
+        pthread_create(&strmh->cb_thread, NULL, _uvc_user_caller, (void *) strmh);
     }
-
     for (transfer_id = 0; transfer_id < LIBUVC_NUM_TRANSFER_BUFS;
          transfer_id++) {
         ret = libusb_submit_transfer(strmh->transfers[transfer_id]);
@@ -1267,7 +1384,9 @@ uvc_error_t uvc_stream_start(
         }
         ret = UVC_SUCCESS;
     }
-
+    if (UNLIKELY(ret != UVC_SUCCESS)) {
+        goto fail;
+    }
     UVC_EXIT(ret);
     return ret;
     fail:

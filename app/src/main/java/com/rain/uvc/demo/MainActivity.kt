@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -20,14 +21,12 @@ import com.rain.uvc.demo.camera.CameraActivity
 import com.rain.uvc.demo.databinding.ActivityMainBinding
 
 class MainActivity : BaseDataBindActivity<ActivityMainBinding>() {
-	override val mViewModel: BaseViewModel? = null
+	override val mViewModel :BaseViewModel?=null
 	override fun initLayoutResId() = R.layout.activity_main
 	private val permissionCall = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
 	
 	}
-	private val testList = mutableListOf(
-		"开启预览",
-	)
+	private val testList = mutableListOf("开启预览")
 	private val adapter by lazy {
 		object : BaseRecAdapter<String>() {
 			override fun getLayoutResId(viewType: Int) = R.layout.item_test_click_view

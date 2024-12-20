@@ -9,11 +9,13 @@ import androidx.lifecycle.viewModelScope
 import com.rain.uvc.UvcCamera
 import com.rain.uvc.UvcCameraHelper
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
+import com.rain.uvc.demo.utils.GsonHelper
 import com.rain.uvc.demo.utils.UsbCameraUtils
 import com.rain.uvc.listener.ICameraOpenListener
+import com.rain.uvc.mode.FormatModeState
 import com.rain.uvc.provider.OverallContext
-import com.rain.uvc.state.CameraNativeState
-import com.rain.uvc.state.OrientationState
+import com.rain.uvc.state.CameraParameter
+import com.rain.uvc.state.CameraSupportParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -53,37 +55,44 @@ class CameraViewModel : BaseViewModel() {
 			//获取设备列表
 			val uvcCamera = UvcCameraHelper.create(device)
 			if (uvcCamera == null) {
+				Log.d("cameraPreviewUpdateTag", "创建usb驱动对象失败～～～")
 				block.invoke(false)
 				return@launch
 			}
 			mUvcCamera = uvcCamera
 			//打开摄像头
-			val openResult = open()
+			val openResult = open(uvcCamera)
+			Log.d("cameraPreviewUpdateTag", "打开结果～～：$openResult")
 			if (!openResult) {
 				mUvcCamera?.close()
 				mUvcCamera = null
 				block.invoke(false)
 				return@launch
 			}
+			val supportedParameter = mUvcCamera?.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
+			Log.d("cameraPreviewUpdateTag", "分辨率集合:${GsonHelper.getHelper().modeToJson(supportedParameter)}")
 			//设置预览分辨率
-			mUvcCamera?.setPreviewSize(640, 480, true)
+			mUvcCamera?.setPreviewSize(1920, 1080, FormatModeState.YUY2)
 			block.invoke(true)
 		}
 	}
 	
-	private suspend fun open(): Boolean {
+	private suspend fun open(uvcCamera: UvcCamera): Boolean {
 		try {
 			return withTimeout(3000) {
 				suspendCancellableCoroutine { con ->
 					con.invokeOnCancellation {
-						mUvcCamera?.close()
+						uvcCamera.close()
 					}
-					mUvcCamera?.open(object : ICameraOpenListener {
+					uvcCamera.open(object : ICameraOpenListener {
 						override fun success() {
+							Log.d("cameraPreviewUpdateTag", "camera 打开成功")
 							con.resume(true)
+							
 						}
 						
 						override fun failed(message: String?) {
+							Log.d("cameraPreviewUpdateTag", "打开失败啦 ：$message")
 							con.resume(false)
 						}
 					})
@@ -100,7 +109,7 @@ class CameraViewModel : BaseViewModel() {
 			val data = ByteArray(frame.capacity())
 			frame.get(data)
 			frame.clear()
-			Log.d("cameraPreviewUpdateTag", "startPreview-data:${data.size}")
+//			Log.d("cameraPreviewUpdateTag", "startPreview-data:${data.size}")
 		}
 		mUvcCamera?.setDisplaySurface(surface)
 		mUvcCamera?.startPreview()
@@ -111,7 +120,7 @@ class CameraViewModel : BaseViewModel() {
 			if (this == -1) 0 else this
 		} + 90) % 360
 		this.currentRotation = currentRotation
-		mUvcCamera?.setParameter(CameraNativeState.ORIENTATION, OrientationState.orientationToState(currentRotation))
+		mUvcCamera?.setParameter(CameraParameter.ORIENTATION, currentRotation)
 	}
 	
 	fun stopPreview() {

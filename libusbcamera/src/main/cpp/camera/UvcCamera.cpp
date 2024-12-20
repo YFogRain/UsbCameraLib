@@ -3,8 +3,8 @@
 //
 
 #include <stdlib.h>
-#include "../UvcCamera.h"
-#include "../state/CameraParameterState.h"
+#include "headers/UvcCamera.h"
+#include "headers/CameraParameterState.h"
 
 /**
  * 连接设备
@@ -17,16 +17,20 @@ int UvcCamera::connect(int fd) {
     //初始化uvc的context实例
     uvc_error_t ret = uvc_init(&mContext, nullptr);
     LOG_E("初始化uvc结果:%d", ret);
-    if (ret != UVC_SUCCESS) {
+    if (ret != UVC_SUCCESS || !mContext) {
         mContext = nullptr;
         return ret;
     }
+    LOG_D("当前设备的文件描述符：%d", fd);
+    int usbRet = libusb_set_option(mContext->usb_ctx, LIBUSB_OPTION_WEAK_AUTHORITY, NULL);
+    LOG_D("初始化设置usb模式：%d", usbRet);
     ret = uvc_wrap(fd, mContext, &mDeviceHandle);
-    LOG_E("uvc设备打开结果:%d", ret);
-    if (ret != UVC_SUCCESS) {
+    LOG_E("uvc设备查询结果:%d", ret);
+    if (ret != UVC_SUCCESS || !mDeviceHandle) {
         mDeviceHandle = nullptr;
         return ret;
     }
+    LOG_E("uvc设备打开结果:%d", ret);
     mPreview = new UvcPreview(mDeviceHandle);
     return UVC_SUCCESS;
 }
@@ -76,10 +80,12 @@ int UvcCamera::stopPreview() {
     return result;
 }
 
-int UvcCamera::setPreviewSize(int width, int height, int fps, bool mode) {
+int UvcCamera::setPreviewSize(int width, int height, int format) {
     int result = EXIT_FAILURE;
     if (mPreview) {
-        result = mPreview->setPreviewSize(width, height, fps, mode);
+        result = mPreview->setPreviewSize(width, height,
+                                          format == UVC_FORMAT_MJPEG ? UVC_FORMAT_MJPEG
+                                                                     : UVC_FORMAT_NV21);
     }
     return result;
 }
@@ -214,26 +220,30 @@ char *UvcCamera::getSupportedSize() {
     }
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    writer.StartObject();
 
+    writer.StartArray();
     //循环读取数据
     uvc_streaming_interface_t *stream_if;
     DL_FOREACH(mDeviceHandle->info->stream_ifs, stream_if) {
         uvc_format_desc_t *fmt_desc;
         uvc_frame_desc_t *frame_desc;
         DL_FOREACH(stream_if->format_descs, fmt_desc) {
+            int formatType;
             switch (fmt_desc->bDescriptorSubtype) {
                 case UVC_VS_FORMAT_UNCOMPRESSED:
-                    writer.String("yuv_formats");
+                    LOG_D("当前为yuv类型");
+                    formatType = 0;
                     break;
                 case UVC_VS_FORMAT_MJPEG:
-                    writer.String("mjpeg_formats");
+                    LOG_D("当前为mjpeg类型");
+                    formatType = 1;
                     break;
                 default:
                     continue;
             }
-            writer.StartArray();
             DL_FOREACH(fmt_desc->frame_descs, frame_desc) {
+                LOG_D("=======================分辨率%d=%d*%d====================", formatType,
+                      frame_desc->wWidth, frame_desc->wHeight);
                 writer.StartObject();
                 //width
                 writer.String("width");
@@ -242,16 +252,15 @@ char *UvcCamera::getSupportedSize() {
                 //height
                 writer.String("height");
                 writer.Uint64(frame_desc->wHeight);
+                //当前类型
+                writer.String("format");
+                writer.Uint64(formatType);
 
-                //fps
-                writer.String("fps");
-                writer.Uint64(10000000 / frame_desc->dwDefaultFrameInterval);
                 writer.EndObject();
             }
-            writer.EndArray();
         }
     }
-    writer.EndObject();
+    writer.EndArray();
     return strdup(buffer.GetString());
 }
 
@@ -366,16 +375,9 @@ std::pair<int, int> UvcCamera::getParameterRange(int type) {
     return std::make_pair(-999, -999);
 }
 
-bool UvcCamera::currentFrameModeIsMjpeg() {
+int UvcCamera::loadCurrentFormat() {
     if (mPreview) {
-        return mPreview->currentFrameModeIsMjpeg();
+        return mPreview->loadCurrentFormat();
     }
-    return false;
-}
-
-int UvcCamera::getCurrentFps() {
-    if (mPreview) {
-        return mPreview->getCurrentFps();
-    }
-    return 0;
+    return -1;
 }

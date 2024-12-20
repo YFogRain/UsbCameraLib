@@ -1,5 +1,6 @@
 package com.rain.uvc;
 
+import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -9,21 +10,20 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.text.TextUtils;
-import android.util.Range;
+import android.util.Log;
 import android.view.Surface;
 
 import com.rain.uvc.listener.ICameraOpenListener;
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.mode.PreviewModeState;
-import com.rain.uvc.mode.SupportSize;
+import com.rain.uvc.mode.CameraSize;
+import com.rain.uvc.mode.FormatModeState;
 import com.rain.uvc.provider.OverallContext;
-import com.rain.uvc.state.CameraNativeState;
-import com.rain.uvc.state.CameraRangeState;
+import com.rain.uvc.state.CameraParameter;
+import com.rain.uvc.state.CameraSupportParameters;
 import com.rain.uvc.utils.CameraNativeUtils;
+import com.rain.uvc.utils.CameraUtils;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -48,7 +48,7 @@ public class UvcCamera {
     //当前打开状态
     private volatile int currentOpenState; //1-打开成功，0-未打开，2-正在打开
     //当前缓存的分辨率信息
-    private HashMap<PreviewModeState, List<SupportSize>> supportSizes;
+    private CameraSize[] supportSizes;
     //当前是否注册广播成功
     private volatile boolean isReceiverSuccess;
     //usb设备移除监听，正在打开时，不会回调此方法
@@ -60,6 +60,7 @@ public class UvcCamera {
                 return;
             }
             String action = intent.getAction();
+            Log.d("UvcCamera", "接收到usb的action:" + action);
             if (TextUtils.isEmpty(action)) return;
             UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
             if (usbDevice == null) return;
@@ -70,12 +71,15 @@ public class UvcCamera {
                 }
                 return;
             }
+            Log.d("UvcCamera", "需要打开的设备DeviceName:" + localDevice.getDeviceName());
+            Log.d("UvcCamera", "广播回调的设备DeviceName:" + usbDevice.getDeviceName());
             //当前不是当前设备的回调，则直接不处理
-            if (localDevice.getProductId() != usbDevice.getProductId() || localDevice.getVendorId() != localDevice.getVendorId()) {
+            if (!localDevice.getDeviceName().equals(usbDevice.getDeviceName())) {
                 return;
             }
             //设备被移除
             if (action.equals(UsbManager.ACTION_USB_DEVICE_DETACHED)) {
+                Log.i("UvcCamera", "无语，谁吧设备卸载咯～～～");
                 //表示是当前设备
                 if (currentOpenState == 2) {
                     resultOpen(false, "usb设备被移除");
@@ -84,13 +88,14 @@ public class UvcCamera {
                     if (iDetachedCloseListener != null) {
                         iDetachedCloseListener.onDetach();
                     }
+                    close();
                 }
                 return;
             }
             //如果不是usb权限回调，则直接忽略,如果不是正在打开，则也不需要处理
             if (!action.equals(ACTION_USB_PERMISSION) || currentOpenState != 2) return;
-
             boolean isGranted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+            Log.d("UvcCamera", "收到权限回调啦：：" + isGranted);
             if (isGranted) {
                 open();
             } else {
@@ -125,20 +130,24 @@ public class UvcCamera {
     public void open(ICameraOpenListener listener) {
         if (currentOpenState == 2) {
             //当前正在打开中，直接返回
+            Log.e("UvcCamera", "当前设备正在打开，请稍后重试");
             listener.failed("当前设备正在打开，请稍后重试");
             return;
         }
+        currentOpenState = 2;
         initReceiver();
         this.iOpenListener = listener;
         //获取usb管理实例，来校验权限
         UsbManager manager = (UsbManager) OverallContext.baseContext.getSystemService(Context.USB_SERVICE);
         UsbDevice usbDevice = usbCache.get();
         if (usbDevice == null) {
+            Log.e("UvcCamera", "未获取到对应的usb设备驱动");
             resultOpen(false, "未获取到对应的usb设备驱动");
             return;
         }
         //判断是否存在usb权限，如果没有，则需要授权
         if (!manager.hasPermission(usbDevice)) {
+            Log.e("UvcCamera", "没有usb权限，开始检查权限");
             PendingIntent broadcast = PendingIntent.getBroadcast(OverallContext.baseContext, 0, new Intent(ACTION_USB_PERMISSION), 0);
             manager.requestPermission(usbDevice, broadcast);
             return;
@@ -147,14 +156,14 @@ public class UvcCamera {
         open();
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private synchronized void initReceiver() {
         if (isReceiverSuccess) return;
         IntentFilter intentFilter = new IntentFilter(ACTION_USB_PERMISSION);
         intentFilter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         try {
             OverallContext.baseContext.registerReceiver(usbReceiver, intentFilter);
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception ignored) {
         }
         isReceiverSuccess = true;
     }
@@ -164,8 +173,7 @@ public class UvcCamera {
         if (isReceiverSuccess) {
             try {
                 OverallContext.baseContext.unregisterReceiver(usbReceiver);
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ignored) {
             }
         }
         isReceiverSuccess = false;
@@ -177,11 +185,13 @@ public class UvcCamera {
     private void open() {
         //当前已经打开成功
         if (currentOpenState == 1) {
+            Log.e("UvcCamera", "涩北已经打开了，你们不要再打了～");
             resultOpen(true, "设备已经打开");
             return;
         }
         UsbDevice usbDevice = usbCache.get();
         if (usbDevice == null) {
+            Log.e("UvcCamera", "没有设置驱动，不知道找谁了");
             resultOpen(false, "未传入对应的usb设备驱动");
             return;
         }
@@ -191,6 +201,7 @@ public class UvcCamera {
         UsbManager manager = (UsbManager) OverallContext.baseContext.getSystemService(Context.USB_SERVICE);
         UsbDeviceConnection usbDeviceConnection = manager.openDevice(usbDevice);
         if (usbDeviceConnection == null) {
+            Log.e("UvcCamera", "打开usb设备驱动失败");
             close();
             resultOpen(false, "打开usb设备驱动失败");
             return;
@@ -198,14 +209,16 @@ public class UvcCamera {
         iUsbDeviceConnect = usbDeviceConnection;
         boolean result = CameraNativeUtils.nativeConnect(nativeId, usbDeviceConnection.getFileDescriptor());
         if (!result) {
+            Log.d("UvcCamera", "连接usb设备失败");
             close();
             resultOpen(false, "连接usb设备失败");
             return;
         }
         this.supportSizes = CameraNativeUtils.getSupportPreviewSizes(nativeId);
         //设置默认使用的分辨率
-        setPreviewSize(640, 480, true);
-        resultOpen(true, "");
+        setPreviewSize(640, 480, FormatModeState.YUY2);
+        resultOpen(true, "打开成功");
+        Log.d("UvcCamera", "啊，可算打开成功了～");
     }
 
     /**
@@ -237,75 +250,20 @@ public class UvcCamera {
      *
      * @param width      宽
      * @param height     高
-     * @param isUsbMjpeg 是否采用mjpeg的格式分辨率，数据根据返回的分辨率列表决定是否存在，如果不存在，则直接使用可找到的分辨率列表
+     * @param formatSate 是否采用mjpeg的格式分辨率，数据根据返回的分辨率列表决定是否存在，如果不存在，则直接使用可找到的分辨率列表
      */
 
-    public boolean updatePreviewSize(int width, int height, boolean isUsbMjpeg) {
+    public boolean updatePreviewSize(int width, int height, FormatModeState formatSate) {
         boolean lastRunningState = isPreviewRunning;
         //停止预览
         stopPreview();
         //设置预览分辨率
-        boolean result = setPreviewSize(width, height, isUsbMjpeg);
+        boolean result = setPreviewSize(width, height, formatSate);
         //恢复预览
         if (lastRunningState && result) {
             result = startPreview();
         }
         return result;
-    }
-
-    /**
-     * 获取当前使用的分辨率信息
-     *
-     * @return 返回当前对应的分辨率信息
-     */
-    public SupportSize getCurrentPreviewSize() {
-        return CameraNativeUtils.getCurrentPreviewSize(uvcNativeId.get());
-    }
-
-
-    /**
-     * 获取当前是否支持自动曝光设置
-     *
-     * @return 是否支持
-     */
-    public boolean getSupportAutoExposure() {
-        long nativeId = uvcNativeId.get();
-        if (nativeId == 0L) return false;
-        return CameraNativeUtils.nativeGetSupportAutoExposure(nativeId);
-    }
-
-    /**
-     * 获取当前支持的参数区间值
-     *
-     * @param state 可获取的区间属性
-     * @return 返回对应区间值
-     */
-    public Range<Integer> getParameterRange(CameraRangeState state) {
-        return CameraNativeUtils.getParameterRange(uvcNativeId.get(), state);
-    }
-
-
-    /**
-     * 获取对应的参数属性
-     *
-     * @param key 支持获取的参数key
-     * @param <T> 当前返回的参数对应的类型
-     * @return 返回对应的值，根据key的具体类型来
-     */
-    public <T> T getParameter(CameraNativeState.Key<T> key) {
-        return CameraNativeUtils.getParameter(uvcNativeId.get(), key);
-    }
-
-    /**
-     * 设置对应的参数属性
-     *
-     * @param key   支持获取的参数key
-     * @param <T>   当前返回的参数对应的类型
-     * @param value 需要设置的值
-     * @return 返回对应的值，根据key的具体类型来
-     */
-    public <T> boolean setParameter(CameraNativeState.Key<T> key, T value) {
-        return CameraNativeUtils.setParameter(uvcNativeId.get(), key, value);
     }
 
     /**
@@ -342,67 +300,57 @@ public class UvcCamera {
     }
 
     /**
+     * 获取对应的参数属性
+     *
+     * @param key 支持获取的参数key
+     * @param <T> 当前返回的参数对应的类型
+     * @return 返回对应的值，根据key的具体类型来
+     */
+    public <T> T getParameter(CameraParameter.Key<T> key) {
+        return CameraNativeUtils.getParameter(uvcNativeId.get(), key);
+    }
+
+    /**
+     * 获取支持的参数信息
+     *
+     * @param key 支持获取的参数key
+     * @param <T> 当前返回的参数对应的类型
+     * @return 返回对应的值，根据key的具体类型来
+     */
+    public <T> T getSupportedParameter(CameraSupportParameters.Key<T> key) {
+        return CameraNativeUtils.getSupportedParameter(uvcNativeId.get(), key);
+    }
+
+
+    /**
+     * 设置对应的参数属性
+     *
+     * @param key   支持获取的参数key
+     * @param <T>   当前返回的参数对应的类型
+     * @param value 需要设置的值
+     * @return 返回对应的值，根据key的具体类型来
+     */
+    public <T> boolean setParameter(CameraParameter.Key<T> key, T value) {
+        return CameraNativeUtils.setParameter(uvcNativeId.get(), key, value);
+    }
+
+    /**
      * 设置预览分辨率
      * 根据当前宽高，匹配缓存列表中的宽高信息，获取对应的fps，mode
      *
-     * @param width      宽
-     * @param height     高
-     * @param isUsbMjpeg 是否采用mjpeg的格式分辨率，数据根据返回的分辨率列表决定是否存在，如果不存在，则直接使用可找到的分辨率列表
+     * @param width       宽
+     * @param height      高
+     * @param formatState 使用的分辨率类型（当前仅支持nv21和mjpeg）
      */
-    public boolean setPreviewSize(int width, int height, boolean isUsbMjpeg) {
+    public boolean setPreviewSize(int width, int height, FormatModeState formatState) {
         long nativeId = uvcNativeId.get();
         if (nativeId == 0L) return false;
-        SupportSize supportSize = loadUseSize(width, height, isUsbMjpeg);
-        if (supportSize == null) {
+        CameraSize cameraSize = CameraUtils.loadUseCameraSize(supportSizes, width, height, formatState);
+        if (cameraSize == null) {
             return false;
         }
-        return CameraNativeUtils.nativeSetPreviewSize(nativeId, supportSize.getWidth(), supportSize.getHeight(), supportSize.getFps(), supportSize.isMjpeg());
+        return CameraNativeUtils.nativeSetPreviewSize(nativeId, cameraSize.getWidth(), cameraSize.getHeight(), 4);
     }
-
-
-    /**
-     * 获取当前分辨率列表信息
-     * 只有打开摄像头后此方法才有数据
-     *
-     * @return 返回对应的分辨率列表信息
-     */
-    public HashMap<PreviewModeState, List<SupportSize>> getSupportPreviewSizes() {
-
-        return supportSizes;
-    }
-
-    /**
-     * 获取当前宽高对应使用的分辨率属性
-     *
-     * @param width  宽
-     * @param height 高
-     * @return 返回当前可使用的分辨率参数
-     */
-    private SupportSize loadUseSize(int width, int height, boolean isUsbMjpeg) {
-        if (supportSizes == null || supportSizes.isEmpty()) {
-            return null;
-        }
-        SupportSize currentSize = findCurrentSize(supportSizes.get(isUsbMjpeg ? PreviewModeState.MJPEG : PreviewModeState.YUV), width, height);
-        if (currentSize == null) {
-            currentSize = findCurrentSize(supportSizes.get(isUsbMjpeg ? PreviewModeState.YUV : PreviewModeState.MJPEG), width, height);
-        }
-        return currentSize;
-    }
-
-
-    protected SupportSize findCurrentSize(List<SupportSize> supportSizes, int width, int height) {
-        if (supportSizes == null || supportSizes.isEmpty()) {
-            return null;
-        }
-
-        for (SupportSize size : supportSizes) {
-            if (size.getWidth() == width && size.getHeight() == height) {
-                return size;
-            }
-        }
-        return null;
-    }
-
 
     /**
      * 关闭摄像头
@@ -422,6 +370,7 @@ public class UvcCamera {
             iUsbDeviceConnect.close();
             iUsbDeviceConnect = null;
         }
+        iDetachedCloseListener = null;
         currentOpenState = 0;
 
     }
@@ -437,6 +386,5 @@ public class UvcCamera {
         iOpenListener.failed(message);
         iOpenListener = null;
     }
-
 }
 
