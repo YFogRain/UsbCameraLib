@@ -68,6 +68,8 @@ private:
 
     void callbackFrame(uvc_frame_t *frame, JNIEnv *env); //数据回调
 
+    uvc_frame_format getPreviewFormat();
+
 public:
 
     UvcPreview(uvc_device_handle_t *deviceHandler);

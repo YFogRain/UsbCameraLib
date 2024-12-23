@@ -85,7 +85,7 @@ int UvcCamera::setPreviewSize(int width, int height, int format) {
     if (mPreview) {
         result = mPreview->setPreviewSize(width, height,
                                           format == UVC_FORMAT_MJPEG ? UVC_FORMAT_MJPEG
-                                                                     : UVC_FORMAT_NV21);
+                                                                     : UVC_FORMAT_YUY2);
     }
     return result;
 }
@@ -211,7 +211,7 @@ int UvcCamera::getParameterIntValue(int type) {
     return value;
 }
 
-char *UvcCamera::getSupportedSize() {
+char *UvcCamera::getSupportedPreviewSizes() {
     if (!mDeviceHandle) {
         return nullptr;
     }
@@ -228,19 +228,9 @@ char *UvcCamera::getSupportedSize() {
         uvc_format_desc_t *fmt_desc;
         uvc_frame_desc_t *frame_desc;
         DL_FOREACH(stream_if->format_descs, fmt_desc) {
-            int formatType;
-            switch (fmt_desc->bDescriptorSubtype) {
-                case UVC_VS_FORMAT_UNCOMPRESSED:
-                    LOG_D("当前为yuv类型");
-                    formatType = 0;
-                    break;
-                case UVC_VS_FORMAT_MJPEG:
-                    LOG_D("当前为mjpeg类型");
-                    formatType = 1;
-                    break;
-                default:
-                    continue;
-            }
+            int formatType = getFormatType(fmt_desc->bDescriptorSubtype);
+            //检查格式，如果不支持则直接跳过
+            if (formatType == -1)continue;
             DL_FOREACH(fmt_desc->frame_descs, frame_desc) {
                 LOG_D("=======================分辨率%d=%d*%d====================", formatType,
                       frame_desc->wWidth, frame_desc->wHeight);
@@ -263,6 +253,22 @@ char *UvcCamera::getSupportedSize() {
     writer.EndArray();
     return strdup(buffer.GetString());
 }
+
+// 根据格式描述符的子类型返回格式类型
+int UvcCamera::getFormatType(uint8_t descriptorSubtype) {
+    switch (descriptorSubtype) {
+        case UVC_VS_FORMAT_UNCOMPRESSED:
+            LOG_D("当前为YUV类型");
+            return 0;
+        case UVC_VS_FORMAT_MJPEG:
+            LOG_D("当前为MJPEG类型");
+            return 1;
+        default:
+            LOG_D("不支持的格式类型");
+            return -1;
+    }
+}
+
 
 std::pair<int, int> UvcCamera::getPreviewSize() {
     if (mPreview) {

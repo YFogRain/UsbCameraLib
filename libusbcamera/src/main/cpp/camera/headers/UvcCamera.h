@@ -26,7 +26,11 @@ private:
 //    uvc_device_t *mDevice;
     uvc_device_handle_t *mDeviceHandle;
     UvcPreview *mPreview;
+
     void clearCameraParams();
+
+    //获取可使用的分辨率对应类型
+    int getFormatType(uint8_t descriptorSubtype);
 
 public:
     UvcCamera();//初始化
@@ -45,7 +49,7 @@ public:
 
     int stopPreview();//停止预览
 
-    char *getSupportedSize();//获取支持的预览分辨率
+    char *getSupportedPreviewSizes();//获取支持的预览分辨率
 
     std::pair<int, int> getPreviewSize(); //获取当前分辨率
 
@@ -64,6 +68,7 @@ public:
     void setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener);
 
     int loadCurrentFormat();
+
 };
 
 

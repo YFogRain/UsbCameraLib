@@ -516,6 +516,7 @@ static uvc_error_t uvc_get_stream_ctrl(uvc_device_handle_t *devh,
             uint32_t best_interval = -1;
             for (interval = frame->intervals; *interval; ++interval) {
                 if (UNLIKELY(!(*interval))) continue;
+                //读取最大的传输通道（最高帧率）
                 if (best_interval == -1 || *interval < best_interval) {
                     best_interval = *interval;
                 }

@@ -74,8 +74,7 @@ int UvcPreview::startPreview() {
 int UvcPreview::prepare_preview(uvc_stream_ctrl_t *ctrl) {
     LOG_D("获取对应的流控制器-sie:%d-%d", requestWidth, requestHeight);
     uvc_error_t ret = uvc_get_stream(mDeviceHandle, ctrl,
-                                     frameMode == UVC_FORMAT_MJPEG ? UVC_FRAME_FORMAT_MJPEG
-                                                                   : UVC_FRAME_FORMAT_YUYV,
+                                     getPreviewFormat(),
                                      requestWidth, requestHeight);
     LOG_D("获取对应的流控制器-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
@@ -95,7 +94,7 @@ int UvcPreview::prepare_preview(uvc_stream_ctrl_t *ctrl) {
         frameWidth = requestWidth;
         frameHeight = requestHeight;
     }
-    frameBytes = frameWidth * frameHeight * (frameMode == UVC_FORMAT_NV21 ? 2 : 4);
+    frameBytes = frameWidth * frameHeight * (frameMode == UVC_FORMAT_YUY2 ? 2 : 4);
     return UVC_SUCCESS;
 }
 
@@ -267,11 +266,10 @@ int UvcPreview::setPreviewSize(int width, int height, int format) {
         requestHeight = height;
     }
     frameMode = format;
-    //可能会出现第一次设置流失败，现在在uvc层进行了两次获取，不知道是否能避免
+    //第一次设置流参数注定失败，所以，需要提前设置一次
     uvc_stream_ctrl_t ctrl;
     uvc_error_t ret = uvc_get_stream(mDeviceHandle, &ctrl,
-                                     frameMode == UVC_FORMAT_MJPEG ? UVC_FRAME_FORMAT_MJPEG
-                                                                   : UVC_FRAME_FORMAT_YUYV,
+                                     getPreviewFormat(),
                                      requestWidth, requestHeight);
     LOG_D("获取对应的流控制器-setPreviewSize-结果:%d", ret);
     return UVC_SUCCESS;
@@ -443,4 +441,22 @@ std::pair<int, int> UvcPreview::getPreviewSize() {
 
 int UvcPreview::loadCurrentFormat() {
     return frameMode;
+}
+
+uvc_frame_format UvcPreview::getPreviewFormat() {
+    switch (frameMode) {
+        case UVC_FORMAT_MJPEG:
+            return UVC_FRAME_FORMAT_MJPEG;
+        case UVC_FORMAT_YUY2:
+            return UVC_FRAME_FORMAT_YUYV;
+        case UVC_FORMAT_NV12:
+            return UVC_FRAME_FORMAT_NV12;  // 扩展支持 NV12 格式
+        case UVC_FORMAT_RGB:
+            return UVC_FRAME_FORMAT_RGB;   // 扩展支持 RGB 格式
+        case UVC_FORMAT_BGR:
+            return UVC_FRAME_FORMAT_BGR;   // 扩展支持 BGR 格式
+        default:
+            return UVC_FRAME_FORMAT_YUYV;
+    }
+    return UVC_FRAME_FORMAT_YUYV;
 }

@@ -72,7 +72,7 @@ class CameraViewModel : BaseViewModel() {
 			val supportedParameter = mUvcCamera?.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
 			Log.d("cameraPreviewUpdateTag", "分辨率集合:${GsonHelper.getHelper().modeToJson(supportedParameter)}")
 			//设置预览分辨率
-			mUvcCamera?.setPreviewSize(1920, 1080, FormatModeState.YUY2)
+			mUvcCamera?.setPreviewSize(1920, 1080, FormatModeState.MJPEG)
 			block.invoke(true)
 		}
 	}

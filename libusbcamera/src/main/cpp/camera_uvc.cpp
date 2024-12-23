@@ -126,7 +126,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetSupportPreviewSizes(JNIEnv *e
                                                                        jlong nativeId) {
     auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
     if (camera) {
-        char *str = camera->getSupportedSize();
+        char *str = camera->getSupportedPreviewSizes();
         if (LIKELY(str)) {
             jstring result = env->NewStringUTF(str);
             free(str);
