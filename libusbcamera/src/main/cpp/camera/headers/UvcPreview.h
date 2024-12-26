@@ -31,6 +31,8 @@ private:
     size_t frameBytes;//预览数据大小，为了校验数据完整性
 
     int frameMode;//使用的类型
+    pthread_mutex_t surfaceMutex;//预览互斥锁
+
     pthread_t captureThread; //捕获预览流，并且绘制到页面的线程
     pthread_mutex_t captureMutex;//捕获线程的互斥锁
     pthread_cond_t captureCond;//等待专用的条件变量

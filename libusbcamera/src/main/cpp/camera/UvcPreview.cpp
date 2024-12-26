@@ -19,6 +19,8 @@ UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
     //初始化互斥锁
     pthread_mutex_init(&captureMutex, nullptr);
     pthread_cond_init(&captureCond, nullptr);
+
+    pthread_mutex_init(&surfaceMutex, nullptr);
     initFrame();
 }
 
@@ -28,6 +30,8 @@ UvcPreview::~UvcPreview() {
     }
     pthread_mutex_destroy(&captureMutex);
     pthread_cond_destroy(&captureCond);
+
+    pthread_mutex_destroy(&surfaceMutex);
     mPreviewWindow = nullptr;
     mDeviceHandle = nullptr;
 
@@ -174,12 +178,9 @@ void *UvcPreview::capture_thread_func(void *vptr_args) {
 
 
 void UvcPreview::drawFrame(uvc_frame_t *frame) {
-    if (!mPreviewWindow) {
-        return;
-    }
-    pthread_mutex_lock(&captureMutex);
+    pthread_mutex_lock(&surfaceMutex);
 //    //获取bgr类型的数据数组
-    if (frame) {
+    if (frame && mPreviewWindow) {
         auto *src = (uint8_t *) frame->data;
         ANativeWindow_Buffer buffer;
         // 锁定缓冲区以获取可以写入的内存区域
@@ -198,7 +199,7 @@ void UvcPreview::drawFrame(uvc_frame_t *frame) {
             ANativeWindow_unlockAndPost(mPreviewWindow);
         }
     }
-    pthread_mutex_unlock(&captureMutex);
+    pthread_mutex_unlock(&surfaceMutex);
 }
 
 void UvcPreview::putFrame(uvc_frame_t *frame) {
@@ -268,16 +269,20 @@ int UvcPreview::setPreviewSize(int width, int height, int format) {
 }
 
 int UvcPreview::setDisplaySurface(ANativeWindow *preview_window) {
-    if (mPreviewWindow != preview_window) {
-        if (mPreviewWindow) {
-            ANativeWindow_release(mPreviewWindow);
-        }
-        mPreviewWindow = preview_window;
-        if (LIKELY(mPreviewWindow)) {
-            ANativeWindow_setBuffersGeometry(mPreviewWindow, frameWidth, frameHeight,
-                                             UVC_FORMAT_FRAME_WINDOW);
+    pthread_mutex_lock(&surfaceMutex);
+    {
+        if (mPreviewWindow != preview_window) {
+            if (mPreviewWindow) {
+                ANativeWindow_release(mPreviewWindow);
+            }
+            mPreviewWindow = preview_window;
+            if (LIKELY(mPreviewWindow)) {
+                ANativeWindow_setBuffersGeometry(mPreviewWindow, frameWidth, frameHeight,
+                                                 UVC_FORMAT_FRAME_WINDOW);
+            }
         }
     }
+    pthread_mutex_unlock(&surfaceMutex);
     return UVC_SUCCESS;
 }
 
@@ -294,6 +299,7 @@ void UvcPreview::clearCaptureFrame() {
 }
 
 void UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener) {
+    pthread_mutex_lock(&captureMutex);
     theVM = vm;
     if (!env->IsSameObject(previewListener, listener)) {
         onFrameMethod = nullptr;
@@ -322,6 +328,7 @@ void UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener) {
     } else {
         LOG_D("callbackFrame-IsSameObject-false");
     }
+    pthread_mutex_unlock(&captureMutex);
 }
 
 void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
@@ -338,7 +345,7 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
 }
 
 bool UvcPreview::setDisplayOrientation(int orientation) {
-    pthread_mutex_lock(&captureMutex);
+    pthread_mutex_lock(&surfaceMutex);
     if (LIKELY(mPreviewWindow)) {
         int rotation = 0;
         if (orientation == 0) {
@@ -357,7 +364,7 @@ bool UvcPreview::setDisplayOrientation(int orientation) {
         mDisplayOrientation = orientation;
         native_window_set_buffers_transform(mPreviewWindow, rotation);
     }
-    pthread_mutex_unlock(&captureMutex);
+    pthread_mutex_unlock(&surfaceMutex);
     return true;
 }
 
