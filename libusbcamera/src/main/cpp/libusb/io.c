@@ -2679,13 +2679,14 @@ static void usbi_event_source_notification(struct libusb_context *ctx)
  * poll_events should be specified as a bitmask of events passed to poll(), e.g.
  * POLLIN and/or POLLOUT. */
 int usbi_add_event_source(struct libusb_context *ctx, usbi_os_handle_t os_handle, short poll_events)
-{
+{   //分配内存用于事件源
 	struct usbi_event_source *ievent_source = malloc(sizeof(*ievent_source));
 
 	if (!ievent_source)
 		return LIBUSB_ERROR_NO_MEM;
 
 	usbi_dbg(ctx, "add " USBI_OS_HANDLE_FORMAT_STRING " events %d", os_handle, poll_events);
+    //将传入的文件描述符 os_handle 和事件类型 poll_events 存储到 ievent_source 的相应字段中。
 	ievent_source->data.os_handle = os_handle;
 	ievent_source->data.poll_events = poll_events;
 	usbi_mutex_lock(&ctx->event_data_lock);

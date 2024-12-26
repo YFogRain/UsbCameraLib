@@ -15,20 +15,13 @@
 #include "rapidjson/writer.h"
 #include <utility> // for std::pair
 
-typedef struct control_value {
-    int min;
-    int max;
-} control_value_t;
-
 class UvcCamera {
 private:
     uvc_context_t *mContext;
-//    uvc_device_t *mDevice;
+    uvc_device_t *mDevice;
     uvc_device_handle_t *mDeviceHandle;
     UvcPreview *mPreview;
-
-    void clearCameraParams();
-
+    int mFd;
     //获取可使用的分辨率对应类型
     int getFormatType(uint8_t descriptorSubtype);
 
@@ -38,6 +31,8 @@ public:
     ~UvcCamera(); //数据销毁
 
     int connect(int fd);//连接设备
+
+    int connect(int fd, int busNum, int devAddress,const char *usbFs);
 
     int disConnect();//断开连接释放内存
 

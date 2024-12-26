@@ -16,13 +16,11 @@ import android.view.Surface;
 import com.rain.uvc.listener.ICameraOpenListener;
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.mode.CameraSize;
 import com.rain.uvc.mode.FormatModeState;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraSupportParameters;
 import com.rain.uvc.utils.CameraNativeUtils;
-import com.rain.uvc.utils.CameraUtils;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,8 +45,6 @@ public class UvcCamera {
     private boolean isPreviewRunning;
     //当前打开状态
     private volatile int currentOpenState; //1-打开成功，0-未打开，2-正在打开
-    //当前缓存的分辨率信息
-    private CameraSize[] supportSizes;
     //当前是否注册广播成功
     private volatile boolean isReceiverSuccess;
     //usb设备移除监听，正在打开时，不会回调此方法
@@ -195,6 +191,11 @@ public class UvcCamera {
             resultOpen(false, "未传入对应的usb设备驱动");
             return;
         }
+        String[] deviceNames = loadSplit(usbDevice);
+        if (deviceNames == null || deviceNames.length < 2) {
+            resultOpen(false, "检查usb驱动失败");
+            return;
+        }
         //初始化内存空间
         long nativeId = CameraNativeUtils.nativeCreate();
         uvcNativeId.set(nativeId);
@@ -207,14 +208,13 @@ public class UvcCamera {
             return;
         }
         iUsbDeviceConnect = usbDeviceConnection;
-        boolean result = CameraNativeUtils.nativeConnect(nativeId, usbDeviceConnection.getFileDescriptor());
+        boolean result = CameraNativeUtils.nativeConnectFd(nativeId, usbDeviceConnection.getFileDescriptor(), getBusNum(deviceNames), getDevAddress(deviceNames), getUSBFSName(deviceNames));
         if (!result) {
             Log.d("UvcCamera", "连接usb设备失败");
             close();
             resultOpen(false, "连接usb设备失败");
             return;
         }
-        this.supportSizes = CameraNativeUtils.getSupportPreviewSizes(nativeId);
         //设置默认使用的分辨率
         setPreviewSize(640, 480, FormatModeState.YUY2);
         resultOpen(true, "打开成功");
@@ -345,9 +345,6 @@ public class UvcCamera {
     public boolean setPreviewSize(int width, int height, FormatModeState formatState) {
         long nativeId = uvcNativeId.get();
         if (nativeId == 0L) return false;
-        if (!CameraUtils.isUsePreviewSize(supportSizes, width, height, formatState)) {
-            return false;
-        }
         return CameraNativeUtils.nativeSetPreviewSize(nativeId, width, height, formatState.getValue());
     }
 
@@ -384,6 +381,44 @@ public class UvcCamera {
         }
         iOpenListener.failed(message);
         iOpenListener = null;
+    }
+
+
+    private String[] loadSplit(UsbDevice device) {
+        String deviceName = device.getDeviceName();
+        if (TextUtils.isEmpty(deviceName)) {
+            return null;
+        }
+        return deviceName.split("/");
+
+    }
+
+    private int getBusNum(String[] split) {
+        try {
+            return Integer.parseInt(split[split.length - 2]);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    private int getDevAddress(String[] split) {
+        try {
+            return Integer.parseInt(split[split.length - 1]);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    private String getUSBFSName(String[] split) {
+        if (split == null || split.length <= 2) {
+            return "/dev/bus/usb";
+        }
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append(split[0]);
+        for (int i = 1; i < split.length - 2; i++) {
+            stringBuilder.append("/").append(split[i]);
+        }
+        return stringBuilder.toString().trim();
     }
 }
 

@@ -530,6 +530,10 @@ typedef struct uvc_still_ctrl {
 } uvc_still_ctrl_t;
 
 uvc_error_t uvc_init(uvc_context_t **ctx, struct libusb_context *usb_ctx);
+
+uvc_error_t uvc_init_fs(uvc_context_t **ctx, const char *usbFs);
+
+
 void uvc_exit(uvc_context_t *ctx);
 
 uvc_error_t uvc_get_device_list(
@@ -551,12 +555,6 @@ uvc_error_t uvc_find_device(
         uvc_device_t **dev,
         int vid, int pid, const char *sn);
 
-uvc_error_t uvc_get_device_with_fd(uvc_context_t *ctx,
-                                   uvc_device_t **device,
-                                   int vid, int pid,
-                                   const char *serial,
-                                   int fd,
-                                   int busnum, int devaddr);
 uvc_error_t uvc_find_devices(
         uvc_context_t *ctx,
         uvc_device_t ***devs,
@@ -577,6 +575,10 @@ uvc_error_t uvc_wrap(
 uvc_error_t uvc_open(
         uvc_device_t *dev,
         uvc_device_handle_t **devh);
+
+uvc_error_t uvc_get_device_with_fd(uvc_context_t *ctx, uvc_device_t **device, int fd, int busNum, int devAddress);
+
+
 void uvc_close(uvc_device_handle_t *devh);
 
 uvc_device_t *uvc_get_device(uvc_device_handle_t *devh);
@@ -885,4 +887,5 @@ uvc_error_t uvc_mjpeg2gray(uvc_frame_t *in, uvc_frame_t *out);
 #endif
 
 #endif // !def(LIBUVC_H)
+
 

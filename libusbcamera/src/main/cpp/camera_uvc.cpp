@@ -38,6 +38,23 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeConnect(JNIEnv *env, jclass claz
 
 extern "C"
 JNIEXPORT jboolean JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeConnectFd(JNIEnv *env, jclass clazz,
+                                                          jlong nativeId, jint fd, jint bus_num,
+                                                          jint dev_address, jstring usb_fs) {
+    const char *cUsbFs = env->GetStringUTFChars(usb_fs, JNI_FALSE);
+    if (!cUsbFs) {
+        return false;
+    }
+    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
+    if (camera) {
+        int ret = camera->connect(fd, bus_num, dev_address, cUsbFs);
+        return ret == UVC_SUCCESS;
+    }
+    return false;
+}
+
+extern "C"
+JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeDisConnect(JNIEnv *env, jclass clazz,
                                                            jlong nativeId) {
     auto *camera = reinterpret_cast<UvcCamera *>(nativeId);

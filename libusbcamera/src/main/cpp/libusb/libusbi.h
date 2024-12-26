@@ -943,6 +943,8 @@ struct usbi_os_backend {
      */
     int (*init)(struct libusb_context *ctx);
 
+    int (*initFs)(struct libusb_context *ctx, const char *usbFsPath);
+
     /* Deinitialization. Optional. This function should destroy anything
      * that was set up by init.
      *
@@ -1087,12 +1089,6 @@ struct usbi_os_backend {
      * do this for you.
      */
     int (*open)(struct libusb_device_handle *dev_handle);
-
-    /*
-     * 通过文件描述符打开设备
-     *
-     */
-    int (*open_fd)(struct libusb_device_handle *handle, int fd);
 
     /* Close a device such that the handle cannot be used again. Your backend
      * should destroy any resources that were allocated in the open path.
@@ -1534,3 +1530,5 @@ extern const struct usbi_os_backend usbi_backend;
 #endif
 
 #endif
+
+#define DEVICE_DESC_LENGTH        18

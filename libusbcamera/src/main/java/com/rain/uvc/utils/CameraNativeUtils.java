@@ -55,7 +55,14 @@ public class CameraNativeUtils {
      * @return 是否成功
      */
     public static native boolean nativeConnect(long nativeId, int fd);
-
+    /**
+     * 根据对应的FileDescriptor连接指定设备
+     *
+     * @param nativeId 对应的内存地址值
+     * @param fd       文件描述符
+     * @return 是否成功
+     */
+    public static native boolean nativeConnectFd(long nativeId, int fd,int busNum,int devAddress,String usbFs);
     /**
      * 断开连接设备
      *

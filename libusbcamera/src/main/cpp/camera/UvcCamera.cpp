@@ -22,14 +22,53 @@ int UvcCamera::connect(int fd) {
         return ret;
     }
     LOG_D("当前设备的文件描述符：%d", fd);
-    int usbRet = libusb_set_option(mContext->usb_ctx, LIBUSB_OPTION_WEAK_AUTHORITY, NULL);
-    LOG_D("初始化设置usb模式：%d", usbRet);
     ret = uvc_wrap(fd, mContext, &mDeviceHandle);
     LOG_E("uvc设备查询结果:%d", ret);
     if (ret != UVC_SUCCESS || !mDeviceHandle) {
         mDeviceHandle = nullptr;
         return ret;
     }
+    LOG_E("uvc设备打开结果:%d", ret);
+    mPreview = new UvcPreview(mDeviceHandle);
+    mFd = fd;
+    return UVC_SUCCESS;
+}
+
+/**
+ * 连接设备
+ * @param busNum  设备总线
+ * @param devAddress  设备地址
+ * @return  连接结果
+ */
+int UvcCamera::connect(int fd, int busNum, int devAddress, const char *usbFs) {
+    LOG_E("当前连接的设备:fd:%d", fd);
+    //初始化uvc的context实例
+    uvc_error_t ret = uvc_init_fs(&mContext, usbFs);
+    if (ret != UVC_SUCCESS) {
+        ret = uvc_init(&mContext, nullptr);
+    }
+    LOG_E("初始化uvc结果:%d", ret);
+    if (ret != UVC_SUCCESS || !mContext) {
+        mContext = nullptr;
+        return ret;
+    }
+    LOG_D("当前设备的文件描述符：%d---%d/%d", fd, busNum, devAddress);
+    fd = dup(fd);
+    ret = uvc_get_device_with_fd(mContext, &mDevice, fd, busNum, devAddress);
+    if (ret != UVC_SUCCESS) {
+        close(fd);
+        return ret;
+    }
+    ret = uvc_open(mDevice, &mDeviceHandle);
+    LOG_E("uvc设备打开结果:%d", ret);
+    if (ret != UVC_SUCCESS || !mDeviceHandle) {
+        mDeviceHandle = nullptr;
+        uvc_exit(mContext);
+        mContext = nullptr;
+        close(fd);
+        return ret;
+    }
+    mFd = fd;
     LOG_E("uvc设备打开结果:%d", ret);
     mPreview = new UvcPreview(mDeviceHandle);
     return UVC_SUCCESS;
@@ -51,12 +90,19 @@ int UvcCamera::disConnect() {
         uvc_close(mDeviceHandle);
         mDeviceHandle = nullptr;
     }
+    if (mDevice) {
+        uvc_unref_device(mDevice);
+        mDevice = nullptr;
+    }
     if (mContext) {
         LOG_D("uvc_exit mContext");
         uvc_exit(mContext);
         mContext = nullptr;
     }
-    clearCameraParams();
+    if (mFd != 0) {
+        close(mFd);
+        mFd = 0;
+    }
     LOG_D("断开连接结束");
     return UVC_SUCCESS;
 
@@ -283,9 +329,8 @@ bool UvcCamera::getSupportAutoExposure() {
 
 //初始化类
 UvcCamera::UvcCamera() : mContext(nullptr),
-                         mDeviceHandle(nullptr),
-                         mPreview(nullptr) {
-    clearCameraParams();
+                         mDeviceHandle(nullptr), mDevice(nullptr),
+                         mPreview(nullptr), mFd(0) {
 }
 
 
@@ -293,9 +338,6 @@ UvcCamera::~UvcCamera() {
     disConnect();
 }
 
-void UvcCamera::clearCameraParams() {
-
-}
 
 void UvcCamera::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener) {
     if (mPreview) {
