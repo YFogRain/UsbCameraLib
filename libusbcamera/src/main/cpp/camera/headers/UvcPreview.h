@@ -15,7 +15,7 @@
 #include <utility> // for std::pair
 
 #define  UVC_FORMAT_FRAME_WINDOW  WINDOW_FORMAT_RGBA_8888
-#define MAX_FRAME 5
+#define MAX_FRAME 2
 
 class UvcPreview {
 private:
@@ -35,11 +35,8 @@ private:
     pthread_mutex_t captureMutex;//捕获线程的互斥锁
     pthread_cond_t captureCond;//等待专用的条件变量
 
-    pthread_t previewThread; //捕获预览流，并且绘制到页面的线程
-    pthread_mutex_t previewMutex;//预览回调的互斥锁
-    pthread_cond_t previewCond;//等待专用的条件变量
     ObjectArray<uvc_frame_t *> previewFrames;
-    uvc_frame_t *lastFrames;//最后一帧数据，回调用
+
     void initFrame();
 
     int prepare_preview(uvc_stream_ctrl_t *ctrl); //准备预览
@@ -50,19 +47,11 @@ private:
 
     void clearCaptureFrame();//清空所有捕获的数据
 
-    void clearPreviewFrame();//清理旧的数据
-
     static void *capture_thread_func(void *vptr_args); //当前捕获线程的回调
-
-    static void *preview_thread_func(void *vptr_args); //当前捕获线程的回调
 
     void putFrame(uvc_frame_t *frame); //发送数据
 
-    void putPreviewFrame(uvc_frame_t *frame);//将当前预览帧的数据推到预览回调的线程
-
     uvc_frame_t *waitPreviewFrame(); //等待获取数据
-
-    uvc_frame_t *waitLastFrame();//获取最后一帧数据
 
     void drawFrame(uvc_frame_t *frame);//将数据绘制到控件上去，
 
@@ -80,7 +69,7 @@ public:
 
     int stopPreview();
 
-    int setPreviewSize(int width, int height,int format);
+    int setPreviewSize(int width, int height, int format);
 
     int setDisplaySurface(ANativeWindow *preview_window);
 
@@ -94,6 +83,8 @@ public:
     std::pair<int, int> getPreviewSize();
 
     int loadCurrentFormat();
+
+    size_t getPreviewBytesSize();
 };
 
 

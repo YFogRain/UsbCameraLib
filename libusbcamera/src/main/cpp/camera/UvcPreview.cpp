@@ -9,7 +9,6 @@ UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         theVM(nullptr),
         previewListener(nullptr),
         onFrameMethod(nullptr),
-        lastFrames(nullptr),
         mDeviceHandle(deviceHandler),
         frameMode(DEFAULT_PREVIEW_MODE),
         requestWidth(DEFAULT_PREVIEW_WIDTH),
@@ -19,9 +18,7 @@ UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         mIsRunning(false) {
     //初始化互斥锁
     pthread_mutex_init(&captureMutex, nullptr);
-    pthread_mutex_init(&previewMutex, nullptr);
     pthread_cond_init(&captureCond, nullptr);
-    pthread_cond_init(&previewCond, nullptr);
     initFrame();
 }
 
@@ -30,9 +27,7 @@ UvcPreview::~UvcPreview() {
         ANativeWindow_release(mPreviewWindow);
     }
     pthread_mutex_destroy(&captureMutex);
-    pthread_mutex_destroy(&previewMutex);
     pthread_cond_destroy(&captureCond);
-    pthread_cond_destroy(&previewCond);
     mPreviewWindow = nullptr;
     mDeviceHandle = nullptr;
 
@@ -94,29 +89,22 @@ int UvcPreview::prepare_preview(uvc_stream_ctrl_t *ctrl) {
         frameWidth = requestWidth;
         frameHeight = requestHeight;
     }
-    frameBytes = frameWidth * frameHeight * (frameMode == UVC_FORMAT_YUY2 ? 2 : 4);
+    frameBytes = getPreviewBytesSize();
     return UVC_SUCCESS;
 }
 
 int UvcPreview::do_preview(uvc_stream_ctrl_t *ctrl) {
+    clearCaptureFrame();
     uvc_error_t ret = uvc_start_streaming(mDeviceHandle, ctrl, uvc_stream_callback, (void *) this,
                                           0);
     LOG_D("开启预览流-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
     }
-    clearPreviewFrame();
-    clearPreviewFrame();
     //开启线程，启动捕获流操作
     mIsRunning = true;
     int result = pthread_create(&captureThread, nullptr, capture_thread_func, (void *) this);
     LOG_D("创建捕获数据线程结果-结果:%d", result);
-    if (result != UVC_SUCCESS) {
-        mIsRunning = false;
-        return result;
-    }
-    int resultPreview = pthread_create(&previewThread, nullptr, preview_thread_func, (void *) this);
-    LOG_D("创建预览回调结果线程-结果:%d", resultPreview);
     return ret;
 }
 
@@ -156,6 +144,8 @@ void UvcPreview::uvc_stream_callback(uvc_frame_t *frame, void *vptr_args) {
         uvc_free_frame(bgrFrame);
         return;
     }
+    //绘制
+    preview->drawFrame(bgrFrame);
     //数据发送出去
     preview->putFrame(bgrFrame);
 }
@@ -163,13 +153,20 @@ void UvcPreview::uvc_stream_callback(uvc_frame_t *frame, void *vptr_args) {
 void *UvcPreview::capture_thread_func(void *vptr_args) {
     auto *preview = reinterpret_cast<UvcPreview *>(vptr_args);
     if (preview) {
+        JNIEnv *env = nullptr;
         while (preview->mIsRunning) {
             //等待获取预览的数据
             uvc_frame_t *pFrame = preview->waitPreviewFrame();
             if (!pFrame)continue;
-            preview->drawFrame(pFrame);
-            //将当前帧发送给预览回调线程处理
-            preview->putPreviewFrame(pFrame);
+            //将数据回到给上层
+            if (preview->theVM && !env) {
+                preview->theVM->AttachCurrentThread(&env, nullptr);
+            }
+            if (env) {
+                preview->callbackFrame(pFrame, env);
+            }
+            //释放销毁当前的frame
+            uvc_free_frame(pFrame);
         }
     }
     pthread_exit(nullptr);
@@ -248,14 +245,9 @@ int UvcPreview::stopPreview() {
         if (pthread_join(captureThread, nullptr) != EXIT_SUCCESS) {
             LOG_E("UVCPreview::terminate capture thread: pthread_join failed");
         }
-        pthread_cond_signal(&previewCond);
-        if (pthread_join(previewThread, nullptr) != EXIT_SUCCESS) {
-            LOG_E("UVCPreview::terminate capture thread: pthread_join failed");
-        }
     }
     LOG_D("停止预览结束");
     clearCaptureFrame();
-    clearPreviewFrame();
     return UVC_SUCCESS;
 }
 
@@ -299,68 +291,6 @@ void UvcPreview::clearCaptureFrame() {
         previewFrames.clear();
     }
     pthread_mutex_unlock(&captureMutex);
-}
-
-void UvcPreview::clearPreviewFrame() {
-    pthread_mutex_lock(&previewMutex);
-    if (lastFrames) {
-        uvc_free_frame(lastFrames);
-        lastFrames = nullptr;
-    }
-    pthread_mutex_unlock(&previewMutex);
-}
-
-void *UvcPreview::preview_thread_func(void *vptr_args) {
-    auto *preview = reinterpret_cast<UvcPreview *>(vptr_args);
-    if (preview) {
-        JNIEnv *env = nullptr;
-        while (preview->mIsRunning) {
-            //等待获取预览的数据
-            uvc_frame_t *pFrame = preview->waitLastFrame();
-            if (!pFrame)continue;
-            //将数据回到给上层
-            if (preview->theVM && !env) {
-                preview->theVM->AttachCurrentThread(&env, nullptr);
-            }
-            if (env) {
-                preview->callbackFrame(pFrame, env);
-            }
-            //释放销毁当前的frame
-            uvc_free_frame(pFrame);
-        }
-    }
-    pthread_exit(nullptr);
-}
-
-void UvcPreview::putPreviewFrame(uvc_frame_t *frame) {
-    // 执行锁定
-    pthread_mutex_lock(&previewMutex);
-    // 如果缓存池的数据满了，则吧第一帧的数据删除掉
-    if (mIsRunning && !lastFrames) {
-        lastFrames = frame;
-        frame = nullptr;
-    }
-    pthread_cond_broadcast(&previewCond);
-    pthread_mutex_unlock(&previewMutex);
-    if (frame) {
-        // 如果没有写入到缓存，则直接释放当前对象
-        uvc_free_frame(frame);
-    }
-}
-
-uvc_frame_t *UvcPreview::waitLastFrame() {
-    uvc_frame_t *frame = nullptr;
-    pthread_mutex_lock(&previewMutex);
-    //如果当前内容为空，则等待获取数据，被唤醒
-    if (!lastFrames) {
-        pthread_cond_wait(&previewCond, &previewMutex);
-    }
-    if (mIsRunning) {
-        frame = lastFrames;
-        lastFrames = nullptr;
-    }
-    pthread_mutex_unlock(&previewMutex);
-    return frame;
 }
 
 void UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener) {
@@ -459,4 +389,22 @@ uvc_frame_format UvcPreview::getPreviewFormat() {
             return UVC_FRAME_FORMAT_YUYV;
     }
     return UVC_FRAME_FORMAT_YUYV;
+}
+
+size_t UvcPreview::getPreviewBytesSize() {
+    size_t previewSizes = frameWidth * frameHeight;
+    switch (frameMode) {
+        case UVC_FORMAT_MJPEG:
+            return previewSizes;
+        case UVC_FORMAT_YUY2:
+            return previewSizes * 2;
+        case UVC_FORMAT_NV12:
+            return previewSizes * 3 / 2; // 扩展支持 NV12 格式
+        case UVC_FORMAT_RGB:
+            return previewSizes * 3; // 扩展支持 RGB 格式
+        case UVC_FORMAT_BGR:
+            return previewSizes * 3; // 扩展支持 BGR 格式
+        default:
+            return previewSizes * 2;
+    }
 }

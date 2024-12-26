@@ -1740,51 +1740,48 @@ size_t uvc_num_devices(uvc_context_t *ctx) {
 }
 
 void uvc_process_control_status(uvc_device_handle_t *devh, unsigned char *data, int len) {
-    enum uvc_status_class status_class;
+    enum uvc_status_class status_class;//用于标识状态更新的类别（如控制摄像头或处理单元）
+    //状态更新的来源实体 ID，状态更新的功能选择器，状态更新的事件类型
     uint8_t originator = 0, selector = 0, event = 0;
+    //状态属性，初始化为未知状态
     enum uvc_status_attribute attribute = UVC_STATUS_ATTRIBUTE_UNKNOWN;
-    void *content = NULL;
-    size_t content_len = 0;
-    int found_entity = 0;
-    struct uvc_input_terminal *input_terminal;
-    struct uvc_processing_unit *processing_unit;
-
-    UVC_ENTER();
-
+    void *content = NULL;//指向状态更新的附加数据
+    size_t content_len = 0;//指向状态更新的附加数据长度
+    int found_entity = 0;//标记是否找到状态更新的来源实体
+    struct uvc_input_terminal *input_terminal;//输入终端的描述结构。
+    struct uvc_processing_unit *processing_unit;//处理单元描述结构
+    LOG_E("解析VideoControl控制传输数据:%d", len);
+    //检查数据合法性
     if (len < 5) {
-        UVC_DEBUG("Short read of VideoControl status update (%d bytes)", len);
-        UVC_EXIT_VOID();
+        LOG_E("当前数据不合法，中断处理");
+        return;
+    }
+    originator = data[1];//状态更新来源实体的 ID
+    event = data[2];//状态事件类型，例如 0 表示常规更新
+    selector = data[3];//功能选择器，用于进一步标识状态更新的功能
+
+    if (originator == 0) {//设备未指定来源，可能是某些虚拟接口的状态更新，不处理
         return;
     }
 
-    originator = data[1];
-    event = data[2];
-    selector = data[3];
-
-    if (originator == 0) {
-        UVC_DEBUG("Unhandled update from VC interface");
-        UVC_EXIT_VOID();
-        return;  /* @todo VideoControl virtual entity interface updates */
-    }
-
-    if (event != 0) {
-        UVC_DEBUG("Unhandled VC event %d", (int) event);
-        UVC_EXIT_VOID();
+    if (event != 0) {// 表示事件类型未知或不支持，目前只处理 event == 0
         return;
     }
 
-    /* printf("bSelector: %d\n", selector); */
-
+    //检查是否是输入终端
+    //遍历 input_term_descs 链表，查找是否有 bTerminalID 匹配 originator
     DL_FOREACH(devh->info->ctrl_if.input_term_descs, input_terminal) {
+        //如果匹配，将 status_class 设置为 UVC_STATUS_CLASS_CONTROL_CAMERA
         if (input_terminal->bTerminalID == originator) {
             status_class = UVC_STATUS_CLASS_CONTROL_CAMERA;
             found_entity = 1;
             break;
         }
     }
-
+    //如果不是输入终端，继续遍历 processing_unit_descs 链表，查找 bUnitID 是否匹配。
     if (!found_entity) {
         DL_FOREACH(devh->info->ctrl_if.processing_unit_descs, processing_unit) {
+            //如果匹配，将 status_class 设置为 UVC_STATUS_CLASS_CONTROL_PROCESSING
             if (processing_unit->bUnitID == originator) {
                 status_class = UVC_STATUS_CLASS_CONTROL_PROCESSING;
                 found_entity = 1;
@@ -1792,23 +1789,18 @@ void uvc_process_control_status(uvc_device_handle_t *devh, unsigned char *data, 
             }
         }
     }
-
-    if (!found_entity) {
-        UVC_DEBUG("Got status update for unknown VideoControl entity %d",
-                  (int) originator);
-        UVC_EXIT_VOID();
+    if (!found_entity) {//如果无法匹配到已知实体，则输出调试信息并退出
         return;
     }
 
-    attribute = data[4];
-    content = data + 5;
-    content_len = len - 5;
+    attribute = data[4];//第 5 个字节表示属性值，标识状态更新的具体类型
+    content = data + 5;//从第 6 个字节开始是附加数据内容，
+    content_len = len - 5;//长度为 len - 5
 
-    UVC_DEBUG("Event: class=%d, event=%d, selector=%d, attribute=%d, content_len=%zd",
-              status_class, event, selector, attribute, content_len);
-
+    LOG_D("Event: class=%d, event=%d, selector=%d, attribute=%d, content_len=%zd", status_class,
+          event, selector, attribute, content_len);
+    //如果用户已注册状态回调函数（status_cb）
     if (devh->status_cb) {
-        UVC_DEBUG("Running user-supplied status callback");
         devh->status_cb(status_class,
                         event,
                         selector,
@@ -1816,53 +1808,47 @@ void uvc_process_control_status(uvc_device_handle_t *devh, unsigned char *data, 
                         content, content_len,
                         devh->status_user_ptr);
     }
-
-    UVC_EXIT_VOID();
 }
 
 void uvc_process_streaming_status(uvc_device_handle_t *devh, unsigned char *data, int len) {
-
-    UVC_ENTER();
-
+    //检查接收到的数据长度是否有效
     if (len < 3) {
-        UVC_DEBUG("Invalid streaming status event received.\n");
-        UVC_EXIT_VOID();
         return;
     }
-
-    if (data[2] == 0) {
-        if (len < 4) {
-            UVC_DEBUG("Short read of status update (%d bytes)", len);
-            UVC_EXIT_VOID();
+    //解析状态事件
+    if (data[2] == 0) {//值为 0：表示 按钮事件。
+        if (len < 4) {//按钮事件需要至少 4 字节的数据。如果数据不足，直接返回
             return;
         }
-        UVC_DEBUG("Button (intf %u) %s len %d\n", data[1], data[3] ? "pressed" : "released", len);
-
-        if (devh->button_cb) {
-            UVC_DEBUG("Running user-supplied button callback");
+        if (devh->button_cb) {//用户定义了按钮事件回调（button_cb），则调用该回调
             devh->button_cb(data[1],
                             data[3],
                             devh->button_user_ptr);
         }
     } else {
-        UVC_DEBUG("Stream %u error event %02x %02x len %d.\n", data[1], data[2], data[3], len);
+        //处理流状态错误
+        LOG_E("当前流状态错误：status:%d", data[2]);
     }
 
-    UVC_EXIT_VOID();
 }
 
+/**
+ * uvc流处理
+ * VideoControl：负责管理摄像头设备的整体控制，例如设备初始化、格式配置、解析能力（如分辨率和帧率）查询等
+ * VideoStreaming：主要用于传输实际的视频帧数据（例如 MJPEG 或 RAW 格式）
+ * @param devh
+ * @param transfer
+ */
 void uvc_process_status_xfer(uvc_device_handle_t *devh, struct libusb_transfer *transfer) {
-
-    UVC_ENTER();
-
-    /* printf("Got transfer of aLen = %d\n", transfer->actual_length); */
-
+    LOG_D("当前传输数据的长度为::::%d", transfer->actual_length);
+    //检查传输数据的长度
     if (transfer->actual_length > 0) {
+        //根据传输数据的内容处理
         switch (transfer->buffer[0] & 0x0f) {
-            case 1: /* VideoControl interface */
+            case 1: //这是来自 VideoControl 接口的状态数据
                 uvc_process_control_status(devh, transfer->buffer, transfer->actual_length);
                 break;
-            case 2:  /* VideoStreaming interface */
+            case 2:  //这是来自 VideoStreaming 接口的状态数据
                 uvc_process_streaming_status(devh, transfer->buffer, transfer->actual_length);
                 break;
         }
@@ -1875,34 +1861,30 @@ void uvc_process_status_xfer(uvc_device_handle_t *devh, struct libusb_transfer *
  * @brief Process asynchronous status updates from the device.
  */
 void LIBUSB_CALL _uvc_status_callback(struct libusb_transfer *transfer) {
-    UVC_ENTER();
-
+    LOG_D("接收到控制传输数据，status:=%d", transfer->status);
     uvc_device_handle_t *devh = (uvc_device_handle_t *) transfer->user_data;
-
+    // 判断传输的状态，并采取相应的处理
     switch (transfer->status) {
-        case LIBUSB_TRANSFER_ERROR:
-        case LIBUSB_TRANSFER_CANCELLED:
-        case LIBUSB_TRANSFER_NO_DEVICE:
-            UVC_DEBUG("not processing/resubmitting, status = %d", transfer->status);
-            UVC_EXIT_VOID();
+        case LIBUSB_TRANSFER_ERROR://发生错误，不再处理或重新提交传输
+        case LIBUSB_TRANSFER_CANCELLED://传输被取消，忽略并返回
+        case LIBUSB_TRANSFER_NO_DEVICE://设备不存在，通常是设备断开连接
+            LOG_D("没有进行传输的数据信息，status:=%d", transfer->status);
             return;
-        case LIBUSB_TRANSFER_COMPLETED:
+        case LIBUSB_TRANSFER_COMPLETED:// 传输成功，调用 uvc_process_status_xfer 处理状态数据。
             uvc_process_status_xfer(devh, transfer);
             break;
-        case LIBUSB_TRANSFER_TIMED_OUT:
-        case LIBUSB_TRANSFER_STALL:
-        case LIBUSB_TRANSFER_OVERFLOW:
-            UVC_DEBUG("retrying transfer, status = %d", transfer->status);
+        case LIBUSB_TRANSFER_TIMED_OUT://超时，重试传输。
+        case LIBUSB_TRANSFER_STALL://传输失败，重新尝试
+        case LIBUSB_TRANSFER_OVERFLOW://传输溢出，重新尝试
+            LOG_D("进行传输重试，status:=%d", transfer->status);
             break;
     }
 
 #ifdef UVC_DEBUGGING
     uvc_error_t ret =
 #endif
-    libusb_submit_transfer(transfer);
-    UVC_DEBUG("libusb_submit_transfer() = %d", ret);
-
-    UVC_EXIT_VOID();
+    int ret = libusb_submit_transfer(transfer);//将传输重新提交，继续接收或发送数据
+    LOG_D("提交传输结果，status:=%d", ret);
 }
 
 /** @brief Set a callback function to receive status updates
