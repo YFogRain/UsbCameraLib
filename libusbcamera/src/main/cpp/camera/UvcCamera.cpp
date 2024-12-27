@@ -60,7 +60,7 @@ int UvcCamera::connect(int fd, int busNum, int devAddress, const char *usbFs) {
         return ret;
     }
     ret = uvc_open(mDevice, &mDeviceHandle);
-    LOG_E("uvc设备打开结果:%d", ret);
+    LOG_D("uvc设备打开结果:%d", ret);
     if (ret != UVC_SUCCESS || !mDeviceHandle) {
         mDeviceHandle = nullptr;
         uvc_exit(mContext);
@@ -69,7 +69,7 @@ int UvcCamera::connect(int fd, int busNum, int devAddress, const char *usbFs) {
         return ret;
     }
     mFd = fd;
-    LOG_E("uvc设备打开结果:%d", ret);
+    LOG_D("uvc设备打开结果:%d", ret);
     mPreview = new UvcPreview(mDeviceHandle);
     return UVC_SUCCESS;
 }

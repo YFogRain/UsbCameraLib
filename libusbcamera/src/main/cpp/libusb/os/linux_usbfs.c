@@ -92,7 +92,6 @@ static unsigned int max_iso_packet_len = 0;
 
 /* is sysfs available (mounted) ? */
 static int sysfs_available = -1;
-static int sysfs_has_descriptors = -1;
 /* how many times have we initted (and not exited) ? */
 static int init_count = 0;
 
@@ -387,14 +386,6 @@ static int op_init(struct libusb_context *ctx) {
             max_iso_packet_len = 8192;
     }
 
-    if (-1 == sysfs_has_descriptors) {
-        /* sysfs descriptors has all descriptors since Linux 2.6.26 */
-        sysfs_has_descriptors = kernel_version_ge(&kversion, 2, 6, 26);
-        if (UNLIKELY(-1 == sysfs_has_descriptors)) {
-            LOG_E("error checking for sysfs descriptors");
-            return LIBUSB_ERROR_OTHER;
-        }
-    }
     usbi_dbg(ctx, "max iso packet length is (likely) %u bytes", max_iso_packet_len);
 
     if (sysfs_available == -1) {
@@ -468,15 +459,6 @@ static int op_initFs(struct libusb_context *ctx, const char *usbFsPath) {
             max_iso_packet_len = 49152;
         else
             max_iso_packet_len = 8192;
-    }
-    //检查是否支持 sysfs 描述符
-    if (-1 == sysfs_has_descriptors) {
-        /* sysfs descriptors has all descriptors since Linux 2.6.26 */
-        sysfs_has_descriptors = kernel_version_ge(&kversion, 2, 6, 26);
-        if (UNLIKELY(-1 == sysfs_has_descriptors)) {
-            LOG_E("检查sysfs的支持失败");
-            return LIBUSB_ERROR_OTHER;
-        }
     }
     LOG_D("当前支持的iso的等时传输包的最大长度为：%d", max_iso_packet_len);
     //检查 sysfs 是否可用

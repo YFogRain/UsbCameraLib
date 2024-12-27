@@ -215,10 +215,8 @@ public class UvcCamera {
             resultOpen(false, "连接usb设备失败");
             return;
         }
-        //设置默认使用的分辨率
-        setPreviewSize(640, 480, FormatModeState.YUY2);
-        resultOpen(true, "打开成功");
         Log.d("UvcCamera", "啊，可算打开成功了～");
+        resultOpen(true, "打开成功");
     }
 
     /**
@@ -250,7 +248,7 @@ public class UvcCamera {
      *
      * @param width      宽
      * @param height     高
-     * @param formatSate 是否采用mjpeg的格式分辨率，数据根据返回的分辨率列表决定是否存在，如果不存在，则直接使用可找到的分辨率列表
+     * @param formatSate 使用的格式类型
      */
 
     public boolean updatePreviewSize(int width, int height, FormatModeState formatSate) {

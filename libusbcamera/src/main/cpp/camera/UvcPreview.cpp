@@ -10,7 +10,7 @@ UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         previewListener(nullptr),
         onFrameMethod(nullptr),
         mDeviceHandle(deviceHandler),
-        frameMode(DEFAULT_PREVIEW_MODE),
+        frameMode(UVC_FORMAT_YUY2),
         requestWidth(DEFAULT_PREVIEW_WIDTH),
         requestHeight(DEFAULT_PREVIEW_HEIGHT),
         mPreviewWindow(nullptr),

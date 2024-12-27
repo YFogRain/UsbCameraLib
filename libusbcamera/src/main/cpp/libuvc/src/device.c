@@ -375,13 +375,13 @@ static uvc_error_t uvc_open_internal(
     internal_devh->is_isight = (desc.idVendor == 0x05ac &&
                                 desc.idProduct == 0x8501);//检查设备是否是 Apple 的 iSight 摄像头
     //处理状态中断传输
+    LOG_D("是否存在中断传输断点-bEndpointAddress:%d",internal_devh->info->ctrl_if.bEndpointAddress);
     if (internal_devh->info->ctrl_if.bEndpointAddress) {//如果设备的控制接口有中断端点
         internal_devh->status_xfer = libusb_alloc_transfer(0);
         if (!internal_devh->status_xfer) {//
             ret = UVC_ERROR_NO_MEM;
             goto fail;
         }
-
         //填充中断传输的参数，设置回调函数 _uvc_status_callback 来处理接收到的数据。
         libusb_fill_interrupt_transfer(internal_devh->status_xfer,
                                        usb_devh,
