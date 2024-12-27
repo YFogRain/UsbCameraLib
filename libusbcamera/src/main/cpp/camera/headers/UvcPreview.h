@@ -39,8 +39,6 @@ private:
 
     ObjectArray<uvc_frame_t *> previewFrames;
 
-    void initFrame();
-
     int prepare_preview(uvc_stream_ctrl_t *ctrl); //准备预览
 
     int do_preview(uvc_stream_ctrl_t *ctrl); //开始预览

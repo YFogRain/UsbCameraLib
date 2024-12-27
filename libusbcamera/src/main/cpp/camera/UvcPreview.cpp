@@ -21,7 +21,6 @@ UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
     pthread_cond_init(&captureCond, nullptr);
 
     pthread_mutex_init(&surfaceMutex, nullptr);
-    initFrame();
 }
 
 UvcPreview::~UvcPreview() {
@@ -38,24 +37,6 @@ UvcPreview::~UvcPreview() {
     theVM = nullptr;
     previewListener = nullptr;
     onFrameMethod = nullptr;
-}
-
-void UvcPreview::initFrame() {
-    const uvc_format_desc_t *format_desc = uvc_get_format_descs(mDeviceHandle);
-    const uvc_frame_desc_t *frame_desc = format_desc->frame_descs;
-    int width = DEFAULT_PREVIEW_WIDTH;
-    int height = DEFAULT_PREVIEW_HEIGHT;
-    int fps = DEFAULT_PREVIEW_FPS;
-    LOG_D("当前获取的预览模式:%d", format_desc->bDescriptorSubtype);
-    if (frame_desc) {
-        width = frame_desc->wWidth;
-        height = frame_desc->wHeight;
-        fps = 10000000 / frame_desc->dwDefaultFrameInterval;
-        LOG_D("frame_desc-宽高:%d-%d;fps:%d", width, height, fps);
-    }
-    requestWidth = width;
-    requestHeight = height;
-    LOG_D("实际使用-宽高:%d-%d", requestWidth, requestHeight);
 }
 
 int UvcPreview::startPreview() {
@@ -254,10 +235,8 @@ int UvcPreview::stopPreview() {
 
 int UvcPreview::setPreviewSize(int width, int height, int format) {
     LOG_D("setPreviewSize-size:%d*%d,format:%d", width, height, format);
-    if ((requestWidth != width) || (requestHeight != height)) {
-        requestWidth = width;
-        requestHeight = height;
-    }
+    requestWidth = width;
+    requestHeight = height;
     frameMode = format;
     //第一次设置流参数注定失败，所以，需要提前设置一次
     uvc_stream_ctrl_t ctrl;
