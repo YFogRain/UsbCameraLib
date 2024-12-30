@@ -339,10 +339,10 @@ UvcCamera::~UvcCamera() {
 }
 
 
-void UvcCamera::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener) {
+void UvcCamera::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener,int mode) {
     if (mPreview) {
         jobject framePreviewListener = env->NewGlobalRef(listener);
-        mPreview->setPreviewListener(vm, env, framePreviewListener);
+        mPreview->setPreviewListener(vm, env, framePreviewListener,mode);
     }
 }
 

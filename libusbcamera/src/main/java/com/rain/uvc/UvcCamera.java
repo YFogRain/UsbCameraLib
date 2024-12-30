@@ -17,6 +17,7 @@ import com.rain.uvc.listener.ICameraOpenListener;
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
 import com.rain.uvc.mode.FormatModeState;
+import com.rain.uvc.mode.FormatRequestMode;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraSupportParameters;
@@ -224,10 +225,10 @@ public class UvcCamera {
      *
      * @param listener 预览回调监听
      */
-    public boolean setPreviewListener(IFrameListener listener) {
+    public boolean setPreviewListener(IFrameListener listener, FormatRequestMode mode) {
         long nativeId = uvcNativeId.get();
         if (nativeId == 0L) return false;
-        CameraNativeUtils.setPreviewListener(nativeId, listener);
+        CameraNativeUtils.setPreviewListener(nativeId, listener, mode.getValue());
         return true;
     }
 

@@ -31,6 +31,7 @@ private:
     size_t frameBytes;//预览数据大小，为了校验数据完整性
 
     int frameMode;//使用的类型
+    int requestMode;//回调时转换的数据类型
     pthread_mutex_t surfaceMutex;//预览互斥锁
 
     pthread_t captureThread; //捕获预览流，并且绘制到页面的线程
@@ -59,6 +60,7 @@ private:
 
     uvc_frame_format getPreviewFormat();
 
+
 public:
 
     UvcPreview(uvc_device_handle_t *deviceHandler);
@@ -73,7 +75,7 @@ public:
 
     int setDisplaySurface(ANativeWindow *preview_window);
 
-    void setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener);
+    void setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener,int mode);
 
     //设置预览方向
     bool setDisplayOrientation(int orientation);

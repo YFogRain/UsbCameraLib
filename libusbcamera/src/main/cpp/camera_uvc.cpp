@@ -218,11 +218,12 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetIntValue(JNIEnv *env, jclass 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_setPreviewListener(JNIEnv *env, jclass clazz,
-                                                             jlong nativeId, jobject listener) {
+                                                             jlong nativeId, jobject listener,
+                                                             jint mode) {
     auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
     if (camera) {
         JavaVM *vm;
         env->GetJavaVM(&vm);
-        camera->setPreviewListener(vm, env, listener);
+        camera->setPreviewListener(vm, env, listener, mode);
     }
 }

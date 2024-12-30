@@ -120,7 +120,7 @@ public class CameraNativeUtils {
      * @param nativeId 设置的对应id
      * @param listener 监听器
      */
-    public static native void setPreviewListener(long nativeId, IFrameListener listener);
+    public static native void setPreviewListener(long nativeId, IFrameListener listener,int mode);
 
     /**
      * 获取是否支持自动曝光

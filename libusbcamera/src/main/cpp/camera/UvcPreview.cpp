@@ -4,6 +4,11 @@
 
 #include "UvcPreview.h"
 #include "CameraParameterState.h"
+#include "opencv2/core/mat.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "vector"
+#include "img_util.h"
 
 UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         theVM(nullptr),
@@ -14,6 +19,7 @@ UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         requestWidth(DEFAULT_PREVIEW_WIDTH),
         requestHeight(DEFAULT_PREVIEW_HEIGHT),
         mPreviewWindow(nullptr),
+        requestMode(UVC_REQUEST_FORMAT_RGBA),
         frameBytes(DEFAULT_PREVIEW_WIDTH * DEFAULT_PREVIEW_HEIGHT * 2),
         mIsRunning(false) {
     //初始化互斥锁
@@ -117,22 +123,21 @@ void UvcPreview::uvc_stream_callback(uvc_frame_t *frame, void *vptr_args) {
               preview->frameBytes);
         return;
     }
-    //    //获取bgr类型的数据数组
-    uvc_frame_t *bgrFrame = uvc_allocate_frame(frame->width * frame->height * 3);
-    if (!bgrFrame) {
-        LOG_E("数据转换失败");
+    //    //获取RGBA类型的数据数组
+    uvc_frame_t *rgbaFrame = uvc_allocate_frame(frame->width * frame->height * 4);
+    if (!rgbaFrame) {
+        LOG_E("创建rgba对象失败");
         return;
     }
-    //将数据转换成rgb格式
-    uvc_error_t ret = uvc_any2rgb(frame, bgrFrame);
-    if (ret != UVC_SUCCESS) {
-        uvc_free_frame(bgrFrame);
+    if (!ImgUtils::any2Rgba(frame, rgbaFrame)) {
+        LOG_E("数据转换失败");
+        uvc_free_frame(rgbaFrame);
         return;
     }
     //绘制
-    preview->drawFrame(bgrFrame);
+    preview->drawFrame(rgbaFrame);
     //数据发送出去
-    preview->putFrame(bgrFrame);
+    preview->putFrame(rgbaFrame);
 }
 
 void *UvcPreview::capture_thread_func(void *vptr_args) {
@@ -167,15 +172,7 @@ void UvcPreview::drawFrame(uvc_frame_t *frame) {
         // 锁定缓冲区以获取可以写入的内存区域
         if (ANativeWindow_lock(mPreviewWindow, &buffer, nullptr) == 0) {
             auto *dst = (uint8_t *) buffer.bits;
-            uint32_t height = frame->height;
-            uint32_t width = frame->width;
-            // 将RGB数据复制到RGBA图像，并设置alpha值为255
-            for (int i = 0, j = 0; i < width * height; ++i, j += 4) {
-                dst[j] = src[i * 3];     // R
-                dst[j + 1] = src[i * 3 + 1]; // G
-                dst[j + 2] = src[i * 3 + 2]; // B
-                dst[j + 3] = 0xFF;                 // A
-            }
+            std::memcpy(dst, src, frame->data_bytes);
             // 解锁缓冲区
             ANativeWindow_unlockAndPost(mPreviewWindow);
         }
@@ -277,7 +274,8 @@ void UvcPreview::clearCaptureFrame() {
     pthread_mutex_unlock(&captureMutex);
 }
 
-void UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener) {
+void UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
+    this->requestMode = mode;
     pthread_mutex_lock(&captureMutex);
     theVM = vm;
     if (!env->IsSameObject(previewListener, listener)) {
@@ -315,11 +313,25 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
         LOG_D("callbackFrame-return");
         return;
     }
-    jobject buf = env->NewDirectByteBuffer(frame->data, frame->data_bytes);
-    env->CallVoidMethod(previewListener, onFrameMethod, frame->width, frame->height, buf);
-    if (env->ExceptionCheck()) {
-        LOG_D("ExceptionCheck");
-        env->ExceptionDescribe();
+    uvc_frame_t *outData;
+    if (requestMode == UVC_REQUEST_FORMAT_YUV_420) {
+        outData = ImgUtils::rgba2Nv21(frame);
+    } else {
+        outData = frame;
+    }
+    if (!outData) {
+        return;
+    }
+    jobject buf = env->NewDirectByteBuffer(outData->data, outData->data_bytes);
+    if (buf) {
+        env->CallVoidMethod(previewListener, onFrameMethod, outData->width, outData->height, buf);
+        if (env->ExceptionCheck()) {
+            LOG_D("ExceptionCheck");
+            env->ExceptionDescribe();
+        }
+    }
+    if (requestMode == UVC_REQUEST_FORMAT_YUV_420) {
+        uvc_free_frame(outData);
     }
 }
 
