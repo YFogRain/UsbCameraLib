@@ -52,11 +52,7 @@ public:
 
     int getParameterIntValue(int type);//获取当前int类型参数
 
-    bool getParameterBoolValue(int type); //设置当前bool类型参数
-
     bool setParameterIntValue(int type, int value);
-
-    bool setParameterBoolValue(int type, bool value); //设置当前bool类型参数
 
     bool getSupportAutoExposure();
 

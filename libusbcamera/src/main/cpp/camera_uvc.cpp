@@ -1,10 +1,18 @@
 #include <jni.h>
 #include "camera/headers/UvcCamera.h"
 #include <utility> // for std::pair
+#include "Log.h"
 
 //
 // Created by MI T on 2024/8/1.
 //
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_debuggable(JNIEnv *env, jclass clazz, jint status) {
+    DEBUG_ENABLE = status;
+    return true;
+}
 
 extern "C"
 JNIEXPORT jlong JNICALL
@@ -183,27 +191,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetIntValue(JNIEnv *env, jclass 
     }
     return -999;
 }
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetBoolValue(JNIEnv *env, jclass clazz,
-                                                             jlong nativeId, jint type) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        return camera->getParameterBoolValue(type);
-    }
-    return false;
-}
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetBoolValue(JNIEnv *env, jclass clazz,
-                                                             jlong nativeId, jint type,
-                                                             jboolean value) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        return camera->setParameterBoolValue(type, value);
-    }
-    return false;
-}
+
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetIntValue(JNIEnv *env, jclass clazz,

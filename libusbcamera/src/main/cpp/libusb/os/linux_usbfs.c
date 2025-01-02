@@ -353,77 +353,7 @@ static int kernel_version_ge(const struct kernel_version *ver,
     return ver->sublevel >= sublevel;
 }
 
-static int op_init(struct libusb_context *ctx) {
-    struct kernel_version kversion;
-    const char *usbfs_path;
-    int r;
-    struct linux_context_priv *cpriv = usbi_get_context_priv(ctx);
-
-    if (get_kernel_version(ctx, &kversion) < 0)
-        return LIBUSB_ERROR_OTHER;
-
-    if (!kernel_version_ge(&kversion, 2, 6, 32)) {
-        usbi_err(ctx, "kernel version is too old (reported as %d.%d.%d)",
-                 kversion.major, kversion.minor,
-                 kversion.sublevel != -1 ? kversion.sublevel : 0);
-        return LIBUSB_ERROR_NOT_SUPPORTED;
-    }
-
-    usbfs_path = find_usbfs_path();
-    if (!usbfs_path) {
-        usbi_err(ctx, "could not find usbfs");
-        return LIBUSB_ERROR_OTHER;
-    }
-
-    usbi_dbg(ctx, "found usbfs at %s", usbfs_path);
-
-    if (!max_iso_packet_len) {
-        if (kernel_version_ge(&kversion, 5, 2, 0))
-            max_iso_packet_len = 98304;
-        else if (kernel_version_ge(&kversion, 3, 10, 0))
-            max_iso_packet_len = 49152;
-        else
-            max_iso_packet_len = 8192;
-    }
-
-    usbi_dbg(ctx, "max iso packet length is (likely) %u bytes", max_iso_packet_len);
-
-    if (sysfs_available == -1) {
-        struct statfs statfsbuf;
-
-        r = statfs(SYSFS_MOUNT_PATH, &statfsbuf);
-        if (r == 0 && statfsbuf.f_type == SYSFS_MAGIC) {
-            LOG_D("sysfs is available");
-            sysfs_available = 1;
-        } else {
-            LOG_D("sysfs not mounted");
-            sysfs_available = 0;
-        }
-    }
-
-    if (cpriv->no_device_discovery) {
-        return LIBUSB_SUCCESS;
-    }
-
-    r = LIBUSB_SUCCESS;
-    if (init_count == 0) {
-        /* start up hotplug event handler */
-        r = linux_start_event_monitor();
-    }
-    if (r == LIBUSB_SUCCESS) {
-        r = linux_scan_devices(ctx);
-        if (r == LIBUSB_SUCCESS)
-            init_count++;
-        else if (init_count == 0)
-            linux_stop_event_monitor();
-    } else {
-        usbi_err(ctx, "error starting hotplug event monitor");
-    }
-
-    return r;
-}
-
-static int op_initFs(struct libusb_context *ctx, const char *usbFsPath) {
+static int op_init(struct libusb_context *ctx, const char *usbFsPath) {
     struct kernel_version kversion;
     const char *usbfs_path;
     int r;
@@ -2871,7 +2801,6 @@ const struct usbi_os_backend usbi_backend = {
         .name = "Linux usbfs",
         .caps = USBI_CAP_HAS_HID_ACCESS | USBI_CAP_SUPPORTS_DETACH_KERNEL_DRIVER,
         .init = op_init,
-        .initFs = op_initFs,
         .exit = op_exit,
         .set_option = op_set_option,
         .hotplug_poll = op_hotplug_poll,

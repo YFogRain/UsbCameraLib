@@ -941,9 +941,7 @@ struct usbi_os_backend {
      *
      * Return 0 on success, or a LIBUSB_ERROR code on failure.
      */
-    int (*init)(struct libusb_context *ctx);
-
-    int (*initFs)(struct libusb_context *ctx, const char *usbFsPath);
+    int (*init)(struct libusb_context *ctx, const char *usbFsPath);
 
     /* Deinitialization. Optional. This function should destroy anything
      * that was set up by init.

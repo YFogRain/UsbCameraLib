@@ -9,6 +9,7 @@ import android.os.Build;
 import android.util.Log;
 
 import com.rain.uvc.provider.OverallContext;
+import com.rain.uvc.utils.CameraNativeUtils;
 
 import java.util.Collection;
 
@@ -18,6 +19,13 @@ import java.util.Collection;
  * @des uvc摄像头操作帮助类
  */
 public class UvcCameraHelper {
+
+    /**
+     * debug模式开关
+     */
+    public static boolean debuggable(boolean status) {
+        return CameraNativeUtils.debuggable(status ? 1 : 0);
+    }
 
     /**
      * 打开对应的uvc摄像头驱动

@@ -36,6 +36,7 @@
 #ifdef HAVE_SYSLOG
 #include <syslog.h>
 #endif
+int DEBUG_ENABLE = 0;
 
 static const struct libusb_version libusb_version_internal =
         {LIBUSB_MAJOR, LIBUSB_MINOR, LIBUSB_MICRO, LIBUSB_NANO,
@@ -2496,7 +2497,7 @@ libusb_init_context(libusb_context **ctx, const struct libusb_init_option option
     usbi_mutex_static_unlock(&active_contexts_lock);
     //调用后端初始化
     if (usbi_backend.init) {
-        r = usbi_backend.init(_ctx);
+        r = usbi_backend.init(_ctx,NULL);
         if (r)
             goto err_io_exit;
     }
@@ -3030,8 +3031,8 @@ libusb_init_context_fs(libusb_context **ctx, const struct libusb_init_option opt
     list_add(&_ctx->list, &active_contexts_list);
     usbi_mutex_static_unlock(&active_contexts_lock);
     //调用后端初始化
-    if (usbi_backend.initFs) {
-        r = usbi_backend.initFs(_ctx, usbfs);
+    if (usbi_backend.init) {
+        r = usbi_backend.init(_ctx, usbfs);
         if (r)
             goto err_io_exit;
     }

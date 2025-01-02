@@ -1,7 +1,6 @@
 package com.rain.uvc.utils;
 
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.Surface;
 
 import com.rain.uvc.listener.IFrameListener;
@@ -26,11 +25,12 @@ public class CameraNativeUtils {
 
     static {
         System.loadLibrary("usb100");
-//        System.loadLibrary("libjpeg-turbo");
         System.loadLibrary("uvc");
         System.loadLibrary("uvcCamera");
     }
 
+
+    public static native boolean debuggable(int status);
 
     /**
      * 创建对应的jni内存地址
@@ -55,6 +55,7 @@ public class CameraNativeUtils {
      * @return 是否成功
      */
     public static native boolean nativeConnect(long nativeId, int fd);
+
     /**
      * 根据对应的FileDescriptor连接指定设备
      *
@@ -62,7 +63,8 @@ public class CameraNativeUtils {
      * @param fd       文件描述符
      * @return 是否成功
      */
-    public static native boolean nativeConnectFd(long nativeId, int fd,int busNum,int devAddress,String usbFs);
+    public static native boolean nativeConnectFd(long nativeId, int fd, int busNum, int devAddress, String usbFs);
+
     /**
      * 断开连接设备
      *
@@ -120,7 +122,7 @@ public class CameraNativeUtils {
      * @param nativeId 设置的对应id
      * @param listener 监听器
      */
-    public static native void setPreviewListener(long nativeId, IFrameListener listener,int mode);
+    public static native void setPreviewListener(long nativeId, IFrameListener listener, int mode);
 
     /**
      * 获取是否支持自动曝光
@@ -155,25 +157,6 @@ public class CameraNativeUtils {
      * @return 返回值
      */
     private static native int nativeGetIntValue(long nativeId, int type);
-
-    /**
-     * 获取对应类型的boolean类型值
-     *
-     * @param nativeId 对应的内存地址值
-     * @param type     对应获取的类型
-     * @return 返回值
-     */
-    private static native boolean nativeGetBoolValue(long nativeId, int type);
-
-    /**
-     * 设置对应类型的boolean类型值
-     *
-     * @param nativeId 对应的内存地址值
-     * @param type     对应获取的类型
-     * @param value    对应的值
-     * @return 是否成功
-     */
-    private static native boolean nativeSetBoolValue(long nativeId, int type, boolean value);
 
     /**
      * 设置对应的int类型值
@@ -239,8 +222,8 @@ public class CameraNativeUtils {
             return (T) Integer.valueOf(value);
         }
         if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
-            boolean value = nativeGetBoolValue(nativeId, ketTypeToNativeId(key.type));
-            return (T) Boolean.valueOf(value);
+            int value = nativeGetIntValue(nativeId, ketTypeToNativeId(key.type));
+            return (T) Boolean.valueOf(value == 1);
         }
         return null;
     }
@@ -259,7 +242,7 @@ public class CameraNativeUtils {
             return nativeSetIntValue(nativeId, ketTypeToNativeId(key.type), (int) value);
         }
         if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
-            return nativeSetBoolValue(nativeId, ketTypeToNativeId(key.type), (boolean) value);
+            return nativeSetIntValue(nativeId, ketTypeToNativeId(key.type), (boolean) value ? 1 : 0);
         }
         if (OrientationState.class.isAssignableFrom(key.mClass)) {
             return nativeSetIntValue(nativeId, ketTypeToNativeId(key.type), ((OrientationState) value).getAngle());

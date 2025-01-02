@@ -129,9 +129,7 @@ int UvcCamera::stopPreview() {
 int UvcCamera::setPreviewSize(int width, int height, int format) {
     int result = EXIT_FAILURE;
     if (mPreview) {
-        result = mPreview->setPreviewSize(width, height,
-                                          format == UVC_FORMAT_MJPEG ? UVC_FORMAT_MJPEG
-                                                                     : UVC_FORMAT_YUY2);
+        result = mPreview->setPreviewSize(width, height,format);
     }
     return result;
 }
@@ -145,8 +143,12 @@ int UvcCamera::setPreviewDisplay(ANativeWindow *preview_window) {
 }
 
 bool UvcCamera::setParameterIntValue(int type, int value) {
+    if (!mDeviceHandle)return false;
     uvc_error_t ret = UVC_ERROR_IO;
     switch (type) {
+        case AUTO_EXPOSURE:
+            ret = uvc_set_ae_mode(mDeviceHandle, value == 1 ? 8 : 0);
+            break;
         case EXPOSURE:
             ret = uvc_set_exposure_abs(mDeviceHandle, value);
             break;
@@ -176,75 +178,51 @@ bool UvcCamera::setParameterIntValue(int type, int value) {
     return ret == UVC_SUCCESS;
 }
 
-bool UvcCamera::setParameterBoolValue(int type, bool value) {
-    uvc_error_t ret = UVC_ERROR_IO;
-    switch (type) {
-        case AUTO_EXPOSURE:
-            uint8_t mode = value ? 8 : 1;
-            ret = uvc_set_ae_mode(mDeviceHandle, mode);
-            break;
-    }
-    return ret == UVC_SUCCESS;
-}
-
-bool UvcCamera::getParameterBoolValue(int type) {
-    if (!mDeviceHandle)return false;
+int UvcCamera::getParameterIntValue(int type) {
+    if (!mDeviceHandle)return -9999;
+    int value = -9999;
     switch (type) {
         case AUTO_EXPOSURE:
             uint8_t mode;
-            uvc_error_t ret = uvc_get_ae_mode(mDeviceHandle, &mode, UVC_GET_CUR);
-            if (ret == UVC_SUCCESS) {
-                return mode == 8;
+            if (uvc_get_ae_mode(mDeviceHandle, &mode, UVC_GET_CUR) == UVC_SUCCESS) {
+                value = mode == 8 ? 1 : 0;
+            } else {
+                value = 0;
             }
             break;
-    }
-    return false;
-}
-
-int UvcCamera::getParameterIntValue(int type) {
-    if (!mDeviceHandle)return -9999;
-    uvc_error_t ret;
-    int value = -9999;
-    switch (type) {
         case EXPOSURE:
             uint32_t exposure;
-            ret = uvc_get_exposure_abs(mDeviceHandle, &exposure, UVC_GET_CUR);
-            if (ret == UVC_SUCCESS) {
+            if (uvc_get_exposure_abs(mDeviceHandle, &exposure, UVC_GET_CUR) == UVC_SUCCESS) {
                 value = exposure;
             }
             break;
         case BRIGHTNESS:
             int16_t brightness;
-            ret = uvc_get_brightness(mDeviceHandle, &brightness, UVC_GET_CUR);
-            if (ret == UVC_SUCCESS) {
+            if (uvc_get_brightness(mDeviceHandle, &brightness, UVC_GET_CUR) == UVC_SUCCESS) {
                 value = brightness;
             }
             break;
         case CONTRAST:
             uint16_t contrast;
-            ret = uvc_get_contrast(mDeviceHandle, &contrast, UVC_GET_CUR);
-            if (ret == UVC_SUCCESS) {
+            if (uvc_get_contrast(mDeviceHandle, &contrast, UVC_GET_CUR) == UVC_SUCCESS) {
                 value = contrast;
             }
             break;
         case GAIN:
             uint16_t gain;
-            ret = uvc_get_gain(mDeviceHandle, &gain, UVC_GET_CUR);
-            if (ret == UVC_SUCCESS) {
+            if (uvc_get_gain(mDeviceHandle, &gain, UVC_GET_CUR) == UVC_SUCCESS) {
                 value = gain;
             }
             break;
         case SATURATION:
             uint16_t saturation;
-            ret = uvc_get_saturation(mDeviceHandle, &saturation, UVC_GET_CUR);
-            if (ret == UVC_SUCCESS) {
+            if (uvc_get_saturation(mDeviceHandle, &saturation, UVC_GET_CUR) == UVC_SUCCESS) {
                 value = saturation;
             }
             break;
         case ZOOM:
             uint16_t zoom;
-            ret = uvc_get_zoom_abs(mDeviceHandle, &zoom, UVC_GET_CUR);
-            if (ret == UVC_SUCCESS) {
+            if (uvc_get_zoom_abs(mDeviceHandle, &zoom, UVC_GET_CUR) == UVC_SUCCESS) {
                 value = zoom;
             }
             break;
@@ -339,10 +317,10 @@ UvcCamera::~UvcCamera() {
 }
 
 
-void UvcCamera::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener,int mode) {
+void UvcCamera::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
     if (mPreview) {
         jobject framePreviewListener = env->NewGlobalRef(listener);
-        mPreview->setPreviewListener(vm, env, framePreviewListener,mode);
+        mPreview->setPreviewListener(vm, env, framePreviewListener, mode);
     }
 }
 
