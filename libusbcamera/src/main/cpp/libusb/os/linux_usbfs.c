@@ -353,9 +353,13 @@ static int kernel_version_ge(const struct kernel_version *ver,
     return ver->sublevel >= sublevel;
 }
 
-static int op_init(struct libusb_context *ctx, const char *usbFsPath) {
+/**
+ * 删除原本的检查文件系统操作，因为安卓可直接使用fd来操作文件
+ * @param ctx
+ * @return
+ */
+static int op_init(struct libusb_context *ctx) {
     struct kernel_version kversion;
-    const char *usbfs_path;
     int r;
     struct linux_context_priv *cpriv = usbi_get_context_priv(ctx);
     //获取linux内核版本
@@ -369,18 +373,6 @@ static int op_init(struct libusb_context *ctx, const char *usbFsPath) {
               kversion.sublevel != -1 ? kversion.sublevel : 0);
         return LIBUSB_ERROR_NOT_SUPPORTED;
     }
-    //设置 USB 文件系统路径
-    if (!usbFsPath || !strlen(usbFsPath)) {
-        usbfs_path = find_usbfs_path();
-    } else {
-        usbfs_path = usbFsPath;
-    }
-    //若找不到路径，返回 LIBUSB_ERROR_OTHER
-    if (!usbfs_path) {
-        LOG_E("未获取到对应的usb文件系统路径");
-        return LIBUSB_ERROR_OTHER;
-    }
-    LOG_D("找到的文件系统路径为：%s", usbfs_path);
     //配置最大等时传输包的长度
     if (!max_iso_packet_len) {
         if (kernel_version_ge(&kversion, 5, 2, 0))
@@ -841,7 +833,7 @@ static int op_get_config_descriptor(struct libusb_device *dev,
     LOG_D("linux-获取描述符config_descriptors");
     config = &priv->config_descriptors[config_index];
     len = MIN(len, config->actual_len);
-    LOG_D("linux-当前长度:%d", len);
+    LOG_D("linux-当前长度:%ld", len);
     memcpy(buffer, config->desc, len);
     return len;
 }

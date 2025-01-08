@@ -209,7 +209,7 @@ public class UvcCamera {
             return;
         }
         iUsbDeviceConnect = usbDeviceConnection;
-        boolean result = CameraNativeUtils.nativeConnectFd(nativeId, usbDeviceConnection.getFileDescriptor(), getBusNum(deviceNames), getDevAddress(deviceNames), getUSBFSName(deviceNames));
+        boolean result = CameraNativeUtils.nativeConnectFd(nativeId, usbDeviceConnection.getFileDescriptor(), getBusNum(deviceNames), getDevAddress(deviceNames));
         if (!result) {
             Log.d("UvcCamera", "连接usb设备失败");
             close();
@@ -218,6 +218,15 @@ public class UvcCamera {
         }
         Log.d("UvcCamera", "啊，可算打开成功了～");
         resultOpen(true, "打开成功");
+    }
+
+    /**
+     * 设置对应的预览回调
+     *
+     * @param listener 预览回调监听
+     */
+    public boolean setPreviewListener(IFrameListener listener) {
+        return setPreviewListener(listener, FormatRequestMode.YUV420SP);
     }
 
     /**
@@ -406,18 +415,6 @@ public class UvcCamera {
         } catch (Exception e) {
             return -1;
         }
-    }
-
-    private String getUSBFSName(String[] split) {
-        if (split == null || split.length <= 2) {
-            return "/dev/bus/usb";
-        }
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(split[0]);
-        for (int i = 1; i < split.length - 2; i++) {
-            stringBuilder.append("/").append(split[i]);
-        }
-        return stringBuilder.toString().trim();
     }
 }
 

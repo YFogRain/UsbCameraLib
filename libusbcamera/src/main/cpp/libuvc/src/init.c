@@ -101,21 +101,6 @@ void *_uvc_handle_events(void *arg) {
  * @param[in]  usb_ctx Optional USB context to use
  * @return Error opening context or UVC_SUCCESS
  */
-
-uvc_error_t uvc_init_fs(uvc_context_t **pctx, const char *usbFs) {
-    uvc_error_t ret = UVC_SUCCESS;
-    uvc_context_t *ctx = calloc(1, sizeof(*ctx));
-    ret = libusb_init_fs(&ctx->usb_ctx,usbFs);
-    ctx->own_usb_ctx = 1;
-    if (ret != UVC_SUCCESS) {
-        free(ctx);
-        ctx = NULL;
-    }
-    if (ctx != NULL)
-        *pctx = ctx;
-    return ret;
-}
-
 uvc_error_t uvc_init(uvc_context_t **pctx, struct libusb_context *usb_ctx) {
     uvc_error_t ret = UVC_SUCCESS;
     uvc_context_t *ctx = calloc(1, sizeof(*ctx));

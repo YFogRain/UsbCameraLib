@@ -1176,7 +1176,7 @@ uvc_error_t uvc_parse_vc_input_terminal(uvc_device_t *dev,
     for (i = 14 + block[14]; i >= 15; --i) {
         //block[14] 是控制字段的长度，从描述符中读取并填充 bmControls 字段。
         term->bmControls = block[i] + (term->bmControls << 8);
-        LOG_D("解析控制字段：%llu", term->bmControls);
+        LOG_D("解析控制字段：%lu", term->bmControls);
     }
     //将输入终端添加到输入终端链表
     DL_APPEND(info->ctrl_if.input_term_descs, term);

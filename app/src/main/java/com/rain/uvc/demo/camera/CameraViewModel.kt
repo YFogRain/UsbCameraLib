@@ -109,7 +109,7 @@ class CameraViewModel : BaseViewModel() {
 			val data = ByteArray(frame.capacity())
 			frame.get(data)
 			frame.clear()
-//			Log.d("cameraPreviewUpdateTag", "startPreview-data:${data.size}")
+//			Log.d("cameraPreviewUpdateTag", "startPreview-data:${data.size},,,:${width}*${height}")
 		}
 		mUvcCamera?.setDisplaySurface(surface)
 		mUvcCamera?.startPreview()

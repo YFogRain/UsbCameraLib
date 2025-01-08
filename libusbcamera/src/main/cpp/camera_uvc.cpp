@@ -48,14 +48,10 @@ extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeConnectFd(JNIEnv *env, jclass clazz,
                                                           jlong nativeId, jint fd, jint bus_num,
-                                                          jint dev_address, jstring usb_fs) {
-    const char *cUsbFs = env->GetStringUTFChars(usb_fs, JNI_FALSE);
-    if (!cUsbFs) {
-        return false;
-    }
+                                                          jint dev_address) {
     auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
     if (camera) {
-        int ret = camera->connect(fd, bus_num, dev_address, cUsbFs);
+        int ret = camera->connect(fd, bus_num, dev_address);
         return ret == UVC_SUCCESS;
     }
     return false;

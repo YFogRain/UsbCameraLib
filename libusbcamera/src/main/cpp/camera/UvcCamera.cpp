@@ -40,13 +40,10 @@ int UvcCamera::connect(int fd) {
  * @param devAddress  设备地址
  * @return  连接结果
  */
-int UvcCamera::connect(int fd, int busNum, int devAddress, const char *usbFs) {
+int UvcCamera::connect(int fd, int busNum, int devAddress) {
     LOG_E("当前连接的设备:fd:%d", fd);
     //初始化uvc的context实例
-    uvc_error_t ret = uvc_init_fs(&mContext, usbFs);
-    if (ret != UVC_SUCCESS) {
-        ret = uvc_init(&mContext, nullptr);
-    }
+    uvc_error_t ret = uvc_init(&mContext, nullptr);
     LOG_E("初始化uvc结果:%d", ret);
     if (ret != UVC_SUCCESS || !mContext) {
         mContext = nullptr;
@@ -129,7 +126,7 @@ int UvcCamera::stopPreview() {
 int UvcCamera::setPreviewSize(int width, int height, int format) {
     int result = EXIT_FAILURE;
     if (mPreview) {
-        result = mPreview->setPreviewSize(width, height,format);
+        result = mPreview->setPreviewSize(width, height, format);
     }
     return result;
 }

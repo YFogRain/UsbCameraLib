@@ -2371,10 +2371,6 @@ int API_EXPORTED libusb_init(libusb_context **ctx) {
     return libusb_init_context(ctx, NULL, 0);
 }
 
-int API_EXPORTED libusb_init_fs(libusb_context **ctx, const char *usbFs) {
-    return libusb_init_context_fs(ctx, NULL, 0, usbFs);
-}
-
 /** \ingroup libusb_lib
  * Initialize libusb. This function must be called before calling any other
  * libusb function.
@@ -2497,7 +2493,7 @@ libusb_init_context(libusb_context **ctx, const struct libusb_init_option option
     usbi_mutex_static_unlock(&active_contexts_lock);
     //调用后端初始化
     if (usbi_backend.init) {
-        r = usbi_backend.init(_ctx,NULL);
+        r = usbi_backend.init(_ctx);
         if (r)
             goto err_io_exit;
     }
@@ -2925,158 +2921,4 @@ LIBUSB_CALL libusb_get_device_with_fd(libusb_context *ctx, int fd, int busNum, i
         device = NULL;
     }
     return device;
-}
-
-int API_EXPORTED
-libusb_init_context_fs(libusb_context **ctx, const struct libusb_init_option options[],
-                       int num_options, const char *usbfs) {
-    //获取后端特定的上下文私有数据大小
-    size_t priv_size = usbi_backend.context_priv_size;
-    struct libusb_context *_ctx;
-    int r;
-
-    usbi_mutex_static_lock(&default_context_lock);
-    // 检查默认上下文是否可复用
-    if (!ctx && default_context_refcnt > 0) {
-        usbi_dbg(usbi_default_context, "reusing default context");
-        default_context_refcnt++;
-        usbi_mutex_static_unlock(&default_context_lock);
-        return 0;
-    }
-
-    // 初始化全局活动上下文列表
-    usbi_mutex_static_lock(&active_contexts_lock);
-    if (!active_contexts_list.next) {
-        list_init(&active_contexts_list);
-        usbi_get_monotonic_time(&timestamp_origin);
-    }
-    usbi_mutex_static_unlock(&active_contexts_lock);
-    //分配并初始化新的上下文
-    _ctx = calloc(1, PTR_ALIGN(sizeof(*_ctx)) + priv_size);
-    if (!_ctx) {
-        usbi_mutex_static_unlock(&default_context_lock);
-        return LIBUSB_ERROR_NO_MEM;
-    }
-
-#if defined(ENABLE_LOGGING) && !defined(ENABLE_DEBUG_LOGGING)
-    _ctx->debug = LIBUSB_LOG_LEVEL_NONE;
-    if (getenv("LIBUSB_DEBUG")) {
-        _ctx->debug = get_env_debug_level();
-        _ctx->debug_fixed = 1;
-    } else if (default_context_options[LIBUSB_OPTION_LOG_LEVEL].is_set) {
-        _ctx->debug = default_context_options[LIBUSB_OPTION_LOG_LEVEL].arg.ival;
-    }
-#endif
-    //初始化上下文结构体的成员
-    usbi_mutex_init(&_ctx->usb_devs_lock);//保护 USB 设备列表的锁
-    usbi_mutex_init(&_ctx->open_devs_lock);//保护打开设备列表的锁
-    list_init(&_ctx->usb_devs);//存储已发现的设备
-    list_init(&_ctx->open_devs);//存储已打开的设备
-
-    //遍历默认上下文选项
-    for (enum libusb_option option = 0; option < LIBUSB_OPTION_MAX; option++) {
-        if (LIBUSB_OPTION_LOG_LEVEL == option || !default_context_options[option].is_set) {
-            continue;
-        }
-        //如果某选项已设置，则调用 libusb_set_option 应用到新上下文中
-        if (LIBUSB_OPTION_LOG_CB != option) {
-            r = libusb_set_option(_ctx, option);
-        } else {
-            r = libusb_set_option(_ctx, option, default_context_options[option].arg.log_cbval);
-        }
-        if (LIBUSB_SUCCESS != r)
-            goto err_free_ctx;
-    }
-    //检查当前传入的配置是否存在
-    if (options && num_options > 0) {
-        //遍历用户传入的选项 options
-        for (int i = 0; i < num_options; ++i) {
-            //根据不同选项的类型，调用相应的处理函数
-            switch (options[i].option) {
-                case LIBUSB_OPTION_LOG_CB:
-                    r = libusb_set_option(_ctx, options[i].option, options[i].value.log_cbval);
-                    break;
-
-                case LIBUSB_OPTION_LOG_LEVEL:
-                case LIBUSB_OPTION_USE_USBDK:
-                case LIBUSB_OPTION_NO_DEVICE_DISCOVERY:
-                case LIBUSB_OPTION_MAX:
-                default:
-                    r = libusb_set_option(_ctx, options[i].option, options[i].value.ival);
-            }
-            if (LIBUSB_SUCCESS != r)
-                goto err_free_ctx;
-        }
-    }
-    /* default context must be initialized before calling usbi_dbg */
-    if (!ctx) {
-        usbi_default_context = _ctx;
-        default_context_refcnt = 1;
-#if defined(ENABLE_LOGGING) && !defined(ENABLE_DEBUG_LOGGING)
-        usbi_atomic_store(&default_debug_level, _ctx->debug);
-#endif
-        usbi_dbg(usbi_default_context, "created default context");
-    }
-
-    usbi_dbg(_ctx, "libusb v%u.%u.%u.%u%s", libusb_version_internal.major,
-             libusb_version_internal.minor,
-             libusb_version_internal.micro, libusb_version_internal.nano,
-             libusb_version_internal.rc);
-    //初始化 IO 系统
-    r = usbi_io_init(_ctx);
-    if (r < 0)
-        goto err_free_ctx;
-    //注册上下文
-    usbi_mutex_static_lock(&active_contexts_lock);
-    list_add(&_ctx->list, &active_contexts_list);
-    usbi_mutex_static_unlock(&active_contexts_lock);
-    //调用后端初始化
-    if (usbi_backend.init) {
-        r = usbi_backend.init(_ctx, usbfs);
-        if (r)
-            goto err_io_exit;
-    }
-    // 热插拔支持
-    usbi_hotplug_init(_ctx);
-
-    if (ctx) {
-        *ctx = _ctx;
-
-        if (!usbi_fallback_context) {
-#if defined(ENABLE_LOGGING) && !defined(ENABLE_DEBUG_LOGGING)
-            if (usbi_atomic_load(&default_debug_level) == -1)
-                usbi_atomic_store(&default_debug_level, _ctx->debug);
-#endif
-            usbi_fallback_context = _ctx;
-            usbi_dbg(usbi_fallback_context, "installing new context as implicit default");
-        }
-    }
-
-    usbi_mutex_static_unlock(&default_context_lock);
-
-    return 0;
-
-    err_io_exit:
-    usbi_mutex_static_lock(&active_contexts_lock);
-    list_del(&_ctx->list);
-    usbi_mutex_static_unlock(&active_contexts_lock);
-
-    usbi_hotplug_exit(_ctx);
-    usbi_io_exit(_ctx);
-
-    err_free_ctx:
-    if (!ctx) {
-        /* clear default context that was not fully initialized */
-        usbi_default_context = NULL;
-        default_context_refcnt = 0;
-    }
-
-    usbi_mutex_destroy(&_ctx->open_devs_lock);
-    usbi_mutex_destroy(&_ctx->usb_devs_lock);
-
-    free(_ctx);
-
-    usbi_mutex_static_unlock(&default_context_lock);
-
-    return r;
 }

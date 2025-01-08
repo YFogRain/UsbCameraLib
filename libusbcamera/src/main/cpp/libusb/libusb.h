@@ -1577,11 +1577,8 @@ struct libusb_init_option {
 };
 
 int LIBUSB_CALL libusb_init(libusb_context **ctx);
-int LIBUSB_CALL libusb_init_fs(libusb_context **ctx, const char *usbFs);
 int LIBUSB_CALL libusb_init_context(libusb_context **ctx, const struct libusb_init_option options[],
                                     int num_options);
-int LIBUSB_CALL libusb_init_context_fs(libusb_context **ctx, const struct libusb_init_option options[],
-                                    int num_options,const char *usbFs);
 void LIBUSB_CALL libusb_exit(libusb_context *ctx);
 void LIBUSB_CALL libusb_set_debug(libusb_context *ctx, int level);
 /* may be deprecated in the future in favor of lubusb_init_context()+libusb_set_option() */

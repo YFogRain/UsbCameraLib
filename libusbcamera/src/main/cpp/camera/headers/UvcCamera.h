@@ -32,7 +32,7 @@ public:
 
     int connect(int fd);//连接设备
 
-    int connect(int fd, int busNum, int devAddress,const char *usbFs);
+    int connect(int fd, int busNum, int devAddress);
 
     int disConnect();//断开连接释放内存
 

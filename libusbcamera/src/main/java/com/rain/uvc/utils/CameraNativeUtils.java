@@ -63,7 +63,7 @@ public class CameraNativeUtils {
      * @param fd       文件描述符
      * @return 是否成功
      */
-    public static native boolean nativeConnectFd(long nativeId, int fd, int busNum, int devAddress, String usbFs);
+    public static native boolean nativeConnectFd(long nativeId, int fd, int busNum, int devAddress);
 
     /**
      * 断开连接设备
