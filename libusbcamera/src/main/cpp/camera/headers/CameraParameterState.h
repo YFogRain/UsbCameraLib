@@ -16,7 +16,7 @@
 #define GAIN  5
 #define SATURATION  6
 #define ZOOM  7
-#define ORIENTATION  8
+#define DISPLAY_TRANSFORM  8
 
 #define DEFAULT_PREVIEW_WIDTH 640
 #define DEFAULT_PREVIEW_HEIGHT 480
@@ -28,6 +28,22 @@
 #define UVC_FORMAT_RGB 4
 #define UVC_FORMAT_BGR 5
 
-
 #define UVC_REQUEST_FORMAT_RGBA 0
 #define UVC_REQUEST_FORMAT_YUV_420 1
+
+///通过下面参数可组合镜像方式+旋转角度（在安卓中，会先执行旋转，再执行镜像操作，所以，跟鸿蒙中正好相反）
+#define TRANSFORM_IDENTITY 0 //不做变化
+#define TRANSFORM_MIRROR_HORIZONTAL 1 //水平镜像
+#define TRANSFORM_MIRROR_VERTICAL 2 //垂直镜像
+
+#define TRANSFORM_ROTATE_90 3 //旋转90度
+#define TRANSFORM_ROTATE_180  4 //旋转180度
+#define TRANSFORM_ROTATE_270 5 //旋转270度
+
+#define TRANSFORM_FLIP_H_ROTATE_90 6 //旋转90度+水平镜像
+#define TRANSFORM_FLIP_H_ROTATE_180 7 //旋转180度+水平镜像
+#define TRANSFORM_FLIP_H_ROTATE_270 8 //旋转270度+水平镜像
+
+#define TRANSFORM_FLIP_V_ROTATE_90 9 //旋转90度+垂直镜像
+#define TRANSFORM_FLIP_V_ROTATE_180 10 //旋转180度+垂直镜像
+#define TRANSFORM_FLIP_V_ROTATE_270 11 //旋转270度+垂直镜像

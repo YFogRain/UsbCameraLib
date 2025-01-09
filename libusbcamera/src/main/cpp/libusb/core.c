@@ -36,7 +36,7 @@
 #ifdef HAVE_SYSLOG
 #include <syslog.h>
 #endif
-int DEBUG_ENABLE = 0;
+int DEBUG_ENABLE = 1;
 
 static const struct libusb_version libusb_version_internal =
         {LIBUSB_MAJOR, LIBUSB_MINOR, LIBUSB_MICRO, LIBUSB_NANO,

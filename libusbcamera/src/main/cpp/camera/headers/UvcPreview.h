@@ -22,7 +22,7 @@ private:
     JavaVM *theVM;
     jobject previewListener;
     jmethodID onFrameMethod;
-    int mDisplayOrientation;
+    int mDisplayTransformState;
     uvc_device_handle_t *mDeviceHandle;
     ANativeWindow *mPreviewWindow;
     volatile bool mIsRunning;
@@ -60,6 +60,7 @@ private:
 
     uvc_frame_format getPreviewFormat();
 
+    bool initDisplayTransformState();
 
 public:
 
@@ -78,15 +79,16 @@ public:
     void setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener,int mode);
 
     //设置预览方向
-    bool setDisplayOrientation(int orientation);
+    bool setDisplayTransformState(int transformState);
 
-    int getDisplayOrientation() const;
+    int getDisplayTransformState() const;
 
     std::pair<int, int> getPreviewSize();
 
     int loadCurrentFormat();
 
     size_t getPreviewBytesSize();
+
 };
 
 

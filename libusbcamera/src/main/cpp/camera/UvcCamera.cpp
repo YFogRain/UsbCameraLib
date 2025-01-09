@@ -3,6 +3,7 @@
 //
 
 #include <stdlib.h>
+#include <unistd.h>
 #include "headers/UvcCamera.h"
 #include "headers/CameraParameterState.h"
 
@@ -164,9 +165,9 @@ bool UvcCamera::setParameterIntValue(int type, int value) {
         case ZOOM:
             ret = uvc_set_zoom_abs(mDeviceHandle, value);
             break;
-        case ORIENTATION:
+        case DISPLAY_TRANSFORM:
             if (mPreview) {
-                bool result = mPreview->setDisplayOrientation(value);
+                bool result = mPreview->setDisplayTransformState(value);
                 if (result)ret = UVC_SUCCESS;
             }
             break;
@@ -223,9 +224,9 @@ int UvcCamera::getParameterIntValue(int type) {
                 value = zoom;
             }
             break;
-        case ORIENTATION:
+        case DISPLAY_TRANSFORM:
             if (mPreview) {
-                value = mPreview->getDisplayOrientation();
+                value = mPreview->getDisplayTransformState();
             }
             break;
     }

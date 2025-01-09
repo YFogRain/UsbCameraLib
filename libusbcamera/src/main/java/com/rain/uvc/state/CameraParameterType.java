@@ -14,7 +14,7 @@ public class CameraParameterType {
     public static final String GAIN = "com.camera.control.gain";//增益值
     public static final String SATURATION = "com.camera.control.saturation";  //饱和度
     public static final String ZOOM = "com.camera.control.zoom";//缩放
-    public static final String ORIENTATION = "com.camera.control.orientation"; //预览方向
+    public static final String DISPLAY_TRANSFORM = "com.camera.control.display_transform"; //预览画面图像变换
     public static final String SCENE_MODE = "com.camera.control.scene_mode"; //场景模式
     public static final String WHITE_BALANCE = "com.camera.control.white_balance"; //白平衡
     public static final String COLOR_EFFECTS = "com.camera.control.color_effects";//滤镜效果

@@ -36,7 +36,7 @@ public class CameraParameter {
 
     public static final Key<Integer> ZOOM = new Key<>(CameraParameterType.ZOOM, int.class);
 
-    public static final Key<Integer> ORIENTATION = new Key<>(CameraParameterType.ORIENTATION, int.class);
+    public static final Key<DisplayTransformState> DISPLAY_TRANSFORM = new Key<>(CameraParameterType.DISPLAY_TRANSFORM, DisplayTransformState.class);
 
     public static final Key<CameraSize> PREVIEW_SIZE = new Key<>(CameraParameterType.PREVIEW_SIZE, CameraSize.class);
 

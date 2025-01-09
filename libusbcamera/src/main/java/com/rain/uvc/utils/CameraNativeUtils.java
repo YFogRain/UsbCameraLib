@@ -10,7 +10,7 @@ import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraParameterType;
 import com.rain.uvc.state.CameraSupportParameters;
 import com.rain.uvc.state.IntRange;
-import com.rain.uvc.state.OrientationState;
+import com.rain.uvc.state.DisplayTransformState;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -213,9 +213,9 @@ public class CameraNativeUtils {
             }
             return (T) new CameraSize(ints[0], ints[1], FormatModeState.valueToFormatMode(ints[2]));
         }
-        if (OrientationState.class.isAssignableFrom(key.mClass)) {
+        if (DisplayTransformState.class.isAssignableFrom(key.mClass)) {
             int value = nativeGetIntValue(nativeId, ketTypeToNativeId(key.type));
-            return (T) OrientationState.orientationToState(value);
+            return (T) DisplayTransformState.orientationToState(value);
         }
         if (int.class.isAssignableFrom(key.mClass) || Integer.class.isAssignableFrom(key.mClass)) {
             int value = nativeGetIntValue(nativeId, ketTypeToNativeId(key.type));
@@ -244,8 +244,8 @@ public class CameraNativeUtils {
         if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
             return nativeSetIntValue(nativeId, ketTypeToNativeId(key.type), (boolean) value ? 1 : 0);
         }
-        if (OrientationState.class.isAssignableFrom(key.mClass)) {
-            return nativeSetIntValue(nativeId, ketTypeToNativeId(key.type), ((OrientationState) value).getAngle());
+        if (DisplayTransformState.class.isAssignableFrom(key.mClass)) {
+            return nativeSetIntValue(nativeId, ketTypeToNativeId(key.type), ((DisplayTransformState) value).getAngle());
         }
         if (CameraSize.class.isAssignableFrom(key.mClass)) {
             CameraSize size = (CameraSize) value;
@@ -269,7 +269,7 @@ public class CameraNativeUtils {
             return 6;
         } else if (CameraParameterType.ZOOM.equals(type)) {
             return 7;
-        } else if (CameraParameterType.ORIENTATION.equals(type)) {
+        } else if (CameraParameterType.DISPLAY_TRANSFORM.equals(type)) {
             return 8;
         }
         return -1;

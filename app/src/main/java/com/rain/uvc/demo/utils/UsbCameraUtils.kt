@@ -35,12 +35,14 @@ object UsbCameraUtils {
 	@JvmStatic
 	fun loadUsbCameraDevice(): UsbDevice? {
 		val usbDevices = loadCameraDevices()
+		Log.d("cameraPreviewUpdateTag", "获取到的摄像头列表是否为空:${usbDevices.isNullOrEmpty()}")
 		//如果未找到设备列表，则直接return
 		if (usbDevices.isNullOrEmpty()) return null
 		var uvcIndex = -1
 		//遍历获取对应的usb设备是否存在
 		for (i in 0 until usbDevices.size) {
 			val usbDevice = usbDevices[i]
+			Log.d("cameraPreviewUpdateTag", "获取到的摄像头列表:${usbDevice.manufacturerName}")
 			val usbType = loadCameraMode(usbDevice) ?: continue
 			when (usbType) {
 				//uvc校验是否时RGB，深度流不适用uvc
@@ -80,6 +82,7 @@ object UsbCameraUtils {
 	fun loadCameraDevices(): MutableList<UsbDevice>? {
 		val devices = OverallContext.baseContext.getSystemService<UsbManager>() ?: return null
 		val deviceList = runCatching { devices.deviceList }.getOrNull()?.values?.filter {
+			Log.d("cameraPreviewUpdateTag", "获取到的摄像头==:${it}")
 			loadCameraMode(it) != null
 		}
 		if (deviceList.isNullOrEmpty()) return null

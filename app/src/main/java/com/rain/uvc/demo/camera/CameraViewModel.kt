@@ -16,6 +16,7 @@ import com.rain.uvc.mode.FormatModeState
 import com.rain.uvc.provider.OverallContext
 import com.rain.uvc.state.CameraParameter
 import com.rain.uvc.state.CameraSupportParameters
+import com.rain.uvc.state.DisplayTransformState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -26,7 +27,7 @@ import kotlin.coroutines.resume
  */
 class CameraViewModel : BaseViewModel() {
 	
-	private var currentRotation = -1 //旋转角度
+	private var currentRotation = 0 //旋转角度
 	
 	private var mUvcCamera: UvcCamera? = null
 	
@@ -37,6 +38,7 @@ class CameraViewModel : BaseViewModel() {
 			return
 		}
 		val uvcDevice = UsbCameraUtils.loadUsbCameraDevice()
+		Log.d("cameraPreviewUpdateTag", "获取到的摄像头信息:${uvcDevice?.manufacturerName}")
 		if (uvcDevice == null) {
 			block.invoke(false)
 			return
@@ -116,11 +118,11 @@ class CameraViewModel : BaseViewModel() {
 	}
 	
 	fun setDisplay() {
-		val currentRotation = (this.currentRotation.run {
-			if (this == -1) 0 else this
-		} + 90) % 360
-		this.currentRotation = currentRotation
-		mUvcCamera?.setParameter(CameraParameter.ORIENTATION, currentRotation)
+		currentRotation++
+		if (currentRotation > 11) {
+			currentRotation = 0
+		}
+		mUvcCamera?.setParameter(CameraParameter.DISPLAY_TRANSFORM, DisplayTransformState.orientationToState(currentRotation))
 	}
 	
 	fun stopPreview() {

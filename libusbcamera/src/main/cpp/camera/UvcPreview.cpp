@@ -9,12 +9,14 @@
 #include "opencv2/imgcodecs.hpp"
 #include "vector"
 #include "img_util.h"
+#include "android/native_window.h"
 
 UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         theVM(nullptr),
         previewListener(nullptr),
         onFrameMethod(nullptr),
         mDeviceHandle(deviceHandler),
+        mDisplayTransformState(TRANSFORM_IDENTITY),
         frameMode(UVC_FORMAT_YUY2),
         requestWidth(DEFAULT_PREVIEW_WIDTH),
         requestHeight(DEFAULT_PREVIEW_HEIGHT),
@@ -256,6 +258,7 @@ int UvcPreview::setDisplaySurface(ANativeWindow *preview_window) {
                 ANativeWindow_setBuffersGeometry(mPreviewWindow, frameWidth, frameHeight,
                                                  UVC_FORMAT_FRAME_WINDOW);
             }
+            initDisplayTransformState();
         }
     }
     pthread_mutex_unlock(&surfaceMutex);
@@ -319,48 +322,88 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
     } else {
         outData = frame;
     }
-    if (!outData) {
-        return;
-    }
-    jobject buf = env->NewDirectByteBuffer(outData->data, outData->data_bytes);
-    if (buf) {
-        env->CallVoidMethod(previewListener, onFrameMethod, outData->width, outData->height, buf);
-        if (env->ExceptionCheck()) {
-            LOG_D("ExceptionCheck");
-            env->ExceptionDescribe();
+    if (outData && outData->data && outData->data_bytes > 0) {
+        jobject buf = env->NewDirectByteBuffer(outData->data, outData->data_bytes);
+        if (buf) {
+            env->CallVoidMethod(previewListener, onFrameMethod, outData->width, outData->height,
+                                buf);
+            if (env->ExceptionCheck()) {
+                LOG_D("ExceptionCheck");
+                env->ExceptionDescribe();
+            }
+            env->ExceptionClear();
+            env->DeleteLocalRef(buf);
         }
+
     }
-    if (requestMode == UVC_REQUEST_FORMAT_YUV_420) {
+    if (outData && requestMode == UVC_REQUEST_FORMAT_YUV_420) {
         uvc_free_frame(outData);
     }
 }
 
-bool UvcPreview::setDisplayOrientation(int orientation) {
-    pthread_mutex_lock(&surfaceMutex);
-    if (LIKELY(mPreviewWindow)) {
-        int rotation = 0;
-        if (orientation == 0) {
-            rotation = 0x00;
-        } else if (orientation > 0 && orientation <= 90) {
-            rotation = 0x04;
-        } else if (orientation > 90 && orientation <= 180) {
-            rotation = 0x01 | 0x02;
-        } else if (orientation > 180 && orientation <= 270) {
-            rotation = (0x01 | 0x02) | 0x04;
-        } else if (orientation == -1) {
-            rotation = 0x01;
-        } else if (orientation == -2) {
-            rotation = 0x02;
-        }
-        mDisplayOrientation = orientation;
-        native_window_set_buffers_transform(mPreviewWindow, rotation);
+bool UvcPreview::initDisplayTransformState() {
+    LOG_D("当前的预览方向为:%d", mDisplayTransformState);
+    if (!mPreviewWindow) {
+        return false;
     }
-    pthread_mutex_unlock(&surfaceMutex);
-    return true;
+    int rotationType;
+    switch (mDisplayTransformState) {
+        case TRANSFORM_MIRROR_HORIZONTAL: //水平镜像
+            rotationType = ANATIVEWINDOW_TRANSFORM_MIRROR_HORIZONTAL;
+            break;
+        case TRANSFORM_MIRROR_VERTICAL://垂直镜像
+            rotationType = ANATIVEWINDOW_TRANSFORM_MIRROR_VERTICAL;
+            break;
+        case TRANSFORM_ROTATE_90://旋转90度
+            rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_90;
+            break;
+        case TRANSFORM_ROTATE_180://旋转180度 = 水平镜像+垂直镜像
+            rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_180;
+            break;
+        case TRANSFORM_ROTATE_270://旋转270度 = 水平镜像 + 垂直镜像 + 旋转90度
+            rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_270;
+            break;
+        case TRANSFORM_FLIP_H_ROTATE_90: //水平镜像 + 旋转90度;
+            rotationType =
+                    ANATIVEWINDOW_TRANSFORM_MIRROR_HORIZONTAL | ANATIVEWINDOW_TRANSFORM_ROTATE_90;
+            break;
+        case TRANSFORM_FLIP_H_ROTATE_180://水平镜像 + 旋转180度 = 垂直镜像
+            rotationType = ANATIVEWINDOW_TRANSFORM_MIRROR_VERTICAL;
+            break;
+        case TRANSFORM_FLIP_H_ROTATE_270://水平镜像 + 旋转270度 = 垂直镜像 + 旋转90度
+            rotationType =
+                    ANATIVEWINDOW_TRANSFORM_MIRROR_VERTICAL | ANATIVEWINDOW_TRANSFORM_ROTATE_90;
+            break;
+        case TRANSFORM_FLIP_V_ROTATE_90://垂直镜像 + 旋转90度
+            rotationType =
+                    ANATIVEWINDOW_TRANSFORM_MIRROR_VERTICAL | ANATIVEWINDOW_TRANSFORM_ROTATE_90;
+            break;
+        case TRANSFORM_FLIP_V_ROTATE_180://垂直镜像 + 旋转180度 = 水平镜像
+            rotationType = ANATIVEWINDOW_TRANSFORM_MIRROR_HORIZONTAL;
+            break;
+        case TRANSFORM_FLIP_V_ROTATE_270://垂直镜像 + 旋转270度 = 水平镜像 + 旋转90度
+            rotationType =
+                    ANATIVEWINDOW_TRANSFORM_MIRROR_HORIZONTAL | ANATIVEWINDOW_TRANSFORM_ROTATE_90;
+            break;
+        default:
+            rotationType = ANATIVEWINDOW_TRANSFORM_IDENTITY; //默认不使用图像变换
+            break;
+    }
+    int32_t ret = native_window_set_buffers_sticky_transform(mPreviewWindow, rotationType);
+    LOG_D("设置window窗口方向-结果:%d", ret);
+    return ret == 0;
 }
 
-int UvcPreview::getDisplayOrientation() const {
-    return mDisplayOrientation;
+bool UvcPreview::setDisplayTransformState(int transformState) {
+    pthread_mutex_lock(&surfaceMutex);
+    mDisplayTransformState = transformState;
+    bool result = initDisplayTransformState();
+    pthread_mutex_unlock(&surfaceMutex);
+    return result;
+}
+
+int UvcPreview::getDisplayTransformState() const {
+    return mDisplayTransformState;
 }
 
 std::pair<int, int> UvcPreview::getPreviewSize() {
