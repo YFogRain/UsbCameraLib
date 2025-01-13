@@ -1377,7 +1377,7 @@ void *_uvc_user_caller(void *arg) {
         pthread_mutex_unlock(&strmh->cb_mutex);
         strmh->user_cb(&strmh->frame, strmh->user_ptr);
     } while (1);
-
+    pthread_exit(NULL);
     return NULL; // return value ignored
 }
 

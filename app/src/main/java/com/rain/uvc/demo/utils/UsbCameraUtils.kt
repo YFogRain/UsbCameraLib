@@ -4,6 +4,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.util.Log
 import androidx.core.content.getSystemService
+import com.rain.uvc.UvcCameraManager
 import com.rain.uvc.provider.OverallContext
 
 /**
@@ -72,7 +73,7 @@ object UsbCameraUtils {
 	fun loadCameraMode(usbDevice: UsbDevice): Int? {
 		if (isPetrelNICamera(usbDevice)) return 2
 		if (isHjCamera(usbDevice)) return 3
-		return if (isUvcCamera(usbDevice)) 1 else null
+		return if (UvcCameraManager.isUvcCamera(usbDevice)) 1 else null
 	}
 	
 	/**
@@ -87,17 +88,6 @@ object UsbCameraUtils {
 		}
 		if (deviceList.isNullOrEmpty()) return null
 		return deviceList.toMutableList()
-	}
-	
-	/**
-	 * 是否是摄像头类型
-	 */
-	@JvmStatic
-	private fun isUvcCamera(usbDevice: UsbDevice): Boolean {
-		return usbDevice.deviceClass == 239 && usbDevice.deviceSubclass == 2 && when (usbDevice.productId) {
-			24581, 33054 -> false
-			else -> true
-		} && !usbDevice.productName.run { !this.isNullOrEmpty() && this.contains("Android", true) }
 	}
 	
 	/**
