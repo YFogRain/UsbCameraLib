@@ -11,7 +11,7 @@ import com.rain.uvc.camera.CameraDevice
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.GsonHelper
 import com.rain.uvc.demo.utils.UsbCameraUtils
-import com.rain.uvc.mode.FormatModeState
+import com.rain.uvc.mode.CameraPreviewFormat
 import com.rain.uvc.provider.OverallContext
 import com.rain.uvc.state.CameraParameter
 import com.rain.uvc.state.CameraSupportParameters
@@ -64,7 +64,7 @@ class CameraViewModel : BaseViewModel() {
 			val supportedParameter = mUvcCamera?.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
 			Log.d("cameraPreviewUpdateTag", "分辨率集合:${GsonHelper.getHelper().modeToJson(supportedParameter)}")
 			//设置预览分辨率
-			mUvcCamera?.setPreviewSize(1920, 1080, FormatModeState.MJPEG)
+			mUvcCamera?.setPreviewSize(1920, 1080, CameraPreviewFormat.MJPEG)
 			block.invoke(true)
 		}
 	}

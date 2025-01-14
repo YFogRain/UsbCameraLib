@@ -2,6 +2,7 @@ package com.rain.uvc.state;
 
 
 import com.rain.uvc.mode.CameraSize;
+import com.rain.uvc.mode.IntRange;
 
 /**
  * @author yuan

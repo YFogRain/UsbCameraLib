@@ -12,7 +12,7 @@ import android.view.TextureView;
 
 import com.rain.uvc.camera.CameraDevice;
 import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.mode.FormatModeState;
+import com.rain.uvc.mode.CameraPreviewFormat;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraSupportParameters;
@@ -144,7 +144,7 @@ public class CameraDeviceImpl extends CameraDevice {
     }
 
     @Override
-    public boolean setPreviewSize(int width, int height, FormatModeState formatState) {
+    public boolean setPreviewSize(int width, int height, CameraPreviewFormat formatState) {
         long nativeId = uvcNativeId.get();
         if (nativeId == 0L) return false;
         return CameraNativeUtils.nativeSetPreviewSize(nativeId, width, height, formatState.getValue());

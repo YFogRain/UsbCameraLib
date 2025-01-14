@@ -16,7 +16,7 @@ import android.view.TextureView;
 
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.mode.FormatModeState;
+import com.rain.uvc.mode.CameraPreviewFormat;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraSupportParameters;
@@ -140,7 +140,7 @@ public abstract class CameraDevice {
 
     public abstract boolean stopPreview();
 
-    public abstract boolean setPreviewSize(int width, int height, FormatModeState formatState);
+    public abstract boolean setPreviewSize(int width, int height, CameraPreviewFormat formatState);
 
 
     /**

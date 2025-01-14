@@ -3,11 +3,11 @@ package com.rain.uvc.mode;
 /**
  * 当前支持的格式
  */
-public enum FormatModeState {
+public enum CameraPreviewFormat {
     YUY2(0), MJPEG(1);
     private final int value;
 
-    FormatModeState(int value) {
+    CameraPreviewFormat(int value) {
         this.value = value;
     }
 
@@ -15,11 +15,11 @@ public enum FormatModeState {
         return value;
     }
 
-    public static FormatModeState valueToFormatMode(int format) {
+    public static CameraPreviewFormat valueToFormatMode(int format) {
         if (format == 1) {
-            return FormatModeState.MJPEG;
+            return CameraPreviewFormat.MJPEG;
         }
-        return FormatModeState.YUY2;
+        return CameraPreviewFormat.YUY2;
     }
 }
 

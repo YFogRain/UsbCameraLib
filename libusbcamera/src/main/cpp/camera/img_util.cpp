@@ -16,7 +16,6 @@ bool ImgUtils::any2Rgba(uvc_frame_t *inFrame, uvc_frame_t *outFrame) {
         LOG_E("当前数据不对劲啊～");
         return false;
     }
-
     uvc_frame_format format = inFrame->frame_format;
     uint8_t *data = static_cast<uint8_t *>(inFrame->data);
     uint32_t width = inFrame->width;
@@ -72,16 +71,30 @@ uvc_frame_t *ImgUtils::rgba2Nv21(uvc_frame_t *srcFrame) {
     auto img = cv::Mat(srcFrame->height, srcFrame->width, CV_8UC4, srcFrame->data);
     cv::Mat outImg;
     cv::cvtColor(img, outImg, cv::COLOR_RGBA2YUV_I420);
-    size_t bytesLength = outImg.total() * outImg.elemSize();  // 计算字节数
+    size_t bytesLength = outImg.total() * outImg.elemSize(); // 计算字节数
     if (bytesLength <= 0) {
         LOG_E("转换失败");
-        return nullptr;  // 内存分配失败，返回 false
+        return nullptr; // 内存分配失败，返回 false
     }
     uvc_frame_t *pFrame = uvc_allocate_frame(srcFrame->width * srcFrame->height * 3 / 2);
     if (!pFrame) {
         LOG_E("创建输出的uvc对象失败");
         return nullptr;
     }
+    uint8_t *data = static_cast<uint8_t *>(pFrame->data);
+    // 将 Y 平面复制到 NV21 缓冲区
+    int ySize = srcFrame->width * srcFrame->height;
+    memcpy(data, outImg.data, ySize);
+
+    // 将 UV 平面交织为 VU 顺序
+    uint8_t *uPlane = outImg.data + ySize;
+    uint8_t *vPlane = uPlane + (ySize / 4);
+    uint8_t *uvData = data + ySize;
+    for (int i = 0; i < ySize / 4; ++i) {
+        uvData[i * 2] = vPlane[i];     // V 分量
+        uvData[i * 2 + 1] = uPlane[i]; // U 分量
+    }
+
     pFrame->width = srcFrame->width;
     pFrame->height = srcFrame->height;
     pFrame->frame_format = UVC_FRAME_FORMAT_NV12;
@@ -90,7 +103,5 @@ uvc_frame_t *ImgUtils::rgba2Nv21(uvc_frame_t *srcFrame) {
     pFrame->capture_time = srcFrame->capture_time;
     pFrame->capture_time_finished = srcFrame->capture_time_finished;
     pFrame->source = srcFrame->source;
-    // 6. 将转换后的 RGBA 图像数据复制到 rgbaFrame
-    std::memcpy(pFrame->data, outImg.data, pFrame->data_bytes);
     return pFrame;
 }

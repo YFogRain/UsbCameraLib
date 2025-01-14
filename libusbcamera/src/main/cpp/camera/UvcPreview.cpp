@@ -317,7 +317,7 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
         return;
     }
     uvc_frame_t *outData;
-    if (requestMode == UVC_REQUEST_FORMAT_YUV_420) {
+    if (requestMode == UVC_REQUEST_FORMAT_NV21) {
         outData = ImgUtils::rgba2Nv21(frame);
     } else {
         outData = frame;
@@ -336,7 +336,7 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
         }
 
     }
-    if (outData && requestMode == UVC_REQUEST_FORMAT_YUV_420) {
+    if (outData && requestMode == UVC_REQUEST_FORMAT_NV21) {
         uvc_free_frame(outData);
     }
 }

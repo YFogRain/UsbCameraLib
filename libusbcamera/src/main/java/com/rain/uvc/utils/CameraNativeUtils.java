@@ -5,11 +5,11 @@ import android.view.Surface;
 
 import com.rain.uvc.listener.IFrameListener;
 import com.rain.uvc.mode.CameraSize;
-import com.rain.uvc.mode.FormatModeState;
+import com.rain.uvc.mode.CameraPreviewFormat;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraParameterType;
 import com.rain.uvc.state.CameraSupportParameters;
-import com.rain.uvc.state.IntRange;
+import com.rain.uvc.mode.IntRange;
 import com.rain.uvc.state.DisplayTransformState;
 
 import org.json.JSONArray;
@@ -189,7 +189,7 @@ public class CameraNativeUtils {
                 int width = jsonObject.optInt("width");
                 int height = jsonObject.optInt("height");
                 int format = jsonObject.optInt("format");
-                lists.add(new CameraSize(width, height, FormatModeState.valueToFormatMode(format)));
+                lists.add(new CameraSize(width, height, CameraPreviewFormat.valueToFormatMode(format)));
             }
             return lists.toArray(new CameraSize[0]);
         } catch (Exception e) {
@@ -211,7 +211,7 @@ public class CameraNativeUtils {
             if (ints == null || ints.length != 3) {
                 return null;
             }
-            return (T) new CameraSize(ints[0], ints[1], FormatModeState.valueToFormatMode(ints[2]));
+            return (T) new CameraSize(ints[0], ints[1], CameraPreviewFormat.valueToFormatMode(ints[2]));
         }
         if (DisplayTransformState.class.isAssignableFrom(key.mClass)) {
             int value = nativeGetIntValue(nativeId, ketTypeToNativeId(key.type));

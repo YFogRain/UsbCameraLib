@@ -1,7 +1,7 @@
 package com.rain.uvc.utils;
 
 import com.rain.uvc.mode.CameraSize;
-import com.rain.uvc.mode.FormatModeState;
+import com.rain.uvc.mode.CameraPreviewFormat;
 
 
 /**
@@ -17,7 +17,7 @@ public class CameraUtils {
      * @param height 高
      * @return 返回当前可使用的分辨率参数
      */
-    public static boolean isUsePreviewSize(CameraSize[] cameraSizes, int width, int height, FormatModeState formatState) {
+    public static boolean isUsePreviewSize(CameraSize[] cameraSizes, int width, int height, CameraPreviewFormat formatState) {
         if (cameraSizes == null) {
             return false;
         }
