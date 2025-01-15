@@ -5,7 +5,7 @@ import android.view.Surface;
 
 import com.rain.uvc.listener.IFrameListener;
 import com.rain.uvc.mode.CameraSize;
-import com.rain.uvc.mode.CameraPreviewFormat;
+import com.rain.uvc.state.CameraPreviewFormat;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraParameterType;
 import com.rain.uvc.state.CameraSupportParameters;

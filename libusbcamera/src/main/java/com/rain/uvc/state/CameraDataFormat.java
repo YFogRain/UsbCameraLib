@@ -1,13 +1,13 @@
-package com.rain.uvc.mode;
+package com.rain.uvc.state;
 
 /**
  * 当前支持的格式
  */
-public enum CameraResultFormat {
+public enum CameraDataFormat {
     RGBA(0), NV21(1);
     private final int value;
 
-    CameraResultFormat(int value) {
+    CameraDataFormat(int value) {
         this.value = value;
     }
 

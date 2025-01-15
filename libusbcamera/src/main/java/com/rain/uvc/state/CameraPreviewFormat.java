@@ -1,4 +1,4 @@
-package com.rain.uvc.mode;
+package com.rain.uvc.state;
 
 /**
  * 当前支持的格式

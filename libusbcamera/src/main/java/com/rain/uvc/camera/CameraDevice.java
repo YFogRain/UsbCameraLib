@@ -16,7 +16,7 @@ import android.view.TextureView;
 
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.mode.CameraPreviewFormat;
+import com.rain.uvc.state.CameraPreviewFormat;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraSupportParameters;

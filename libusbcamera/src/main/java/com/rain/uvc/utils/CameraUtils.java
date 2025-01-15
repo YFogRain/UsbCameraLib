@@ -1,7 +1,7 @@
 package com.rain.uvc.utils;
 
 import com.rain.uvc.mode.CameraSize;
-import com.rain.uvc.mode.CameraPreviewFormat;
+import com.rain.uvc.state.CameraPreviewFormat;
 
 
 /**

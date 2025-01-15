@@ -21,7 +21,7 @@ UvcPreview::UvcPreview(uvc_device_handle_t *deviceHandler) :
         requestWidth(DEFAULT_PREVIEW_WIDTH),
         requestHeight(DEFAULT_PREVIEW_HEIGHT),
         mPreviewWindow(nullptr),
-        requestMode(UVC_REQUEST_FORMAT_RGBA),
+        requestMode(UVC_DATA_FORMAT_RGBA),
         frameBytes(DEFAULT_PREVIEW_WIDTH * DEFAULT_PREVIEW_HEIGHT * 2),
         mIsRunning(false) {
     //初始化互斥锁
@@ -317,7 +317,7 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
         return;
     }
     uvc_frame_t *outData;
-    if (requestMode == UVC_REQUEST_FORMAT_NV21) {
+    if (requestMode == UVC_DATA_FORMAT_NV21) {
         outData = ImgUtils::rgba2Nv21(frame);
     } else {
         outData = frame;
@@ -336,7 +336,7 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
         }
 
     }
-    if (outData && requestMode == UVC_REQUEST_FORMAT_NV21) {
+    if (outData && requestMode == UVC_DATA_FORMAT_NV21) {
         uvc_free_frame(outData);
     }
 }

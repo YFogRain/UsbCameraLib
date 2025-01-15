@@ -28,8 +28,8 @@
 #define UVC_FORMAT_RGB 4
 #define UVC_FORMAT_BGR 5
 
-#define UVC_REQUEST_FORMAT_RGBA 0
-#define UVC_REQUEST_FORMAT_NV21 1
+#define UVC_DATA_FORMAT_RGBA 0
+#define UVC_DATA_FORMAT_NV21 1
 
 ///通过下面参数可组合镜像方式+旋转角度（在安卓中，会先执行旋转，再执行镜像操作，所以，跟鸿蒙中正好相反）
 #define TRANSFORM_IDENTITY 0 //不做变化

@@ -39,7 +39,7 @@ bool ImgUtils::any2Rgba(uvc_frame_t *inFrame, uvc_frame_t *outFrame) {
         LOG_E("无法解码图像或图像为空！");
         return false;
     }
-    cv::Mat rgbaImg;  // OpenCV Mat 的 BGR 图像格式
+    cv::Mat rgbaImg(height, width, CV_8UC4);  // OpenCV Mat 的 BGR 图像格式
     cv::cvtColor(img, rgbaImg, cvColoType);  // 转换为 BGRA 格式
     if (rgbaImg.empty()) {
         LOG_E("转换成RGBA的类型失败啦！");
@@ -69,7 +69,7 @@ uvc_frame_t *ImgUtils::rgba2Nv21(uvc_frame_t *srcFrame) {
         return nullptr;
     }
     auto img = cv::Mat(srcFrame->height, srcFrame->width, CV_8UC4, srcFrame->data);
-    cv::Mat outImg;
+    cv::Mat outImg(srcFrame->height + srcFrame->height / 2, srcFrame->width, CV_8UC1);
     cv::cvtColor(img, outImg, cv::COLOR_RGBA2YUV_I420);
     size_t bytesLength = outImg.total() * outImg.elemSize(); // 计算字节数
     if (bytesLength <= 0) {

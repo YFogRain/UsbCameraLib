@@ -1,5 +1,7 @@
 package com.rain.uvc.mode;
 
+import com.rain.uvc.state.CameraPreviewFormat;
+
 /**
  * 对应的分辨率信息
  */

@@ -11,7 +11,7 @@ import com.rain.uvc.camera.CameraDevice
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.GsonHelper
 import com.rain.uvc.demo.utils.UsbCameraUtils
-import com.rain.uvc.mode.CameraPreviewFormat
+import com.rain.uvc.state.CameraPreviewFormat
 import com.rain.uvc.provider.OverallContext
 import com.rain.uvc.state.CameraParameter
 import com.rain.uvc.state.CameraSupportParameters
