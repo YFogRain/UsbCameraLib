@@ -315,11 +315,12 @@ UvcCamera::~UvcCamera() {
 }
 
 
-void UvcCamera::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
+bool UvcCamera::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
     if (mPreview) {
         jobject framePreviewListener = env->NewGlobalRef(listener);
-        mPreview->setPreviewListener(vm, env, framePreviewListener, mode);
+        return mPreview->setPreviewListener(vm, env, framePreviewListener, mode);
     }
+    return false;
 }
 
 std::pair<int, int> UvcCamera::getParameterRange(int type) {

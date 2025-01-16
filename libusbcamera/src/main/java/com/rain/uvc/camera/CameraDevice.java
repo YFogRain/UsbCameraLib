@@ -16,6 +16,7 @@ import android.view.TextureView;
 
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
+import com.rain.uvc.state.CameraDataFormat;
 import com.rain.uvc.state.CameraPreviewFormat;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraParameter;
@@ -217,11 +218,18 @@ public abstract class CameraDevice {
     }
 
     /**
+     * 设置预览监听，默认返回BGR格式数据
+     */
+    public boolean setPreviewListener(IFrameListener listener) {
+        return this.setPreviewListener(listener, CameraDataFormat.BGR);
+    }
+
+    /**
      * 设置对应的预览回调
      *
      * @param listener 预览回调监听
      */
-    public abstract boolean setPreviewListener(IFrameListener listener);
+    public abstract boolean setPreviewListener(IFrameListener listener, CameraDataFormat format);
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private synchronized void initReceiver() {

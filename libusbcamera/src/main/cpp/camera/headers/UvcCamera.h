@@ -56,7 +56,7 @@ public:
 
     bool getSupportAutoExposure();
 
-    void setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener,int mode);
+    bool setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener,int mode);
 
     int loadCurrentFormat();
 

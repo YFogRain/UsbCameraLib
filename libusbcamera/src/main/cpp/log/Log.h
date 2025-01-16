@@ -10,8 +10,6 @@
 extern int DEBUG_ENABLE;
 
 #define LOG_D(...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_INFO, "uvc_camera", __VA_ARGS__); } while(0)
-#define LOG_I(...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_INFO, "uvc_camera", __VA_ARGS__); } while(0)
-#define LOG_W(...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_WARN, "uvc_camera", __VA_ARGS__); } while(0)
 #define LOG_E(...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_ERROR, "uvc_camera", __VA_ARGS__);} while(0)
 #define        SAFE_FREE(p)                { if (p) { free((p)); (p) = NULL; } }
 #define        SAFE_DELETE(p)                { if (p) { delete (p); (p) = NULL; } }

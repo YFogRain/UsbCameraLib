@@ -17,6 +17,12 @@
 #define  UVC_FORMAT_FRAME_WINDOW  WINDOW_FORMAT_RGBA_8888
 #define MAX_FRAME 2
 
+struct frame_result_data {
+    uint8_t *frame;
+    size_t frameLength;
+    uint32_t width;
+    uint32_t height;
+};
 class UvcPreview {
 private:
     JavaVM *theVM;
@@ -76,7 +82,7 @@ public:
 
     int setDisplaySurface(ANativeWindow *preview_window);
 
-    void setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener,int mode);
+    bool setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener,int mode);
 
     //设置预览方向
     bool setDisplayTransformState(int transformState);

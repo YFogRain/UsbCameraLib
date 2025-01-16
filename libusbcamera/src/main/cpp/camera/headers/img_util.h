@@ -5,16 +5,22 @@
 #ifndef USBCAMERALIB_IMG_UTIL_H
 #define USBCAMERALIB_IMG_UTIL_H
 
-#include <stdint.h>
+#include "UvcPreview.h"
 #include "libuvc/libuvc.h"
+#include "opencv2/core/mat.hpp"
 
 class ImgUtils {
 
 public:
-    static bool any2Rgba(uvc_frame_t *inFrame, uvc_frame_t *outFrame);
+    // 将数据转换为BGR格式
+    static uvc_frame_t *any2BGR(uvc_frame_t *inFrame);
 
-    //将rgba的数据流转换成对应输出的类型
-    static uvc_frame_t *rgba2Nv21(uvc_frame_t *srcFrame);
+    static cv::Mat bgr2Any(uvc_frame_t *inFrame, int mode);
+
+
+private:
+
+    static uvc_frame_t *initOutFrame(uvc_frame_t *inFrame);
 };
 
-#endif //USBCAMERALIB_IMG_UTIL_H
+#endif // USBCAMERALIB_IMG_UTIL_H

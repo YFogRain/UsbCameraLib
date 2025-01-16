@@ -125,21 +125,16 @@ void UvcPreview::uvc_stream_callback(uvc_frame_t *frame, void *vptr_args) {
               preview->frameBytes);
         return;
     }
-    //    //获取RGBA类型的数据数组
-    uvc_frame_t *rgbaFrame = uvc_allocate_frame(frame->width * frame->height * 4);
-    if (!rgbaFrame) {
-        LOG_E("创建rgba对象失败");
-        return;
-    }
-    if (!ImgUtils::any2Rgba(frame, rgbaFrame)) {
+    //获取bgr类型的数据数组
+    uvc_frame_t *bgrFrame = ImgUtils::any2BGR(frame);
+    // 将数据转换成rgb格式
+    if (!bgrFrame) {
         LOG_E("数据转换失败");
-        uvc_free_frame(rgbaFrame);
         return;
     }
-    //绘制
-    preview->drawFrame(rgbaFrame);
-    //数据发送出去
-    preview->putFrame(rgbaFrame);
+    preview->drawFrame(bgrFrame);
+//     数据发送出去
+    preview->putFrame(bgrFrame);
 }
 
 void *UvcPreview::capture_thread_func(void *vptr_args) {
@@ -150,6 +145,7 @@ void *UvcPreview::capture_thread_func(void *vptr_args) {
             //等待获取预览的数据
             uvc_frame_t *pFrame = preview->waitPreviewFrame();
             if (!pFrame)continue;
+
             //将数据回到给上层
             if (preview->theVM && !env) {
                 preview->theVM->AttachCurrentThread(&env, nullptr);
@@ -277,7 +273,7 @@ void UvcPreview::clearCaptureFrame() {
     pthread_mutex_unlock(&captureMutex);
 }
 
-void UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
+bool UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
     this->requestMode = mode;
     pthread_mutex_lock(&captureMutex);
     theVM = vm;
@@ -298,7 +294,7 @@ void UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener, i
             if (!onFrameMethod) {
                 env->DeleteGlobalRef(listener);
                 previewListener = nullptr;
-                return;
+                return false;
             }
         } else {
             env->DeleteGlobalRef(listener);
@@ -309,6 +305,7 @@ void UvcPreview::setPreviewListener(JavaVM *vm, JNIEnv *env, jobject listener, i
         LOG_D("callbackFrame-IsSameObject-false");
     }
     pthread_mutex_unlock(&captureMutex);
+    return true;
 }
 
 void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
@@ -316,17 +313,16 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
         LOG_D("callbackFrame-return");
         return;
     }
-    uvc_frame_t *outData;
-    if (requestMode == UVC_DATA_FORMAT_NV21) {
-        outData = ImgUtils::rgba2Nv21(frame);
-    } else {
-        outData = frame;
+    auto outImg = ImgUtils::bgr2Any(frame, requestMode);
+    if (outImg.empty()) {
+        return;
     }
-    if (outData && outData->data && outData->data_bytes > 0) {
-        jobject buf = env->NewDirectByteBuffer(outData->data, outData->data_bytes);
+    // 释放源数据
+    int data_bytes = outImg.total() * outImg.elemSize();
+    if (outImg.data && data_bytes > 0) {
+        jobject buf = env->NewDirectByteBuffer(outImg.data, data_bytes);
         if (buf) {
-            env->CallVoidMethod(previewListener, onFrameMethod, outData->width, outData->height,
-                                buf);
+            env->CallVoidMethod(previewListener, onFrameMethod, outImg.cols, outImg.rows, buf);
             if (env->ExceptionCheck()) {
                 LOG_D("ExceptionCheck");
                 env->ExceptionDescribe();
@@ -335,9 +331,6 @@ void UvcPreview::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
             env->DeleteLocalRef(buf);
         }
 
-    }
-    if (outData && requestMode == UVC_DATA_FORMAT_NV21) {
-        uvc_free_frame(outData);
     }
 }
 

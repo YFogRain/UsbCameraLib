@@ -12,6 +12,7 @@ import android.view.TextureView;
 
 import com.rain.uvc.camera.CameraDevice;
 import com.rain.uvc.listener.IFrameListener;
+import com.rain.uvc.state.CameraDataFormat;
 import com.rain.uvc.state.CameraPreviewFormat;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraParameter;
@@ -196,8 +197,8 @@ public class CameraDeviceImpl extends CameraDevice {
     }
 
     @Override
-    public boolean setPreviewListener(IFrameListener listener) {
-        return false;
+    public boolean setPreviewListener(IFrameListener listener, CameraDataFormat format) {
+        return CameraNativeUtils.setPreviewListener(uvcNativeId.get(), listener, format.getValue());
     }
 
     private String[] loadSplit(UsbDevice device) {

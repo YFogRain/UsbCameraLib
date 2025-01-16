@@ -4,7 +4,7 @@ package com.rain.uvc.state;
  * 当前支持的格式
  */
 public enum CameraDataFormat {
-    RGBA(0), NV21(1);
+    BGR(0), NV21(1), RGBA(2);
     private final int value;
 
     CameraDataFormat(int value) {

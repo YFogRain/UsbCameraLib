@@ -70,7 +70,7 @@ class CameraViewModel : BaseViewModel() {
 	}
 	
 	fun startPreview(surface: Surface) {
-		mUvcCamera?.setPreviewListener { width, height, frame ->
+		mUvcCamera?.setPreviewListener { _, _, frame ->
 			val data = ByteArray(frame.capacity())
 			frame.get(data)
 			frame.clear()

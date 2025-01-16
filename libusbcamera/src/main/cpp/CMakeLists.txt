@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project(uvcCamera)
 
+# 开启simd支持
+if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcpu=cortex-a53 -mfpu=neon -mfloat-abi=softfp")
+endif ()
+
 # libusb库导入
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/libusb")
 
