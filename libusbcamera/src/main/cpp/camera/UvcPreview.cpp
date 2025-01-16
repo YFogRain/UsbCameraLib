@@ -170,7 +170,15 @@ void UvcPreview::drawFrame(uvc_frame_t *frame) {
         // 锁定缓冲区以获取可以写入的内存区域
         if (ANativeWindow_lock(mPreviewWindow, &buffer, nullptr) == 0) {
             auto *dst = (uint8_t *) buffer.bits;
-            std::memcpy(dst, src, frame->data_bytes);
+            uint32_t height = frame->height;
+            uint32_t width = frame->width;
+            // 将RGB数据复制到RGBA图像，并设置alpha值为255
+            for (int i = 0, j = 0; i < width * height; ++i, j += 4) {
+                dst[j] = src[i * 3 + 2];     // R
+                dst[j + 1] = src[i * 3 + 1]; // G
+                dst[j + 2] = src[i * 3]; // B
+                dst[j + 3] = 0xFF;                 // A
+            }
             // 解锁缓冲区
             ANativeWindow_unlockAndPost(mPreviewWindow);
         }
