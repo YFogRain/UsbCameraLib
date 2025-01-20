@@ -227,8 +227,9 @@ int UvcPreview::stopPreview() {
         mIsRunning = false;
         uvc_stop_streaming(mDeviceHandle);
         pthread_cond_signal(&captureCond);
-        if (pthread_join(captureThread, nullptr) != EXIT_SUCCESS) {
-            LOG_E("UVCPreview::terminate capture thread: pthread_join failed");
+        // 使用pthread_kill来检查线程是否存活
+        if (pthread_kill(captureThread, 0) != ESRCH || pthread_join(captureThread, nullptr) != 0) {
+            LOG_E("UVCPreview::当前线程已经结束，或者等待结束线程失败");
         }
     }
     LOG_D("停止预览结束");
