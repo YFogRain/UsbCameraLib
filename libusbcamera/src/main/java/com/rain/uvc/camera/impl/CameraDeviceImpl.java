@@ -58,8 +58,6 @@ public class CameraDeviceImpl extends CameraDevice {
                     return;
                 }
                 //初始化内存空间
-                long nativeId = CameraNativeUtils.nativeCreate();
-                uvcNativeId.set(nativeId);
                 UsbManager manager = (UsbManager) OverallContext.baseContext.getSystemService(Context.USB_SERVICE);
                 UsbDeviceConnection usbDeviceConnection = manager.openDevice(usbDevice);
                 if (Thread.currentThread().isInterrupted()) {
@@ -72,11 +70,12 @@ public class CameraDeviceImpl extends CameraDevice {
                     return;
                 }
                 iUsbDeviceConnect = usbDeviceConnection;
-                boolean result = CameraNativeUtils.nativeConnectFd(nativeId, usbDeviceConnection.getFileDescriptor(), getBusNum(deviceNames), getDevAddress(deviceNames));
+                long nativeId = CameraNativeUtils.nativeOpen(usbDeviceConnection.getFileDescriptor(), getBusNum(deviceNames), getDevAddress(deviceNames));
+                uvcNativeId.set(nativeId);
                 if (Thread.currentThread().isInterrupted()) {
                     return;
                 }
-                if (!result) {
+                if (nativeId == 0L) {
                     Log.d("UvcCamera", "连接usb设备失败");
                     close();
                     resultOpen(false, "连接usb设备失败");
@@ -107,9 +106,7 @@ public class CameraDeviceImpl extends CameraDevice {
         long nativeId = uvcNativeId.get();
         if (nativeId != 0L) {
             //断开连接
-            CameraNativeUtils.nativeDisConnect(nativeId);
-            //销毁jni申请的内存
-            CameraNativeUtils.nativeDestroy(nativeId);
+            CameraNativeUtils.nativeClose(nativeId);
             uvcNativeId.set(0L);
         }
         if (iUsbDeviceConnect != null) {

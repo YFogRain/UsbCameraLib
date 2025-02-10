@@ -6,7 +6,7 @@ import android.util.Log
 import android.view.Surface
 import androidx.core.content.getSystemService
 import androidx.lifecycle.viewModelScope
-import com.rain.uvc.UvcCameraManager
+import com.rain.uvc.CameraManager
 import com.rain.uvc.camera.CameraDevice
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.GsonHelper
@@ -43,7 +43,7 @@ class CameraViewModel : BaseViewModel() {
 	}
 	
 	fun destroyCamera() {
-		UvcCameraManager.cancel()
+		CameraManager.cancel()
 		mUvcCamera?.close()
 		mUvcCamera = null
 	}
@@ -52,7 +52,7 @@ class CameraViewModel : BaseViewModel() {
 		Log.d("cameraPreviewUpdateTag", "openCamera-device:${device}")
 		viewModelScope.launch(Dispatchers.IO) {
 			//打开摄像头
-			val cameraDevice = UvcCameraManager.openCameraSync(device)
+			val cameraDevice = CameraManager.openCameraSync(device)
 			Log.d("cameraPreviewUpdateTag", "打开结果～～：$cameraDevice")
 			if (cameraDevice == null) {
 				mUvcCamera?.close()
@@ -64,7 +64,7 @@ class CameraViewModel : BaseViewModel() {
 			val supportedParameter = mUvcCamera?.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
 			Log.d("cameraPreviewUpdateTag", "分辨率集合:${GsonHelper.getHelper().modeToJson(supportedParameter)}")
 			//设置预览分辨率
-			mUvcCamera?.setPreviewSize(1920, 1080, CameraPreviewFormat.MJPEG)
+			mUvcCamera?.setPreviewSize(640, 480, CameraPreviewFormat.YUY2)
 			block.invoke(true)
 		}
 	}

@@ -1208,6 +1208,7 @@ uvc_error_t uvc_stream_start(
     //如果接口具有多个备用设置（altsetting），则启用等时传输
     isochronous = interface->num_altsetting > 1;
     if (isochronous) {
+        LOG_D("当前使用的是等时传输类型");
         const struct libusb_interface_descriptor *altsetting = 0;//指向当前备用设置
         const struct libusb_endpoint_descriptor *endpoint = 0;//指向当前端点
         size_t config_bytes_per_packet;//配置的每包最大字节数
@@ -1264,6 +1265,7 @@ uvc_error_t uvc_stream_start(
         if (ret != UVC_SUCCESS) {
             goto fail;
         }
+        LOG_D("触发等时传输，发送指令，准备开启收发流");
         //批量传输部分
         for (transfer_id = 0; transfer_id < LIBUVC_NUM_TRANSFER_BUFS; ++transfer_id) {
             transfer = libusb_alloc_transfer(packets_per_transfer);

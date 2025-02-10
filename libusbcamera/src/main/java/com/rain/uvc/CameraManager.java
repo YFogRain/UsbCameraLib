@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @createTime: 2025/1/10
  * @des
  */
-public class UvcCameraManager {
+public class CameraManager {
 
     private static final Object mLock = new Object();
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();

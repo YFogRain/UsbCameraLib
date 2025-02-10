@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1)
 
+# 设置为c++17
+set(CMAKE_CXX_STANDARD 17)
+
 project(uvcCamera)
 
 # 开启simd支持
@@ -44,8 +47,11 @@ target_link_libraries(uvc
 
 add_library(uvcCamera SHARED
         camera_uvc.cpp
-        camera/UvcPreview.cpp
-        camera/UvcCamera.cpp
+
+        camera/camera_factory_helper.cpp
+        camera/usb/camera_factory_usb_impl.cpp
+        camera/v4l2/camera_factory_v4l2_impl.cpp
+        camera/v4l2/video_v4l2_utils.cpp
         camera/img_util.cpp
 )
 
