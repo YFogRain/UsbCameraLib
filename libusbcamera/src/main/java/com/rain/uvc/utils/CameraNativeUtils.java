@@ -207,6 +207,24 @@ public class CameraNativeUtils {
             return 7;
         } else if (CameraParameterType.ZOOM.equals(type)) {
             return 8;
+        } else if (CameraParameterType.AUTO_FOCUS.equals(type)) {
+            return 9;
+        } else if (CameraParameterType.FOCUS.equals(type)) {
+            return 10;
+        } else if (CameraParameterType.IRIS.equals(type)) {
+            return 11;
+        } else if (CameraParameterType.AUTO_HUE.equals(type)) {
+            return 12;
+        } else if (CameraParameterType.HUE.equals(type)) {
+            return 13;
+        } else if (CameraParameterType.AUTO_WHITE_BALANCE.equals(type)) {
+            return 14;
+        } else if (CameraParameterType.WHITE_BALANCE.equals(type)) {
+            return 15;
+        } else if (CameraParameterType.SCENE_MODE.equals(type)) {
+            return 16;
+        } else if (CameraParameterType.PRIVACY.equals(type)) {
+            return 17;
         }
         return -1;
     }
@@ -237,21 +255,23 @@ public class CameraNativeUtils {
             }
         }
 
-        if (key.type.equals(CameraParameterType.AUTO_EXPOSURE)) {
+        if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
             int state = 0;
             if (!TextUtils.isEmpty(result)) {
                 state = Integer.parseInt(result);
             }
             return (T) Boolean.valueOf(state == 1);
+        } else if (IntRange.class.isAssignableFrom(key.mClass)) {
+            if (TextUtils.isEmpty(result) || !result.contains(":")) {
+                return null;
+            }
+            String[] split = result.split(":");
+            if (split.length != 2) {
+                return null;
+            }
+            return (T) new IntRange(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
         }
-        if (TextUtils.isEmpty(result) || !result.contains(":")) {
-            return null;
-        }
-        String[] split = result.split(":");
-        if (split.length != 2) {
-            return null;
-        }
-        return (T) new IntRange(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
+        return null;
     }
 
 }

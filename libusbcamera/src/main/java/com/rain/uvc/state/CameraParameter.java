@@ -40,13 +40,30 @@ public class CameraParameter {
 
     public static final Key<CameraSize> PREVIEW_SIZE = new Key<>(CameraParameterType.PREVIEW_SIZE, CameraSize.class);
 
-    public static final Key<String> SCENE_MODE = new Key<>(CameraParameterType.SCENE_MODE, String.class);
+//    public static final Key<String> SCENE_MODE = new Key<>(CameraParameterType.SCENE_MODE, String.class);
 
-    public static final Key<String> WHITE_BALANCE = new Key<>(CameraParameterType.WHITE_BALANCE, String.class);
+//    public static final Key<String> WHITE_BALANCE = new Key<>(CameraParameterType.WHITE_BALANCE, String.class);
 
-    public static final Key<String> COLOR_EFFECTS = new Key<>(CameraParameterType.COLOR_EFFECTS, String.class);
+//    public static final Key<String> COLOR_EFFECTS = new Key<>(CameraParameterType.COLOR_EFFECTS, String.class);
 
-    public static final Key<String> ISO = new Key<>(CameraParameterType.ISO, String.class);
+//    public static final Key<String> ISO = new Key<>(CameraParameterType.ISO, String.class);
 
+    public static final Key<Boolean> AUTO_FOCUS = new Key<>(CameraParameterType.AUTO_FOCUS, boolean.class);
+
+    public static final Key<Integer> FOCUS = new Key<>(CameraParameterType.FOCUS, int.class);
+
+    public static final Key<Integer> IRIS = new Key<>(CameraParameterType.IRIS, int.class);
+
+    public static final Key<Boolean> AUTO_HUE = new Key<>(CameraParameterType.AUTO_HUE, boolean.class);
+
+    public static final Key<Integer> HUE = new Key<>(CameraParameterType.HUE, int.class);
+
+    public static final Key<Boolean> AUTO_WHITE_BALANCE = new Key<>(CameraParameterType.AUTO_WHITE_BALANCE, boolean.class);
+
+    public static final Key<Integer> WHITE_BALANCE = new Key<>(CameraParameterType.WHITE_BALANCE, int.class);
+
+    public static final Key<Integer> SCENE_MODE = new Key<>(CameraParameterType.SCENE_MODE, int.class);
+
+    public static final Key<Boolean> PRIVACY = new Key<>(CameraParameterType.PRIVACY, boolean.class);
 }
 

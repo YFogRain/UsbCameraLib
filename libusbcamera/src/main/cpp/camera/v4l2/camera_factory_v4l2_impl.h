@@ -104,6 +104,10 @@ private:
     void cleanup_buffers(); // 清理buffers
 
     void callbackFrame(uint8_t *frame, int width, int height, JNIEnv *env); //数据回调
+
+    int loadTypeToId(int type);
+
+    int loadValueToPutValue(int type, int value);
 };
 
 #endif // UVCCAMERA_CAMERAV4L2_H
