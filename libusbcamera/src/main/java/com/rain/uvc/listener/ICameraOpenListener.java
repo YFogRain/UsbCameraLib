@@ -1,6 +1,6 @@
 package com.rain.uvc.listener;
 
-import com.rain.uvc.camera.CameraDevice;
+import com.rain.uvc.camera.ICameraDevice;
 
 /**
  * @author yuan
@@ -8,7 +8,7 @@ import com.rain.uvc.camera.CameraDevice;
  * @des 摄像头打开结果回调
  */
 public interface ICameraOpenListener {
-    void success(CameraDevice cameraDevice);
+    void success(ICameraDevice cameraDevice);
 
     void failed(String message);
 }

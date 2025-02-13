@@ -13,7 +13,7 @@ public class CameraParameter {
         public String type;
         public Class<T> mClass;
 
-        Key(String type, Class<T> mClass) {
+        private Key(String type, Class<T> mClass) {
             this.type = type;
             this.mClass = mClass;
         }

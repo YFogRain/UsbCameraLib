@@ -4,7 +4,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.util.Log
 import androidx.core.content.getSystemService
-import com.rain.uvc.CameraManager
+import com.rain.uvc.CameraUvcManager
 import com.rain.uvc.provider.OverallContext
 
 /**
@@ -73,7 +73,7 @@ object UsbCameraUtils {
 	fun loadCameraMode(usbDevice: UsbDevice): Int? {
 		if (isPetrelNICamera(usbDevice)) return 2
 		if (isHjCamera(usbDevice)) return 3
-		return if (CameraManager.isUvcCamera(usbDevice)) 1 else null
+		return if (CameraUvcManager.checkDeviceUvc(usbDevice)) 1 else null
 	}
 	
 	/**

@@ -8,7 +8,7 @@ import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.text.TextUtils;
 
-import com.rain.uvc.camera.CameraDevice;
+import com.rain.uvc.camera.ICameraDevice;
 import com.rain.uvc.camera.impl.CameraDeviceImpl;
 import com.rain.uvc.listener.ICameraOpenListener;
 import com.rain.uvc.provider.OverallContext;
@@ -30,12 +30,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @createTime: 2025/1/10
  * @des
  */
-public class CameraManager {
+public class CameraUvcManager {
 
     private static final Object mLock = new Object();
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    private static final ConcurrentHashMap<CameraDevice, CountDownLatch> runningDevices = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ICameraDevice, CountDownLatch> runningDevices = new ConcurrentHashMap<>();
 
     /**
      * debug模式开关
@@ -54,7 +54,7 @@ public class CameraManager {
         Collection<UsbDevice> values = manager.getDeviceList().values();
         List<UsbDevice> list = new ArrayList<>();
         for (UsbDevice device : values) {
-            if (isUvcCamera(device)) {
+            if (checkDeviceUvc(device)) {
                 list.add(device);
             }
         }
@@ -64,7 +64,7 @@ public class CameraManager {
     /**
      * 是否是摄像头类型
      */
-    public static boolean isUvcCamera(UsbDevice usbDevice) {
+    public static boolean checkDeviceUvc(UsbDevice usbDevice) {
         //校验类型是否是usb摄像头
         if (usbDevice.getDeviceClass() != 239 && usbDevice.getDeviceSubclass() != 2) {
             return false;
@@ -79,7 +79,7 @@ public class CameraManager {
     }
 
 
-    public static UsbDevice findDevice(int vId, int pId) {
+    public static UsbDevice getDeviceForId(int vId, int pId) {
         UsbManager manager = (UsbManager) OverallContext.baseContext.getSystemService(Context.USB_SERVICE);
         Collection<UsbDevice> values = manager.getDeviceList().values();
         for (UsbDevice device : values) {
@@ -122,7 +122,7 @@ public class CameraManager {
      * @param usbDevice 打开的usb设备
      * @return 返回打开后的操作对象
      */
-    public static CameraDevice openCameraSync(UsbDevice usbDevice) throws UvcCameraAccessException {
+    public static ICameraDevice openCameraSync(UsbDevice usbDevice) throws UvcCameraAccessException {
         if (checkPermission(Manifest.permission.CAMERA)) {
             throw new UvcCameraAccessException("请检查权限");
         }
@@ -137,7 +137,7 @@ public class CameraManager {
      * @param timeout   超时时间 ms
      * @return 返回打开后的操作对象
      */
-    public static CameraDevice openCameraSync(UsbDevice usbDevice, long timeout) throws UvcCameraAccessException {
+    public static ICameraDevice openCameraSync(UsbDevice usbDevice, long timeout) throws UvcCameraAccessException {
         if (checkPermission(Manifest.permission.CAMERA)) {
             throw new UvcCameraAccessException("请检查权限");
         }
@@ -160,7 +160,7 @@ public class CameraManager {
         executor.submit(() -> {
             try {
                 // 调用异步方法，等待摄像头打开
-                CameraDevice cameraDevice = waitOpenCamera(usbDevice, timeout);
+                ICameraDevice cameraDevice = waitOpenCamera(usbDevice, timeout);
                 // 摄像头成功打开
                 listener.success(cameraDevice);
             } catch (UvcCameraAccessException e) {
@@ -193,14 +193,14 @@ public class CameraManager {
      * @param timeout   超时时间ms
      * @return 打开后的操作对象
      */
-    private static CameraDevice waitOpenCamera(UsbDevice usbDevice, long timeout) throws UvcCameraAccessException {
+    private static ICameraDevice waitOpenCamera(UsbDevice usbDevice, long timeout) throws UvcCameraAccessException {
         synchronized (mLock) {
             final CountDownLatch latch = new CountDownLatch(1);
             CameraDeviceImpl cameraDevice = new CameraDeviceImpl(usbDevice);
             AtomicBoolean isOpenSuccess = new AtomicBoolean(false);  // 使用 AtomicBoolean 来标识成功或失败
             StringBuilder errorMessage = new StringBuilder(); // 用于存储失败的错误信息
             runningDevices.put(cameraDevice, latch);//添加到打开队列
-            cameraDevice.open(new CameraDevice.ICameraDeviceListener() {
+            cameraDevice.open(new ICameraDevice.ICameraDeviceListener() {
                 @Override
                 public void onSuccess() {
                     isOpenSuccess.set(true);
@@ -242,7 +242,7 @@ public class CameraManager {
         try {
             if (!runningDevices.isEmpty()) {
                 for (var entry : runningDevices.entrySet()) {
-                    CameraDevice device = entry.getKey();
+                    ICameraDevice device = entry.getKey();
                     CountDownLatch latch = entry.getValue();
                     device.close();
                     latch.countDown();

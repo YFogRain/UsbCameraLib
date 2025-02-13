@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @createTime: 2025/1/10
  * @des 对外使用的CameraDevice
  */
-public abstract class CameraDevice {
+public abstract class ICameraDevice {
     private static final String ACTION_USB_PERMISSION = "com.dc.camera.uvc.permission.request";
     //当前缓存的usb设备信息
     protected final AtomicReference<UsbDevice> mUsbDevice = new AtomicReference<>();
@@ -83,7 +83,7 @@ public abstract class CameraDevice {
         }
     };
 
-    public CameraDevice(UsbDevice device) {
+    public ICameraDevice(UsbDevice device) {
         this.mUsbDevice.set(device);
     }
 

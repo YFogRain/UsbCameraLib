@@ -10,7 +10,7 @@ import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.TextureView;
 
-import com.rain.uvc.camera.CameraDevice;
+import com.rain.uvc.camera.ICameraDevice;
 import com.rain.uvc.listener.IFrameListener;
 import com.rain.uvc.state.CameraDataFormat;
 import com.rain.uvc.state.CameraPreviewFormat;
@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @createTime: 2025/1/10
  * @des
  */
-public class CameraDeviceImpl extends CameraDevice {
+public class CameraDeviceImpl extends ICameraDevice {
     //当前打开的对应的jni层的内存地址值，操作摄像头用
     private final AtomicLong uvcNativeId = new AtomicLong(0L);
     //打开摄像头启动的子线程，保证打开不会造成主线程卡死

@@ -14,7 +14,7 @@ public class CameraSupportParameters {
         public String type;
         public Class<T> mClass;
 
-        Key(String type, Class<T> mClass) {
+        private Key(String type, Class<T> mClass) {
             this.type = type;
             this.mClass = mClass;
         }
@@ -48,23 +48,23 @@ public class CameraSupportParameters {
     public static final Key<CameraSize[]> PREVIEW_SIZE = new Key<>(CameraParameterType.PREVIEW_SIZE, CameraSize[].class);
 
 
-    public static final Key<Boolean> AUTO_FOCUS = new Key<>(CameraParameterType.AUTO_FOCUS,boolean.class);
+    public static final Key<Boolean> AUTO_FOCUS = new Key<>(CameraParameterType.AUTO_FOCUS, boolean.class);
 
-    public static final Key<IntRange> FOCUS = new Key<>(CameraParameterType.FOCUS,IntRange.class);
+    public static final Key<IntRange> FOCUS = new Key<>(CameraParameterType.FOCUS, IntRange.class);
 
-    public static final Key<IntRange> IRIS = new Key<>(CameraParameterType.IRIS,IntRange.class);
+    public static final Key<IntRange> IRIS = new Key<>(CameraParameterType.IRIS, IntRange.class);
 
-    public static final Key<Boolean> AUTO_HUE = new Key<>(CameraParameterType.AUTO_HUE,boolean.class);
+    public static final Key<Boolean> AUTO_HUE = new Key<>(CameraParameterType.AUTO_HUE, boolean.class);
 
-    public static final Key<IntRange> HUE = new Key<>(CameraParameterType.HUE,IntRange.class);
+    public static final Key<IntRange> HUE = new Key<>(CameraParameterType.HUE, IntRange.class);
 
-    public static final Key<Boolean> AUTO_WHITE_BALANCE = new Key<>(CameraParameterType.AUTO_WHITE_BALANCE,boolean.class);
+    public static final Key<Boolean> AUTO_WHITE_BALANCE = new Key<>(CameraParameterType.AUTO_WHITE_BALANCE, boolean.class);
 
-    public static final Key<IntRange> WHITE_BALANCE = new Key<>(CameraParameterType.WHITE_BALANCE,IntRange.class);
+    public static final Key<IntRange> WHITE_BALANCE = new Key<>(CameraParameterType.WHITE_BALANCE, IntRange.class);
 
-    public static final Key<IntRange> SCENE_MODE = new Key<>(CameraParameterType.SCENE_MODE,IntRange.class);
+    public static final Key<IntRange> SCENE_MODE = new Key<>(CameraParameterType.SCENE_MODE, IntRange.class);
 
-    public static final Key<Boolean> PRIVACY = new Key<>(CameraParameterType.PRIVACY,boolean.class);
+    public static final Key<Boolean> PRIVACY = new Key<>(CameraParameterType.PRIVACY, boolean.class);
 
 }
 

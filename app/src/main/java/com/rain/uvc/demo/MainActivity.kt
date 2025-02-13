@@ -25,7 +25,9 @@ class MainActivity : BaseDataBindActivity<ActivityMainBinding>() {
 	override val mViewModel :BaseViewModel?=null
 	override fun initLayoutResId() = R.layout.activity_main
 	private val permissionCall = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-	
+		if (!it){
+			Toast.makeText(this,"请检查摄像头权限",Toast.LENGTH_SHORT).show()
+		}
 	}
 	private val testList = mutableListOf("开启预览")
 	private val adapter by lazy {

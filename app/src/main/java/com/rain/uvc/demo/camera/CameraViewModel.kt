@@ -6,8 +6,8 @@ import android.util.Log
 import android.view.Surface
 import androidx.core.content.getSystemService
 import androidx.lifecycle.viewModelScope
-import com.rain.uvc.CameraManager
-import com.rain.uvc.camera.CameraDevice
+import com.rain.uvc.CameraUvcManager
+import com.rain.uvc.camera.ICameraDevice
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.GsonHelper
 import com.rain.uvc.demo.utils.UsbCameraUtils
@@ -25,7 +25,7 @@ class CameraViewModel : BaseViewModel() {
 	
 	private var currentRotation = 0 //旋转角度
 	
-	private var mUvcCamera: CameraDevice? = null
+	private var mUvcCamera: ICameraDevice? = null
 	
 	fun openCamera(block: ((Boolean) -> Unit)) {
 		val usbManager = OverallContext.baseContext.getSystemService<UsbManager>()
@@ -43,7 +43,7 @@ class CameraViewModel : BaseViewModel() {
 	}
 	
 	fun destroyCamera() {
-		CameraManager.cancel()
+		CameraUvcManager.cancel()
 		mUvcCamera?.close()
 		mUvcCamera = null
 	}
@@ -52,7 +52,7 @@ class CameraViewModel : BaseViewModel() {
 		Log.d("cameraPreviewUpdateTag", "openCamera-device:${device}")
 		viewModelScope.launch(Dispatchers.IO) {
 			//打开摄像头
-			val cameraDevice = CameraManager.openCameraSync(device)
+			val cameraDevice = runCatching { CameraUvcManager.openCameraSync(device) }.getOrNull()
 			Log.d("cameraPreviewUpdateTag", "打开结果～～：$cameraDevice")
 			if (cameraDevice == null) {
 				mUvcCamera?.close()
