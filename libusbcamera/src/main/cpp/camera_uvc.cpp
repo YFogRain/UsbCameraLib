@@ -1,220 +1,152 @@
 #include <jni.h>
-#include "camera/UvcCamera.h"
 #include <utility> // for std::pair
-
-//
-// Created by MI T on 2024/8/1.
-//
-
-extern "C"
-JNIEXPORT jlong JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeCreate(JNIEnv *env, jclass clazz) {
-    auto *camera = new UvcCamera();
-    return reinterpret_cast<jlong>(camera);
-}
-
+#include <android/native_window_jni.h>
+#include "Log.h"
+#include "camera_factory_helper.h"
+#include <iostream>
 
 extern "C"
 JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeDestroy(JNIEnv *env, jclass clazz, jlong nativeId) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        SAFE_DELETE(camera)
-    }
+Java_com_rain_uvc_utils_CameraNativeUtils_debuggable(JNIEnv *env, jclass clazz, jint status) {
+    DEBUG_ENABLE = status;
     return true;
 }
 
 extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeConnect(JNIEnv *env, jclass clazz, jlong nativeId,
-                                                      jint fd) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        int ret = camera->connect(fd);
-        return ret == UVC_SUCCESS;
+JNIEXPORT jlong JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeOpen(JNIEnv *env, jclass clazz, jint fd, jint bus_num, jint dev_address) {
+    auto result = CameraFactoryHelper::openCamera(fd, bus_num, dev_address);
+    if (result) {
+        return reinterpret_cast<jlong>(result);
     }
-    return false;
+    return 0;
+}
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeOpenVideo(JNIEnv *env, jclass clazz, jstring video_path) {
+    if (!video_path)return 0;
+    const char *path = env->GetStringUTFChars(video_path, nullptr);
+    if (!path)return 0;
+    auto result = CameraFactoryHelper::openCamera(path);
+    env->ReleaseStringUTFChars(video_path, path);
+    if (result) {
+        return reinterpret_cast<jlong>(result);
+    }
+    return 0;
+}
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeClose(JNIEnv *env, jclass clazz, jlong native_id) {
+    return CameraFactoryHelper::closeCamera(native_id);
 }
 
 extern "C"
 JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeDisConnect(JNIEnv *env, jclass clazz,
-                                                         jlong nativeId) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        int ret = camera->disConnect();
-        return ret == UVC_SUCCESS;
-    }
-    return false;
-}
-extern "C"
-JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeStartPreview(JNIEnv *env, jclass clazz,
-                                                           jlong nativeId) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
+        jlong nativeId) {
+    auto *camera = reinterpret_cast<ICameraFactory *>(nativeId);
     if (camera) {
-        int ret = camera->startPreview();
-        return ret == UVC_SUCCESS;
+        return camera->startPreview();
     }
     return false;
 }
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeStopPreview(JNIEnv *env, jclass clazz,
-                                                          jlong nativeId) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
+        jlong nativeId) {
+    auto *camera = reinterpret_cast<ICameraFactory *>(nativeId);
     if (camera) {
-        int ret = camera->stopPreview();
-        return ret == UVC_SUCCESS;
+        return camera->stopPreview();
     }
     return false;
 }
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetDisplaySurface(JNIEnv *env, jclass clazz,
-                                                                jlong nativeId, jobject jSurface) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
+        jlong nativeId,
+        jobject jSurface) {
+    auto *camera = reinterpret_cast<ICameraFactory *>(nativeId);
     if (camera) {
         ANativeWindow *preview_window = jSurface ? ANativeWindow_fromSurface(env, jSurface)
                                                  : nullptr;
-        int ret = camera->setPreviewDisplay(preview_window);
-        return ret == UVC_SUCCESS;
+        return camera->setDisplaySurface(preview_window);
     }
     return false;
 }
-extern "C"
-JNIEXPORT jintArray JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetPreviewSize(JNIEnv *env, jclass clazz,
-                                                             jlong nativeId) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        std::pair<int, int> pair = camera->getPreviewSize();
-        int width = pair.first;
-        int height = pair.second;
-        LOG_D("当前获取到的值:%d-%d", width, height);
-        if (width == height) {
-            return nullptr;
-        }
 
-        bool isMjpeg = camera->currentFrameModeIsMjpeg();
-        bool currentFps = camera->getCurrentFps();
-        int temp[4] = {width, height, currentFps, isMjpeg ? 1 : 0};
-        jintArray pArray = env->NewIntArray(4);
-        env->SetIntArrayRegion(pArray, 0, 4, temp);
-        return nullptr;
-    }
-    return nullptr;
-}
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetPreviewSize(JNIEnv *env, jclass clazz,
-                                                             jlong nativeId, jint width,
-                                                             jint height, jint fps,
-                                                             jboolean isMjpeg) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
+        jlong nativeId, jint width,
+        jint height, jint format) {
+    auto *camera = reinterpret_cast<ICameraFactory *>(nativeId);
     if (camera) {
-        int ret = camera->setPreviewSize(width, height, fps, isMjpeg);
-        return ret == UVC_SUCCESS;
+        return camera->setPreviewSize(width, height, format);
     }
     return false;
 }
+
 extern "C"
 JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetSupportAutoExposure(JNIEnv *env, jclass clazz,
-                                                                     jlong nativeId) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
+Java_com_rain_uvc_utils_CameraNativeUtils_setPreviewListener(JNIEnv *env, jclass clazz,
+        jlong nativeId, jobject listener,
+        jint mode) {
+    auto *camera = reinterpret_cast<ICameraFactory *>(nativeId);
     if (camera) {
-        int ret = camera->getSupportAutoExposure();
-        return ret == UVC_SUCCESS;
+        JavaVM *vm;
+        env->GetJavaVM(&vm);
+        return camera->setPreviewDataListener(vm, env, listener, mode);
     }
     return false;
 }
 extern "C"
 JNIEXPORT jstring JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetSupportPreviewSizes(JNIEnv *env, jclass clazz,
-                                                                     jlong nativeId) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        char *str = camera->getSupportedSize();
-        if (LIKELY(str)) {
-            jstring result = env->NewStringUTF(str);
-            free(str);
-            return result;
-        }
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetSupportedParameters(JNIEnv *env, jclass clazz, jlong native_id, jint type) {
+    ICameraFactory *camera = reinterpret_cast<ICameraFactory *>(native_id);
+    if (!camera)return nullptr;
+    auto result = camera->getSupportParameters(type);
+    if (std::holds_alternative<std::monostate>(result)) {
+        return nullptr;
+    } else if (std::holds_alternative<int>(result)) {
+        int value = std::get<int>(result);
+        std::string str = std::to_string(value);
+        return env->NewStringUTF(str.c_str());
+    } else if (std::holds_alternative<std::string>(result)) {
+        LOG_D("获取到了char类型");
+        auto value = std::get<std::string>(result);
+        LOG_D("当前获取到的值为:%s", value.c_str());
+        return env->NewStringUTF(value.c_str());
+    } else if (std::holds_alternative<std::pair<int, int>>(result)) {
+        auto value = std::get<std::pair<int, int>>(result);
+        auto resultStr = std::to_string(value.first) + ":" + std::to_string(value.second);
+        return env->NewStringUTF(resultStr.c_str());
     }
     return nullptr;
 }
+
+
 extern "C"
-JNIEXPORT jintArray JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetParameterRange(JNIEnv *env, jclass clazz,
-                                                                jlong nativeId, jint type) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        LOG_D("开始获取值");
-        std::pair<int, int> pair = camera->getParameterRange(type);
-        int min = pair.first;
-        int max = pair.second;
-        LOG_D("当前获取到的值:%d-%d", min, max);
-        if (min == max) {
-            return nullptr;
-        }
-        int temp[2] = {min, max};
-        jintArray pArray = env->NewIntArray(2);
-        env->SetIntArrayRegion(pArray, 0, 2, temp);
-        return pArray;
+JNIEXPORT jstring JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetParameterValue(JNIEnv *env, jclass clazz, jlong native_id, jint type) {
+    ICameraFactory *camera = reinterpret_cast<ICameraFactory *>(native_id);
+    if (!camera)return nullptr;
+    auto result = camera->getParameter(type);
+    if (std::holds_alternative<std::monostate>(result)) {
+        return nullptr;
+    } else if (std::holds_alternative<int>(result)) {
+        return env->NewStringUTF(std::to_string(std::get<int>(result)).c_str());
+    } else if (std::holds_alternative<std::string>(result)) {
+        auto value = std::get<std::string>(result);
+        LOG_D("当前获取到的值为:%s", value.c_str());
+        return env->NewStringUTF(value.c_str());
     }
     return nullptr;
-}
-extern "C"
-JNIEXPORT jint JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetIntValue(JNIEnv *env, jclass clazz,
-                                                          jlong nativeId, jint type) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        return camera->getParameterIntValue(type);
-    }
-    return -999;
-}
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetBoolValue(JNIEnv *env, jclass clazz,
-                                                           jlong nativeId, jint type) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        return camera->getParameterBoolValue(type);
-    }
-    return false;
-}
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetBoolValue(JNIEnv *env, jclass clazz,
-                                                           jlong nativeId, jint type,
-                                                           jboolean value) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        return camera->setParameterBoolValue(type, value);
-    }
-    return false;
-}
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetIntValue(JNIEnv *env, jclass clazz,
-                                                          jlong nativeId, jint type, jint value) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        return camera->setParameterIntValue(type, value);
-    }
-    return false;
 }
 
 extern "C"
-JNIEXPORT void JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_setPreviewListener(JNIEnv *env, jclass clazz,
-                                                           jlong nativeId, jobject listener) {
-    auto *camera = reinterpret_cast<UvcCamera *>(nativeId);
-    if (camera) {
-        JavaVM *vm;
-        env->GetJavaVM(&vm);
-        camera->setPreviewListener(vm, env, listener);
-    }
+JNIEXPORT jboolean JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetParameterValue(JNIEnv *env, jclass clazz, jlong native_id, jint type, jint value) {
+    ICameraFactory *camera = reinterpret_cast<ICameraFactory *>(native_id);
+    if (!camera)return false;
+    return camera->setParameter(type, value);
 }

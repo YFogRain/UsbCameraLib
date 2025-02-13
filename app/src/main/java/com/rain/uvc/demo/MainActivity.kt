@@ -4,9 +4,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -20,14 +22,14 @@ import com.rain.uvc.demo.camera.CameraActivity
 import com.rain.uvc.demo.databinding.ActivityMainBinding
 
 class MainActivity : BaseDataBindActivity<ActivityMainBinding>() {
-	override val mViewModel: BaseViewModel? = null
+	override val mViewModel :BaseViewModel?=null
 	override fun initLayoutResId() = R.layout.activity_main
 	private val permissionCall = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-	
+		if (!it){
+			Toast.makeText(this,"请检查摄像头权限",Toast.LENGTH_SHORT).show()
+		}
 	}
-	private val testList = mutableListOf(
-		"开启预览",
-	)
+	private val testList = mutableListOf("开启预览")
 	private val adapter by lazy {
 		object : BaseRecAdapter<String>() {
 			override fun getLayoutResId(viewType: Int) = R.layout.item_test_click_view
@@ -57,6 +59,7 @@ class MainActivity : BaseDataBindActivity<ActivityMainBinding>() {
 	private fun itemClick(str: String?) {
 		when (str) {
 			"开启预览" -> {
+				SystemClock.sleep(1000000)
 				if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
 					permissionCall.launch(android.Manifest.permission.CAMERA)
 				} else startActivity(Intent(this, CameraActivity::class.java))

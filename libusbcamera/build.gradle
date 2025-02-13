@@ -10,6 +10,9 @@ android {
         minSdk  libs.versions.minSdk.get().toInteger()
 
         consumerProguardFiles "consumer-rules.pro"
+        ndk{
+            abiFilters "arm64-v8a","armeabi-v7a","x86_64"
+        }
     }
 
     buildTypes {
@@ -19,9 +22,10 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
+
     externalNativeBuild{
         cmake{
             path = "src/main/cpp/CMakeLists.txt"

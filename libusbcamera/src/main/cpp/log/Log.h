@@ -7,9 +7,10 @@
 
 #include "android/log.h"
 
-#define LOG_D(...) __android_log_print(ANDROID_LOG_DEBUG, "uvc_camera", __VA_ARGS__)
-#define LOG_I(...) __android_log_print(ANDROID_LOG_INFO, "uvc_camera", __VA_ARGS__)
-#define LOG_E(...) __android_log_print(ANDROID_LOG_ERROR, "uvc_camera", __VA_ARGS__)
+extern int DEBUG_ENABLE;
+
+#define LOG_D(...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_INFO, "uvc_camera", __VA_ARGS__); } while(0)
+#define LOG_E(...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_ERROR, "uvc_camera", __VA_ARGS__);} while(0)
 #define        SAFE_FREE(p)                { if (p) { free((p)); (p) = NULL; } }
 #define        SAFE_DELETE(p)                { if (p) { delete (p); (p) = NULL; } }
 #define        SAFE_DELETE_ARRAY(p)        { if (p) { delete [](p); (p) = NULL; } }

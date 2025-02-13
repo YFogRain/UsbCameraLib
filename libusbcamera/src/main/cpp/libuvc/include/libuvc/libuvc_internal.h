@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <libusb.h>
 #include "utlist.h"
+#include "libuvc.h"
 
 /** Converts an unaligned four-byte little-endian integer into an int32 */
 #define DW_TO_INT(p) ((p)[0] | ((p)[1] << 8) | ((p)[2] << 16) | ((p)[3] << 24))

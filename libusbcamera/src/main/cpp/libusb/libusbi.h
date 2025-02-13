@@ -1088,12 +1088,6 @@ struct usbi_os_backend {
      */
     int (*open)(struct libusb_device_handle *dev_handle);
 
-    /*
-     * 通过文件描述符打开设备
-     *
-     */
-    int (*open_fd)(struct libusb_device_handle *handle, int fd);
-
     /* Close a device such that the handle cannot be used again. Your backend
      * should destroy any resources that were allocated in the open path.
      * This may also be a good place to call usbi_remove_event_source() to
@@ -1534,3 +1528,5 @@ extern const struct usbi_os_backend usbi_backend;
 #endif
 
 #endif
+
+#define DEVICE_DESC_LENGTH        18

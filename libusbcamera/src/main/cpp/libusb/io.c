@@ -1498,38 +1498,6 @@ int API_EXPORTED libusb_submit_transfer(struct libusb_transfer *transfer)
 	ctx = HANDLE_CTX(transfer->dev_handle);
 	usbi_dbg(ctx, "transfer %p", (void *) transfer);
 
-	/*
-	 * Important note on locking, this function takes / releases locks
-	 * in the following order:
-	 *  take flying_transfers_lock
-	 *  take itransfer->lock
-	 *  clear transfer
-	 *  add to flying_transfers list
-	 *  release flying_transfers_lock
-	 *  submit transfer
-	 *  release itransfer->lock
-	 *  if submit failed:
-	 *   take flying_transfers_lock
-	 *   remove from flying_transfers list
-	 *   release flying_transfers_lock
-	 *
-	 * Note that it takes locks in the order a-b and then releases them
-	 * in the same order a-b. This is somewhat unusual but not wrong,
-	 * release order is not important as long as *all* locks are released
-	 * before re-acquiring any locks.
-	 *
-	 * This means that the ordering of first releasing itransfer->lock
-	 * and then re-acquiring the flying_transfers_list on error is
-	 * important and must not be changed!
-	 *
-	 * This is done this way because when we take both locks we must always
-	 * take flying_transfers_lock first to avoid ab-ba style deadlocks with
-	 * the timeout handling and usbi_handle_disconnect paths.
-	 *
-	 * And we cannot release itransfer->lock before the submission is
-	 * complete otherwise timeout handling for transfers with short
-	 * timeouts may run before submission.
-	 */
 	usbi_mutex_lock(&ctx->flying_transfers_lock);
 	usbi_mutex_lock(&itransfer->lock);
 	if (itransfer->state_flags & USBI_TRANSFER_IN_FLIGHT) {
@@ -2679,13 +2647,14 @@ static void usbi_event_source_notification(struct libusb_context *ctx)
  * poll_events should be specified as a bitmask of events passed to poll(), e.g.
  * POLLIN and/or POLLOUT. */
 int usbi_add_event_source(struct libusb_context *ctx, usbi_os_handle_t os_handle, short poll_events)
-{
+{   //分配内存用于事件源
 	struct usbi_event_source *ievent_source = malloc(sizeof(*ievent_source));
 
 	if (!ievent_source)
 		return LIBUSB_ERROR_NO_MEM;
 
 	usbi_dbg(ctx, "add " USBI_OS_HANDLE_FORMAT_STRING " events %d", os_handle, poll_events);
+    //将传入的文件描述符 os_handle 和事件类型 poll_events 存储到 ievent_source 的相应字段中。
 	ievent_source->data.os_handle = os_handle;
 	ievent_source->data.poll_events = poll_events;
 	usbi_mutex_lock(&ctx->event_data_lock);

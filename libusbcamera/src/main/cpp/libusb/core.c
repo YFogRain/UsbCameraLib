@@ -36,6 +36,7 @@
 #ifdef HAVE_SYSLOG
 #include <syslog.h>
 #endif
+int DEBUG_ENABLE = 1;
 
 static const struct libusb_version libusb_version_internal =
         {LIBUSB_MAJOR, LIBUSB_MINOR, LIBUSB_MICRO, LIBUSB_NANO,
@@ -711,20 +712,26 @@ struct discovered_devs *discovered_devs_append(
  * a reference count of 1. */
 struct libusb_device *usbi_alloc_device(struct libusb_context *ctx,
                                         unsigned long session_id) {
+    //计算设备结构体大小
     size_t priv_size = usbi_backend.device_priv_size;
+    //使用 calloc 为设备分配内存（PTR_ALIGN：确保指针对齐以优化内存访问效率。）
     struct libusb_device *dev = calloc(1, PTR_ALIGN(sizeof(*dev)) + priv_size);
-
     if (!dev)
         return NULL;
-
+    //初始化设备字段
     usbi_atomic_store(&dev->refcnt, 1);
-
+    //关联设备的上下文 ctx，用于设备的后续管理和操作。
     dev->ctx = ctx;
+    //将传入的 session_id 保存到设备的会话数据字段中，用于标识设备的唯一性
     dev->session_data = session_id;
+    //将设备速度初始化为 LIBUSB_SPEED_UNKNOWN（未知速度）
     dev->speed = LIBUSB_SPEED_UNKNOWN;
-
-    if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
+    // 检查热插拔支持
+    if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG)) {
+        //如果当前系统不支持热插拔功能,将设备添加到全局活动设备列表中
+        LOG_D("当前不支持热插拔，添加设备到全局活动列表");
         usbi_connect_device(dev);
+    }
 
     return dev;
 }
@@ -761,18 +768,17 @@ int usbi_sanitize_device(struct libusb_device *dev) {
 
     if (dev->device_descriptor.bLength != LIBUSB_DT_DEVICE_SIZE ||
         dev->device_descriptor.bDescriptorType != LIBUSB_DT_DEVICE) {
-        usbi_err(DEVICE_CTX(dev), "invalid device descriptor");
+        LOG_E("初始化设备描述符失败：bLength：%d", dev->device_descriptor.bLength);
         return LIBUSB_ERROR_IO;
     }
 
     num_configurations = dev->device_descriptor.bNumConfigurations;
     if (num_configurations > USB_MAXCONFIG) {
-        usbi_err(DEVICE_CTX(dev), "too many configurations");
+        LOG_E("配置总数超过了最大值：%d", num_configurations);
         return LIBUSB_ERROR_IO;
     } else if (0 == num_configurations) {
-        usbi_dbg(DEVICE_CTX(dev), "zero configurations, maybe an unauthorized device");
+        LOG_E("zero configurations, maybe an unauthorized device：%d", num_configurations);
     }
-
     return 0;
 }
 
@@ -1384,37 +1390,37 @@ int API_EXPORTED libusb_wrap_sys_device(libusb_context *ctx, intptr_t sys_dev,
  */
 int API_EXPORTED libusb_open(libusb_device *dev,
                              libusb_device_handle **dev_handle) {
+    //获取设备上下文和准备变量
     struct libusb_context *ctx = DEVICE_CTX(dev);
     struct libusb_device_handle *_dev_handle;
+    //获取设备句柄私有数据部分的大小
     size_t priv_size = usbi_backend.device_handle_priv_size;
     int r;
-
-    usbi_dbg(DEVICE_CTX(dev), "open %d.%d", dev->bus_number, dev->device_address);
-
+    LOG_D("打开设备。 %d.%d", dev->bus_number, dev->device_address);
+    // 检查设备是否已附加
     if (!usbi_atomic_load(&dev->attached))
         return LIBUSB_ERROR_NO_DEVICE;
-
+    //分配设备句柄内存
     _dev_handle = calloc(1, PTR_ALIGN(sizeof(*_dev_handle)) + priv_size);
-    if (!_dev_handle)
+    if (!_dev_handle)//内存分配失败
         return LIBUSB_ERROR_NO_MEM;
-
+    //初始化设备句柄的锁
     usbi_mutex_init(&_dev_handle->lock);
-
+    //引用设备
     _dev_handle->dev = libusb_ref_device(dev);
-
+    //调用后端的 open 函数
     r = usbi_backend.open(_dev_handle);
-    if (r < 0) {
+    if (r < 0) {//打开失败
         usbi_dbg(DEVICE_CTX(dev), "open %d.%d returns %d", dev->bus_number, dev->device_address, r);
         libusb_unref_device(dev);
         usbi_mutex_destroy(&_dev_handle->lock);
         free(_dev_handle);
         return r;
     }
-
-    usbi_mutex_lock(&ctx->open_devs_lock);
-    list_add(&_dev_handle->list, &ctx->open_devs);
-    usbi_mutex_unlock(&ctx->open_devs_lock);
-    *dev_handle = _dev_handle;
+    usbi_mutex_lock(&ctx->open_devs_lock);//使用互斥锁对 open_devs_lock 进行加锁，防止多线程并发访问设备列表。
+    list_add(&_dev_handle->list, &ctx->open_devs);//将设备句柄添加到已打开设备列表
+    usbi_mutex_unlock(&ctx->open_devs_lock);//解锁设备列表互斥锁
+    *dev_handle = _dev_handle;//返回设备句柄
 
     return 0;
 }
@@ -2386,12 +2392,13 @@ int API_EXPORTED libusb_init(libusb_context **ctx) {
 int API_EXPORTED
 libusb_init_context(libusb_context **ctx, const struct libusb_init_option options[],
                     int num_options) {
+    //获取后端特定的上下文私有数据大小
     size_t priv_size = usbi_backend.context_priv_size;
     struct libusb_context *_ctx;
     int r;
 
     usbi_mutex_static_lock(&default_context_lock);
-
+    // 检查默认上下文是否可复用
     if (!ctx && default_context_refcnt > 0) {
         usbi_dbg(usbi_default_context, "reusing default context");
         default_context_refcnt++;
@@ -2399,14 +2406,14 @@ libusb_init_context(libusb_context **ctx, const struct libusb_init_option option
         return 0;
     }
 
-    /* check for first init */
+    // 初始化全局活动上下文列表
     usbi_mutex_static_lock(&active_contexts_lock);
     if (!active_contexts_list.next) {
         list_init(&active_contexts_list);
         usbi_get_monotonic_time(&timestamp_origin);
     }
     usbi_mutex_static_unlock(&active_contexts_lock);
-
+    //分配并初始化新的上下文
     _ctx = calloc(1, PTR_ALIGN(sizeof(*_ctx)) + priv_size);
     if (!_ctx) {
         usbi_mutex_static_unlock(&default_context_lock);
@@ -2422,17 +2429,18 @@ libusb_init_context(libusb_context **ctx, const struct libusb_init_option option
         _ctx->debug = default_context_options[LIBUSB_OPTION_LOG_LEVEL].arg.ival;
     }
 #endif
+    //初始化上下文结构体的成员
+    usbi_mutex_init(&_ctx->usb_devs_lock);//保护 USB 设备列表的锁
+    usbi_mutex_init(&_ctx->open_devs_lock);//保护打开设备列表的锁
+    list_init(&_ctx->usb_devs);//存储已发现的设备
+    list_init(&_ctx->open_devs);//存储已打开的设备
 
-    usbi_mutex_init(&_ctx->usb_devs_lock);
-    usbi_mutex_init(&_ctx->open_devs_lock);
-    list_init(&_ctx->usb_devs);
-    list_init(&_ctx->open_devs);
-
-    /* apply default options to all new contexts */
+    //遍历默认上下文选项
     for (enum libusb_option option = 0; option < LIBUSB_OPTION_MAX; option++) {
         if (LIBUSB_OPTION_LOG_LEVEL == option || !default_context_options[option].is_set) {
             continue;
         }
+        //如果某选项已设置，则调用 libusb_set_option 应用到新上下文中
         if (LIBUSB_OPTION_LOG_CB != option) {
             r = libusb_set_option(_ctx, option);
         } else {
@@ -2442,8 +2450,9 @@ libusb_init_context(libusb_context **ctx, const struct libusb_init_option option
             goto err_free_ctx;
     }
 
-    /* apply any options provided by the user */
+    //遍历用户传入的选项 options
     for (int i = 0; i < num_options; ++i) {
+        //根据不同选项的类型，调用相应的处理函数
         switch (options[i].option) {
             case LIBUSB_OPTION_LOG_CB:
                 r = libusb_set_option(_ctx, options[i].option, options[i].value.log_cbval);
@@ -2474,22 +2483,21 @@ libusb_init_context(libusb_context **ctx, const struct libusb_init_option option
              libusb_version_internal.minor,
              libusb_version_internal.micro, libusb_version_internal.nano,
              libusb_version_internal.rc);
-
+    //初始化 IO 系统
     r = usbi_io_init(_ctx);
     if (r < 0)
         goto err_free_ctx;
-
+    //注册上下文
     usbi_mutex_static_lock(&active_contexts_lock);
     list_add(&_ctx->list, &active_contexts_list);
     usbi_mutex_static_unlock(&active_contexts_lock);
-
+    //调用后端初始化
     if (usbi_backend.init) {
         r = usbi_backend.init(_ctx);
         if (r)
             goto err_io_exit;
     }
-
-    /* Initialize hotplug after the initial enumeration is done. */
+    // 热插拔支持
     usbi_hotplug_init(_ctx);
 
     if (ctx) {
@@ -2896,4 +2904,21 @@ DEFAULT_VISIBILITY const char *LIBUSB_CALL libusb_error_name(int error_code) {
 DEFAULT_VISIBILITY
 const struct libusb_version *LIBUSB_CALL libusb_get_version(void) {
     return &libusb_version_internal;
+}
+
+
+int
+android_generate_device(struct libusb_context *ctx, struct libusb_device **dev, int fd, int busNum,
+                        int devAddress);
+
+libusb_device *
+LIBUSB_CALL libusb_get_device_with_fd(libusb_context *ctx, int fd, int busNum, int devAddress) {
+    struct libusb_device *device = NULL;
+    // 去初始化设备信息，根据fd，
+    int ret = android_generate_device(ctx, &device, fd, busNum, devAddress);
+    if (ret) {
+        LOG_E("获取设备失败了:err=%d", ret);
+        device = NULL;
+    }
+    return device;
 }

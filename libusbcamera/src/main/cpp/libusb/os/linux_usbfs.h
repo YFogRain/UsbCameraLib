@@ -190,15 +190,6 @@ static inline void linux_stop_event_monitor(void)
 #endif
 }
 
-static inline void linux_hotplug_poll(void)
-{
-#if defined(HAVE_LIBUDEV)
-	linux_udev_hotplug_poll();
-#elif !defined(__ANDROID__)
-	linux_netlink_hotplug_poll();
-#endif
-}
-
 void linux_hotplug_enumerate(uint8_t busnum, uint8_t devaddr, const char *sys_name);
 void linux_device_disconnected(uint8_t busnum, uint8_t devaddr);
 

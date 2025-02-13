@@ -5,19 +5,20 @@ compileSdk = "34"
 targetSdk = "34"
 rxjava = "2.2.19"
 rxandroid = "2.1.1"
-jvm-version = "1.8"
+jvm-version = "17"
 
-android-gradle-plugin = "8.5.0"
-ksp = "1.9.24-1.0.20"
-kotlin = "1.9.24"
+android-gradle-plugin = "8.7.3"
+ksp = "2.0.20-1.0.24"
+kotlin = "2.0.20"
 coreKtx = "1.13.1"
-lifecycle-process = "2.6.2"
+lifecycle-process = "2.8.4"
 
 appcompat = "1.7.0"
 coroutines-android = "1.8.0"
 material = "1.12.0"
 constraintlayout = "2.1.4"
 
+gson = "2.10.1"
 [libraries]
 activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -25,7 +26,7 @@ appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat"
 material = { module = "com.google.android.material:material", version.ref = "material" }
 constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle-process" }
-
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }

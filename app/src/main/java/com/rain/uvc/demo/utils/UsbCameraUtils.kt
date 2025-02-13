@@ -4,6 +4,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.util.Log
 import androidx.core.content.getSystemService
+import com.rain.uvc.CameraUvcManager
 import com.rain.uvc.provider.OverallContext
 
 /**
@@ -35,12 +36,14 @@ object UsbCameraUtils {
 	@JvmStatic
 	fun loadUsbCameraDevice(): UsbDevice? {
 		val usbDevices = loadCameraDevices()
+		Log.d("cameraPreviewUpdateTag", "获取到的摄像头列表是否为空:${usbDevices.isNullOrEmpty()}")
 		//如果未找到设备列表，则直接return
 		if (usbDevices.isNullOrEmpty()) return null
 		var uvcIndex = -1
 		//遍历获取对应的usb设备是否存在
 		for (i in 0 until usbDevices.size) {
 			val usbDevice = usbDevices[i]
+			Log.d("cameraPreviewUpdateTag", "获取到的摄像头列表:${usbDevice.manufacturerName}")
 			val usbType = loadCameraMode(usbDevice) ?: continue
 			when (usbType) {
 				//uvc校验是否时RGB，深度流不适用uvc
@@ -70,7 +73,7 @@ object UsbCameraUtils {
 	fun loadCameraMode(usbDevice: UsbDevice): Int? {
 		if (isPetrelNICamera(usbDevice)) return 2
 		if (isHjCamera(usbDevice)) return 3
-		return if (isUvcCamera(usbDevice)) 1 else null
+		return if (CameraUvcManager.checkDeviceUvc(usbDevice)) 1 else null
 	}
 	
 	/**
@@ -80,21 +83,11 @@ object UsbCameraUtils {
 	fun loadCameraDevices(): MutableList<UsbDevice>? {
 		val devices = OverallContext.baseContext.getSystemService<UsbManager>() ?: return null
 		val deviceList = runCatching { devices.deviceList }.getOrNull()?.values?.filter {
+			Log.d("cameraPreviewUpdateTag", "获取到的摄像头==:${it}")
 			loadCameraMode(it) != null
 		}
 		if (deviceList.isNullOrEmpty()) return null
 		return deviceList.toMutableList()
-	}
-	
-	/**
-	 * 是否是摄像头类型
-	 */
-	@JvmStatic
-	private fun isUvcCamera(usbDevice: UsbDevice): Boolean {
-		return usbDevice.deviceClass == 239 && usbDevice.deviceSubclass == 2 && when (usbDevice.productId) {
-			24581, 33054 -> false
-			else -> true
-		} && !usbDevice.productName.run { !this.isNullOrEmpty() && this.contains("Android", true) }
 	}
 	
 	/**

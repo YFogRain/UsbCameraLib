@@ -39,6 +39,7 @@
 #include "libuvc/libuvc.h"
 #include "libuvc/libuvc_internal.h"
 #include "errno.h"
+#include "Log.h"
 
 #ifdef _MSC_VER
 
@@ -204,19 +205,20 @@ uvc_error_t uvc_query_stream_ctrl(
         uvc_stream_ctrl_t *ctrl,
         uint8_t probe,
         enum uvc_req_code req) {
-    uint8_t buf[34];
+    uint8_t buf[34];//用于存储流控信息的临时缓冲区
     size_t len;
     uvc_error_t err;
 
     memset(buf, 0, sizeof(buf));
-
+    //如果设备支持 UVC 1.1 或更高版本 (bcdUVC >= 0x0110)，使用 34 字节长的缓冲区
     if (devh->info->ctrl_if.bcdUVC >= 0x0110)
         len = 34;
     else
         len = 26;
 
-    /* prepare for a SET transfer */
+    //准备 SET 请求的数据
     if (req == UVC_SET_CUR) {
+        //将主机端的多字节数据按小端格式写入 buf
         SHORT_TO_SW(ctrl->bmHint, buf);
         buf[2] = ctrl->bFormatIndex;
         buf[3] = ctrl->bFrameIndex;
@@ -238,23 +240,24 @@ uvc_error_t uvc_query_stream_ctrl(
             /** @todo support UVC 1.1 */
         }
     }
-
-    /* do the transfer */
+    //发送控制传输请求
     err = libusb_control_transfer(
             devh->usb_devh,
-            req == UVC_SET_CUR ? 0x21 : 0xA1,
-            req,
+            req == UVC_SET_CUR ? 0x21 : 0xA1,//请求类型: 0x21 (主机到设备) 或 0xA1 (设备到主机)
+            req,//表示 UVC 请求码，例如 UVC_SET_CUR
+            //如果为 1，目标为 Probe Control (UVC_VS_PROBE_CONTROL)
+            //如果为 0，目标为 Commit Control (UVC_VS_COMMIT_CONTROL)
             probe ? (UVC_VS_PROBE_CONTROL << 8) : (UVC_VS_COMMIT_CONTROL << 8),
-            ctrl->bInterfaceNumber,
-            buf, len, 0
+            ctrl->bInterfaceNumber,//指定设备接口编号
+            buf, len, 0//指定传输的数据和长度
     );
 
     if (err <= 0) {
         return err;
     }
-
-    /* now decode following a GET transfer */
+    //解码 GET 请求返回的数据
     if (req != UVC_SET_CUR) {
+        //将返回的 buf 按小端字节序解码到 ctrl 结构
         ctrl->bmHint = SW_TO_SHORT(buf);
         ctrl->bFormatIndex = buf[2];
         ctrl->bFrameIndex = buf[3];
@@ -266,7 +269,7 @@ uvc_error_t uvc_query_stream_ctrl(
         ctrl->wDelay = SW_TO_SHORT(buf + 16);
         ctrl->dwMaxVideoFrameSize = DW_TO_INT(buf + 18);
         ctrl->dwMaxPayloadTransferSize = DW_TO_INT(buf + 22);
-
+        //如果长度为 34 字节，解析额外的字段（时钟频率、版本等）
         if (len == 34) {
             ctrl->dwClockFrequency = DW_TO_INT (buf + 26);
             ctrl->bmFramingInfo = buf[30];
@@ -276,12 +279,11 @@ uvc_error_t uvc_query_stream_ctrl(
             /** @todo support UVC 1.1 */
         } else
             ctrl->dwClockFrequency = devh->info->ctrl_if.dwClockFrequency;
-
-        /* fix up block for cameras that fail to set dwMax* */
-        if (ctrl->dwMaxVideoFrameSize == 0) {
+        //修正 dwMaxVideoFrameSize
+        if (ctrl->dwMaxVideoFrameSize == 0) {//如果 dwMaxVideoFrameSize 为 0，说明设备返回的值无效。
+            //查找帧描述符，并修正为帧缓冲区的最大尺寸
             uvc_frame_desc_t *frame = uvc_find_frame_desc(devh, ctrl->bFormatIndex,
                                                           ctrl->bFrameIndex);
-
             if (frame) {
                 ctrl->dwMaxVideoFrameSize = frame->dwMaxVideoFrameBufferSize;
             }
@@ -465,6 +467,116 @@ uvc_frame_desc_t *uvc_find_frame_desc(uvc_device_handle_t *devh,
     return NULL;
 }
 
+static uvc_error_t prepare_stream_ctrl(uvc_device_handle_t *devh, uvc_stream_ctrl_t *ctrl) {
+    //获取控制器的当前流的值
+    uvc_error_t result = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_CUR);
+    if (LIKELY(!result)) {
+        //获取最小通道流
+        result = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_MIN);
+        if (LIKELY(!result)) {
+            //获取最大通道流
+            result = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_MAX);
+            if (UNLIKELY(result))
+                LOG_E("获取预览流的最大值错误:err=%d", result);
+        } else {
+            LOG_E("获取预览流的最小值错误:err=%d", result);
+        }
+    } else {
+        LOG_E("获取预览流的当前值错误:err=%d", result);
+    }
+    return result;
+}
+
+static uvc_error_t uvc_get_stream_ctrl(uvc_device_handle_t *devh,
+                                       uvc_stream_ctrl_t *ctrl,
+                                       uvc_streaming_interface_t *stream_if,
+                                       uvc_format_desc_t *format,
+                                       int width, int height) {
+    //设置流控制结构体 ctrl 的接口编号为当前流接口编号
+    ctrl->bInterfaceNumber = stream_if->bInterfaceNumber;
+
+    //调用 uvc_claim_if 函数尝试占用该流接口。
+    uvc_error_t result = uvc_claim_if(devh, ctrl->bInterfaceNumber);
+    if (UNLIKELY(result)) {
+        LOG_E("占用流接口失败:err=%d", result);
+        goto fail;
+    }
+    result = prepare_stream_ctrl(devh, ctrl);
+    if (UNLIKELY(result)) {
+        LOG_E("初始化预览流失败:err=%d", result);
+        goto fail;
+    }
+    uvc_frame_desc_t *frame;
+    DL_FOREACH(format->frame_descs, frame) {
+        //检查帧的宽度和高度是否与目标分辨率相符
+        if (frame->wWidth != width || frame->wHeight != height) {
+            continue;
+        }
+        uint32_t *interval;
+        if (frame->intervals) {
+            uint32_t best_interval = -1;
+            for (interval = frame->intervals; *interval; ++interval) {
+                if (UNLIKELY(!(*interval))) continue;
+                //读取最大的传输通道（最高帧率）
+                if (best_interval == -1 || *interval < best_interval) {
+                    best_interval = *interval;
+                }
+            }
+            ctrl->bmHint = (1 << 0); /* 不协商间隔 */
+            ctrl->bFormatIndex = format->bFormatIndex;
+            ctrl->bFrameIndex = frame->bFrameIndex;
+            ctrl->dwFrameInterval =
+                    best_interval == -1 ? frame->dwDefaultFrameInterval : best_interval;
+            goto found;
+        } else {
+            // 默认选择默认间隔（最高帧率）
+            ctrl->bmHint = (1 << 0);
+            ctrl->bFormatIndex = format->bFormatIndex;
+            ctrl->bFrameIndex = frame->bFrameIndex;
+            ctrl->dwFrameInterval = frame->dwDefaultFrameInterval;
+            goto found;
+        }
+    }
+    fail:
+    uvc_release_if(devh, ctrl->bInterfaceNumber);
+    return UVC_ERROR_INVALID_MODE;
+    found:
+    return UVC_SUCCESS;
+}
+
+uvc_error_t uvc_get_stream(uvc_device_handle_t *devh,
+                           uvc_stream_ctrl_t *ctrl,
+                           enum uvc_frame_format format,
+                           int width, int height) {
+    LOG_D("设置的流类型:%d", format);
+    if (!devh || !devh->info->stream_ifs) {
+        return UVC_ERROR_INVALID_MODE;
+    }
+
+    uvc_streaming_interface_t *stream_if;
+    memset(ctrl, 0, sizeof(*ctrl));    // XXX add
+    //循环查找可以使用的流数据
+    uvc_format_desc_t *fmt_desc;
+    DL_FOREACH(devh->info->stream_ifs, stream_if) {
+        DL_FOREACH(stream_if->format_descs, fmt_desc) {
+            //检查目标帧格式 cf 是否与当前格式描述符的 GUID 相匹配
+            if (!_uvc_frame_format_matches_guid(format, fmt_desc->guidFormat)) {
+                continue;
+            }
+            uvc_error_t result = uvc_get_stream_ctrl(devh, ctrl, stream_if, fmt_desc, width,
+                                                     height);
+            if (!result) {
+                goto found;
+            }
+        }
+
+    }
+    return UVC_ERROR_INVALID_MODE;
+    found:
+    return uvc_probe_stream_ctrl(devh, ctrl);
+}
+
+
 /** Get a negotiated streaming control block for some common parameters.
  * @ingroup streaming
  *
@@ -617,16 +729,23 @@ static int _uvc_stream_params_negotiated(
 uvc_error_t uvc_probe_stream_ctrl(
         uvc_device_handle_t *devh,
         uvc_stream_ctrl_t *ctrl) {
-    uvc_stream_ctrl_t required_ctrl = *ctrl;
 
-    uvc_query_stream_ctrl(devh, ctrl, 1, UVC_SET_CUR);
-    uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_CUR);
-
-    if (!_uvc_stream_params_negotiated(&required_ctrl, ctrl)) {
-        UVC_DEBUG("Unable to negotiate streaming format");
-        return UVC_ERROR_INVALID_MODE;
+    uvc_error_t err;
+    err = uvc_claim_if(devh, ctrl->bInterfaceNumber);
+    if (UNLIKELY(err)) {
+        LOG_E("uvc_claim_if:err=%d", err);
+        return err;
     }
-
+    err = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_SET_CUR);    // probe query
+    if (UNLIKELY(err)) {
+        LOG_E("uvc_query_stream_ctrl(UVC_SET_CUR):err=%d", err);
+        return err;
+    }
+    err = uvc_query_stream_ctrl(devh, ctrl, 1, UVC_GET_CUR);    // probe query ここでエラーが返ってくる
+    if (UNLIKELY(err)) {
+        LOG_E("uvc_query_stream_ctrl(UVC_GET_CUR):err=%d", err);
+        return err;
+    }
     return UVC_SUCCESS;
 }
 
@@ -708,36 +827,22 @@ void _uvc_process_payload(uvc_stream_handle_t *strmh, uint8_t *payload, size_t p
     size_t header_len;
     uint8_t header_info;
     size_t data_len;
-
-    /* magic numbers for identifying header packets from some iSight cameras */
     static uint8_t isight_tag[] = {
             0x11, 0x22, 0x33, 0x44,
             0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xfa, 0xce
     };
-
-    /* ignore empty payload transfers */
+    //检查负载长度
     if (payload_len == 0)
         return;
-
-    /* Certain iSight cameras have strange behavior: They send header
-     * information in a packet with no image data, and then the following
-     * packets have only image data, with no more headers until the next frame.
-     *
-     * The iSight header: len(1), flags(1 or 2), 0x11223344(4),
-     * 0xdeadbeefdeadface(8), ??(16)
-     */
-
+    //识别并处理 iSight 特定数据，如果是 iSight 设备并且负载的开头（从第 2 或 3 字节开始）不匹配 isight_tag
     if (strmh->devh->is_isight &&
         (payload_len < 14 || memcmp(isight_tag, payload + 2, sizeof(isight_tag))) &&
         (payload_len < 15 || memcmp(isight_tag, payload + 3, sizeof(isight_tag)))) {
-        /* The payload transfer doesn't have any iSight magic, so it's all image data */
         header_len = 0;
         data_len = payload_len;
     } else {
         header_len = payload[0];
-
         if (header_len > payload_len) {
-            UVC_DEBUG("bogus packet: actual_len=%zd, header_len=%zd\n", payload_len, header_len);
             return;
         }
 
@@ -746,40 +851,32 @@ void _uvc_process_payload(uvc_stream_handle_t *strmh, uint8_t *payload, size_t p
         else
             data_len = payload_len - header_len;
     }
-
-    if (header_len < 2) {
+    //处理头部信息
+    if (header_len < 2) {//则设置 header_info 为 0。
         header_info = 0;
-    } else {
-        /** @todo we should be checking the end-of-header bit */
+    } else {//读取负载中的头部信息
         size_t variable_offset = 2;
-
-        header_info = payload[1];
-
-        if (header_info & 0x40) {
-            UVC_DEBUG("bad packet: error bit set");
+        header_info = payload[1];//提取头部信息
+        if (header_info & 0x40) {//如果头部信息的第 6 位被设置（header_info & 0x40）
             return;
         }
-
+        //如果 fid 发生变化且已有数据
         if (strmh->fid != (header_info & 1) && strmh->got_bytes != 0) {
-            /* The frame ID bit was flipped, but we have image data sitting
-               around from prior transfers. This means the camera didn't send
-               an EOF for the last transfer of the previous frame. */
             _uvc_swap_buffers(strmh);
         }
-
+        //更新 fid（场标识符），表示当前帧是奇数或偶数帧
         strmh->fid = header_info & 1;
-
+        //根据头部信息，提取时间戳（PTS）
         if (header_info & (1 << 2)) {
             strmh->pts = DW_TO_INT(payload + variable_offset);
             variable_offset += 4;
         }
-
+        //提取和上一个屏幕时间（last_scr）
         if (header_info & (1 << 3)) {
-            /** @todo read the SOF token counter */
             strmh->last_scr = DW_TO_INT(payload + variable_offset);
             variable_offset += 6;
         }
-
+        //如果头部有附加的元数据（header_len > variable_offset），将元数据复制到缓冲区。
         if (header_len > variable_offset) {
             // Metadata is attached to header
             size_t meta_len = header_len - variable_offset;
@@ -789,14 +886,17 @@ void _uvc_process_payload(uvc_stream_handle_t *strmh, uint8_t *payload, size_t p
             strmh->meta_got_bytes += meta_len;
         }
     }
-
+    //处理视频数据
     if (data_len > 0) {
+        //如果 strmh->got_bytes + data_len 超过了最大帧大小，限制 data_len 为剩余空间。
         if (strmh->got_bytes + data_len > strmh->cur_ctrl.dwMaxVideoFrameSize)
-            data_len = strmh->cur_ctrl.dwMaxVideoFrameSize - strmh->got_bytes; /* Avoid overflow. */
+            data_len = strmh->cur_ctrl.dwMaxVideoFrameSize - strmh->got_bytes;
+        //将数据复制到输出缓冲区 strmh->outbuf 中
         memcpy(strmh->outbuf + strmh->got_bytes, payload + header_len, data_len);
-        strmh->got_bytes += data_len;
+        strmh->got_bytes += data_len;//更新 strmh->got_bytes 记录当前已接收的数据量
+        //如果头部信息的第 1 位被设置（EOF标志）或接收到的字节等于最大帧大小
         if (header_info & (1 << 1) || strmh->got_bytes == strmh->cur_ctrl.dwMaxVideoFrameSize) {
-            /* The EOF bit is set, so publish the complete frame */
+            //来交换缓冲区，表示已接收完整帧
             _uvc_swap_buffers(strmh);
         }
     }
@@ -812,47 +912,38 @@ void _uvc_process_payload(uvc_stream_handle_t *strmh, uint8_t *payload, size_t p
  */
 void LIBUSB_CALL _uvc_stream_callback(struct libusb_transfer *transfer) {
     uvc_stream_handle_t *strmh = transfer->user_data;
-
     int resubmit = 1;
-
-    switch (transfer->status) {
-        case LIBUSB_TRANSFER_COMPLETED:
-            if (transfer->num_iso_packets == 0) {
-                /* This is a bulk mode transfer, so it just has one payload transfer */
+    switch (transfer->status) {//根据 transfer->status 的值判断当前传输的状态，可能的值包括
+        case LIBUSB_TRANSFER_COMPLETED://传输完成
+            if (transfer->num_iso_packets ==
+                0) {//表示是批量传输（Bulk Transfer），直接调用 _uvc_process_payload 处理负载数据。
                 _uvc_process_payload(strmh, transfer->buffer, transfer->actual_length);
             } else {
-                /* This is an isochronous mode transfer, so each packet has a payload transfer */
+                //等时传输（Isochronous Transfer），需要逐个处理每个数据包。
                 int packet_id;
-
+                //遍历每个数据包,检查 pkt->status 确保数据包传输成功
                 for (packet_id = 0; packet_id < transfer->num_iso_packets; ++packet_id) {
                     uint8_t *pktbuf;
                     struct libusb_iso_packet_descriptor *pkt;
-
                     pkt = transfer->iso_packet_desc + packet_id;
-
                     if (pkt->status != 0) {
-                        UVC_DEBUG("bad packet (isochronous transfer); status: %d", pkt->status);
                         continue;
                     }
-
+                    //调用 libusb_get_iso_packet_buffer_simple 获取数据包缓冲区
                     pktbuf = libusb_get_iso_packet_buffer_simple(transfer, packet_id);
-
+                    //调用 _uvc_process_payload 处理数据包
                     _uvc_process_payload(strmh, pktbuf, pkt->actual_length);
 
                 }
             }
             break;
-        case LIBUSB_TRANSFER_CANCELLED:
-        case LIBUSB_TRANSFER_ERROR:
-        case LIBUSB_TRANSFER_NO_DEVICE: {
+        case LIBUSB_TRANSFER_CANCELLED://传输被取消
+        case LIBUSB_TRANSFER_ERROR://传输错误
+        case LIBUSB_TRANSFER_NO_DEVICE: {//设备丢失
             int i;
-            UVC_DEBUG("not retrying transfer, status = %d", transfer->status);
             pthread_mutex_lock(&strmh->cb_mutex);
-
-            /* Mark transfer as deleted. */
             for (i = 0; i < LIBUVC_NUM_TRANSFER_BUFS; i++) {
                 if (strmh->transfers[i] == transfer) {
-                    UVC_DEBUG("Freeing transfer %d (%p)", i, transfer);
                     free(transfer->buffer);
                     libusb_free_transfer(transfer);
                     strmh->transfers[i] = NULL;
@@ -860,7 +951,6 @@ void LIBUSB_CALL _uvc_stream_callback(struct libusb_transfer *transfer) {
                 }
             }
             if (i == LIBUVC_NUM_TRANSFER_BUFS) {
-                UVC_DEBUG("transfer %p not found; not freeing!", transfer);
             }
 
             resubmit = 0;
@@ -870,24 +960,20 @@ void LIBUSB_CALL _uvc_stream_callback(struct libusb_transfer *transfer) {
 
             break;
         }
-        case LIBUSB_TRANSFER_TIMED_OUT:
-        case LIBUSB_TRANSFER_STALL:
-        case LIBUSB_TRANSFER_OVERFLOW:
-            UVC_DEBUG("retrying transfer, status = %d", transfer->status);
+        case LIBUSB_TRANSFER_TIMED_OUT://传输超时
+        case LIBUSB_TRANSFER_STALL://端点停滞
+        case LIBUSB_TRANSFER_OVERFLOW://传输数据溢出
             break;
     }
-
     if (resubmit) {
         if (strmh->running) {
+            //提交输出，进行下一次传输
             int libusbRet = libusb_submit_transfer(transfer);
             if (libusbRet < 0) {
                 int i;
                 pthread_mutex_lock(&strmh->cb_mutex);
-
-                /* Mark transfer as deleted. */
                 for (i = 0; i < LIBUVC_NUM_TRANSFER_BUFS; i++) {
                     if (strmh->transfers[i] == transfer) {
-                        UVC_DEBUG("Freeing failed transfer %d (%p)", i, transfer);
                         free(transfer->buffer);
                         libusb_free_transfer(transfer);
                         strmh->transfers[i] = NULL;
@@ -895,7 +981,6 @@ void LIBUSB_CALL _uvc_stream_callback(struct libusb_transfer *transfer) {
                     }
                 }
                 if (i == LIBUVC_NUM_TRANSFER_BUFS) {
-                    UVC_DEBUG("failed transfer %p not found; not freeing!", transfer);
                 }
 
                 pthread_cond_broadcast(&strmh->cb_cond);
@@ -904,11 +989,8 @@ void LIBUSB_CALL _uvc_stream_callback(struct libusb_transfer *transfer) {
         } else {
             int i;
             pthread_mutex_lock(&strmh->cb_mutex);
-
-            /* Mark transfer as deleted. */
             for (i = 0; i < LIBUVC_NUM_TRANSFER_BUFS; i++) {
                 if (strmh->transfers[i] == transfer) {
-                    UVC_DEBUG("Freeing orphan transfer %d (%p)", i, transfer);
                     free(transfer->buffer);
                     libusb_free_transfer(transfer);
                     strmh->transfers[i] = NULL;
@@ -916,7 +998,6 @@ void LIBUSB_CALL _uvc_stream_callback(struct libusb_transfer *transfer) {
                 }
             }
             if (i == LIBUVC_NUM_TRANSFER_BUFS) {
-                UVC_DEBUG("orphan transfer %p not found; not freeing!", transfer);
             }
 
             pthread_cond_broadcast(&strmh->cb_cond);
@@ -1081,6 +1162,7 @@ uvc_error_t uvc_stream_open_ctrl(uvc_device_handle_t *devh, uvc_stream_handle_t 
  * @param flags Stream setup flags, currently undefined. Set this to zero. The lower bit
  * is reserved for backward compatibility.
  */
+
 uvc_error_t uvc_stream_start(
         uvc_stream_handle_t *strmh,
         uvc_frame_callback_t *cb,
@@ -1088,78 +1170,57 @@ uvc_error_t uvc_stream_start(
         uint8_t flags
 ) {
     /* USB interface we'll be using */
-    const struct libusb_interface *interface;
-    int interface_id;
-    char isochronous;
-    uvc_frame_desc_t *frame_desc;
-    uvc_format_desc_t *format_desc;
-    uvc_stream_ctrl_t *ctrl;
+    const struct libusb_interface *interface;//用于存储当前 USB 接口
+    int interface_id;//接口编号
+    char isochronous;//是否使用等时传输（1 为是，0 为否）。
+    uvc_frame_desc_t *frame_desc;//描述帧的结构
+    uvc_format_desc_t *format_desc;//描述格式的结构
+    uvc_stream_ctrl_t *ctrl;//当前流控制块
     uvc_error_t ret;
-    /* Total amount of data per transfer */
-    size_t total_transfer_size = 0;
-    struct libusb_transfer *transfer;
+    size_t total_transfer_size = 0;//每次传输的数据总大小
+    struct libusb_transfer *transfer;//libusb 传输相关
     int transfer_id;
-
-    ctrl = &strmh->cur_ctrl;
-
-    UVC_ENTER();
-
-    if (strmh->running) {
-        UVC_EXIT(UVC_ERROR_BUSY);
+    ctrl = &strmh->cur_ctrl;//指向当前的流控制结构体
+    if (strmh->running) {//检查流是否已经运行
         return UVC_ERROR_BUSY;
     }
-
-    strmh->running = 1;
-    strmh->seq = 1;
-    strmh->fid = 0;
-    strmh->pts = 0;
-    strmh->last_scr = 0;
-
+    strmh->running = 1;//设置 running 为 1 表示流正在运行
+    strmh->seq = 1;//帧序号，从 1 开始。
+    strmh->fid = 0;//帧 ID
+    strmh->pts = 0;//表示时间戳
+    strmh->last_scr = 0;//最后的同步参考值
+    //通过格式索引和帧索引查找帧描述符
     frame_desc = uvc_find_frame_desc_stream(strmh, ctrl->bFormatIndex, ctrl->bFrameIndex);
-    if (!frame_desc) {
+    if (!frame_desc) {//设置错误码为 UVC_ERROR_INVALID_PARAM 并跳转到错误处理块
         ret = UVC_ERROR_INVALID_PARAM;
         goto fail;
     }
     format_desc = frame_desc->parent;
-
+    //从帧描述符中获取对应的格式描述符
     strmh->frame_format = uvc_frame_format_for_guid(format_desc->guidFormat);
     if (strmh->frame_format == UVC_FRAME_FORMAT_UNKNOWN) {
         ret = UVC_ERROR_NOT_SUPPORTED;
         goto fail;
     }
-
-    // Get the interface that provides the chosen format and frame configuration
+    //通过接口编号 bInterfaceNumber 获取当前视频流对应的 USB 接口
     interface_id = strmh->stream_if->bInterfaceNumber;
     interface = &strmh->devh->info->config->interface[interface_id];
-
-    /* A VS interface uses isochronous transfers iff it has multiple altsettings.
-     * (UVC 1.5: 2.4.3. VideoStreaming Interface) */
+    //如果接口具有多个备用设置（altsetting），则启用等时传输
     isochronous = interface->num_altsetting > 1;
     if (isochronous) {
-        /* For isochronous streaming, we choose an appropriate altsetting for the endpoint
-         * and set up several transfers */
-        const struct libusb_interface_descriptor *altsetting = 0;
-        const struct libusb_endpoint_descriptor *endpoint = 0;
-        /* The greatest number of bytes that the device might provide, per packet, in this
-         * configuration */
-        size_t config_bytes_per_packet;
-        /* Number of packets per transfer */
-        size_t packets_per_transfer = 0;
-        /* Size of packet transferable from the chosen endpoint */
-        size_t endpoint_bytes_per_packet = 0;
-        /* Index of the altsetting */
+        LOG_D("当前使用的是等时传输类型");
+        const struct libusb_interface_descriptor *altsetting = 0;//指向当前备用设置
+        const struct libusb_endpoint_descriptor *endpoint = 0;//指向当前端点
+        size_t config_bytes_per_packet;//配置的每包最大字节数
+        size_t packets_per_transfer = 0;//每次传输的包数
+        size_t endpoint_bytes_per_packet = 0;//端点的每包字节数
         int alt_idx, ep_idx;
-
+        //从控制块中读取 dwMaxPayloadTransferSize，表示每包的最大传输字节数
         config_bytes_per_packet = strmh->cur_ctrl.dwMaxPayloadTransferSize;
-
-        /* Go through the altsettings and find one whose packets are at least
-         * as big as our format's maximum per-packet usage. Assume that the
-         * packet sizes are increasing. */
+        //遍历备用设置，查找符合配置要求的备用设置
         for (alt_idx = 0; alt_idx < interface->num_altsetting; alt_idx++) {
             altsetting = interface->altsetting + alt_idx;
             endpoint_bytes_per_packet = 0;
-
-            /* Find the endpoint with the number specified in the VS header */
             for (ep_idx = 0; ep_idx < altsetting->bNumEndpoints; ep_idx++) {
                 endpoint = altsetting->endpoint + ep_idx;
 
@@ -1194,23 +1255,18 @@ uvc_error_t uvc_stream_start(
                 break;
             }
         }
-
-        /* If we searched through all the altsettings and found nothing usable */
         if (alt_idx == interface->num_altsetting) {
             ret = UVC_ERROR_INVALID_MODE;
             goto fail;
         }
-
-        /* Select the altsetting */
         ret = libusb_set_interface_alt_setting(strmh->devh->usb_devh,
                                                altsetting->bInterfaceNumber,
                                                altsetting->bAlternateSetting);
         if (ret != UVC_SUCCESS) {
-            UVC_DEBUG("libusb_set_interface_alt_setting failed");
             goto fail;
         }
-
-        /* Set up the transfers */
+        LOG_D("触发等时传输，发送指令，准备开启收发流");
+        //批量传输部分
         for (transfer_id = 0; transfer_id < LIBUVC_NUM_TRANSFER_BUFS; ++transfer_id) {
             transfer = libusb_alloc_transfer(packets_per_transfer);
             strmh->transfers[transfer_id] = transfer;
@@ -1247,9 +1303,8 @@ uvc_error_t uvc_stream_start(
      * with the contents of each frame.
      */
     if (cb) {
-        int i = pthread_create(&strmh->cb_thread, NULL, _uvc_user_caller, (void *) strmh);
+        pthread_create(&strmh->cb_thread, NULL, _uvc_user_caller, (void *) strmh);
     }
-
     for (transfer_id = 0; transfer_id < LIBUVC_NUM_TRANSFER_BUFS;
          transfer_id++) {
         ret = libusb_submit_transfer(strmh->transfers[transfer_id]);
@@ -1267,7 +1322,9 @@ uvc_error_t uvc_stream_start(
         }
         ret = UVC_SUCCESS;
     }
-
+    if (UNLIKELY(ret != UVC_SUCCESS)) {
+        goto fail;
+    }
     UVC_EXIT(ret);
     return ret;
     fail:
@@ -1322,7 +1379,7 @@ void *_uvc_user_caller(void *arg) {
         pthread_mutex_unlock(&strmh->cb_mutex);
         strmh->user_cb(&strmh->frame, strmh->user_ptr);
     } while (1);
-
+    pthread_exit(NULL);
     return NULL; // return value ignored
 }
 
