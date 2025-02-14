@@ -13,7 +13,7 @@ import com.rain.uvc.demo.base.viewModel.BaseViewModel
  */
 abstract class BaseDataBindActivity<DB : ViewDataBinding> : AppCompatActivity() {
 	protected lateinit var mBinding: DB
-	protected open var mViewModel: BaseViewModel? = null
+	protected open val mViewModel: BaseViewModel? = null
 	
 	/**
 	 * 初始化layout的id

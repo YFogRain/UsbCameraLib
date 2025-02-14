@@ -15,14 +15,15 @@ CameraFactoryV4L2Impl::CameraFactoryV4L2Impl(int fd)
         : mVideoFd(fd), mPreviewWindow(nullptr), mIsPreviewRunning(false), previewWidth(640),
           previewHeight(480), requestMode(UVC_DATA_FORMAT_BGR),
           previewFormat(PREVIEW_FORMAT_YUY2), captureWidth(640), captureHeight(480),
-          captureFormat(PREVIEW_FORMAT_YUY2),
+          captureFormat(PREVIEW_FORMAT_YUY2), lastFrame(nullptr),
           captureBuffers(nullptr), captureBufferLength(0),
           mDisplayTransformState(TRANSFORM_IDENTITY),
           theVM(nullptr), previewListener(nullptr), onFrameMethod(nullptr) {
     // 初始化互斥锁
-    pthread_mutex_init(&captureMutex, nullptr);
-    pthread_cond_init(&captureCond, nullptr);
-
+    pthread_mutex_init(&surfaceMutex, nullptr);
+    // 初始化互斥锁
+    pthread_mutex_init(&previewMutex, nullptr);
+    pthread_cond_init(&previewCond, nullptr);
 
     // 初始化互斥锁
     pthread_mutex_init(&callbackMutex, nullptr);
@@ -30,8 +31,10 @@ CameraFactoryV4L2Impl::CameraFactoryV4L2Impl(int fd)
 }
 
 CameraFactoryV4L2Impl::~CameraFactoryV4L2Impl() {
-    pthread_mutex_destroy(&captureMutex);
-    pthread_cond_destroy(&captureCond);
+    pthread_mutex_destroy(&previewMutex);
+    pthread_cond_destroy(&previewCond);
+
+    pthread_mutex_destroy(&surfaceMutex);
 
     pthread_mutex_destroy(&callbackMutex);
     pthread_cond_destroy(&callbackCond);
@@ -57,7 +60,7 @@ CameraFactoryV4L2Impl::~CameraFactoryV4L2Impl() {
 }
 
 bool CameraFactoryV4L2Impl::setDisplaySurface(ANativeWindow *preview_window) {
-    pthread_mutex_lock(&captureMutex);
+    pthread_mutex_lock(&surfaceMutex);
     {
         if (mPreviewWindow != preview_window) {
             if (mPreviewWindow) {
@@ -71,7 +74,7 @@ bool CameraFactoryV4L2Impl::setDisplaySurface(ANativeWindow *preview_window) {
             ImgUtils::setDisplayTransformState(mPreviewWindow, mDisplayTransformState);
         }
     }
-    pthread_mutex_unlock(&captureMutex);
+    pthread_mutex_unlock(&surfaceMutex);
     return true;
 }
 
@@ -126,11 +129,16 @@ bool CameraFactoryV4L2Impl::startPreview() {
         stopPreview();
         return false;
     }
-    // 5. 创建回调线程
+    // 5. 创建预览的读取线程
+    result = pthread_create(&previewThread, nullptr, preview_thread_func, (void *) this);
+    if (result != 0) {
+        stopPreview();
+        return false;
+    }
+    // 6. 创建回调线程
     pthread_create(&callbackThread, nullptr, callback_thread_func, (void *) this);
     return true;
 }
-
 
 bool CameraFactoryV4L2Impl::prepare_mmap() {
     // 请求缓冲区，
@@ -191,13 +199,16 @@ bool CameraFactoryV4L2Impl::stopPreview() {
         if (ioctl(mVideoFd, VIDIOC_STREAMOFF, &bufType) < 0) {
             LOG_E("停止视频流失败, 错误码: %d", errno);
         }
-        pthread_cond_signal(&captureCond);
         // 使用pthread_kill来检查线程是否存活
         if (pthread_kill(captureThread, 0) == ESRCH || pthread_join(captureThread, nullptr) != 0) {
             LOG_E("captureThread::当前线程已经结束，或者等待结束线程失败");
         }
-        pthread_cond_signal(&callbackCond);
         // 使用pthread_kill来检查线程是否存活
+        pthread_cond_signal(&previewCond);
+        if (pthread_kill(previewThread, 0) == ESRCH || pthread_join(previewThread, nullptr) != 0) {
+            LOG_E("captureThread::当前线程已经结束，或者等待结束线程失败");
+        }
+        pthread_cond_signal(&callbackCond);
         if (pthread_kill(callbackThread, 0) == ESRCH ||
             pthread_join(callbackThread, nullptr) != 0) {
             LOG_E("callbackThread::当前线程已经结束，或者等待结束线程失败");
@@ -226,7 +237,6 @@ void CameraFactoryV4L2Impl::cleanup_buffers() {
     captureBuffers = nullptr;
     captureBufferLength = 0;
 }
-
 
 int CameraFactoryV4L2Impl::loadTypeToId(int type) {
     int id = -1;
@@ -336,10 +346,10 @@ bool CameraFactoryV4L2Impl::setParameter(int type, int value) {
     }
     // 如果是int类型，则可以设置下面的所有参数
     if (type == CAMERA_PARAMETER_DISPLAY_TRANSFORM) {
-        pthread_mutex_lock(&captureMutex);
+        pthread_mutex_lock(&surfaceMutex);
         mDisplayTransformState = value;
         bool result = ImgUtils::setDisplayTransformState(mPreviewWindow, value);
-        pthread_mutex_unlock(&captureMutex);
+        pthread_mutex_unlock(&surfaceMutex);
         return result;
     }
     int id = loadTypeToId(type);
@@ -383,7 +393,7 @@ std::variant<std::monostate, std::pair<int, int>, std::string, int> CameraFactor
 
 bool CameraFactoryV4L2Impl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
     this->requestMode = mode;
-    pthread_mutex_lock(&captureMutex);
+    pthread_mutex_lock(&callbackMutex);
     theVM = vm;
     if (!env->IsSameObject(previewListener, listener)) {
         onFrameMethod = nullptr;
@@ -411,10 +421,9 @@ bool CameraFactoryV4L2Impl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobj
     } else {
         LOG_D("callbackFrame-IsSameObject-false");
     }
-    pthread_mutex_unlock(&captureMutex);
+    pthread_mutex_unlock(&callbackMutex);
     return true;
 }
-
 
 void *CameraFactoryV4L2Impl::capture_thread_func(void *vptr_args) {
     CameraFactoryV4L2Impl *cameraFactory = static_cast<CameraFactoryV4L2Impl *>(vptr_args);
@@ -432,8 +441,8 @@ void *CameraFactoryV4L2Impl::capture_thread_func(void *vptr_args) {
                 buf.index < cameraFactory->captureBufferLength) {
                 uint8_t *frameData = (uint8_t *) cameraFactory->captureBuffers[buf.index].start;
                 if (frameData) {
-                    cameraFactory->drawFrame(frameData, buf.bytesused); // 绘制
-//                     cameraFactory->putCallbackFrame();
+                    // 将数据复制到外部，然后释放当前缓冲区
+                    cameraFactory->putPreviewFrame(frameData, buf.bytesused);
                 }
             }
         } else {
@@ -447,37 +456,58 @@ void *CameraFactoryV4L2Impl::capture_thread_func(void *vptr_args) {
     return nullptr;
 }
 
-void CameraFactoryV4L2Impl::drawFrame(uint8_t *frame, int length) {
-    auto outImg = ImgUtils::any2BGR(frame, captureFormat, length, captureWidth, captureHeight);
-    if (outImg.empty()) {
-        LOG_E("转换的格式错误，是空的数据");
-        return;
-    }
-    // 释放源数据
-    int data_bytes = outImg.total() * outImg.elemSize();
-    if (outImg.data && data_bytes > 0) {
-        pthread_mutex_lock(&captureMutex);
-        {
-            if (frame && mPreviewWindow) {
-                auto *src = (uint8_t *) outImg.data;
-                ANativeWindow_Buffer buffer;
-                // 锁定缓冲区以获取可以写入的内存区域
-                if (ANativeWindow_lock(mPreviewWindow, &buffer, nullptr) == 0) {
-                    auto *dst = (uint8_t *) buffer.bits;
-                    // 将RGB数据复制到RGBA图像，并设置alpha值为255
-                    for (int i = 0, j = 0; i < captureWidth * captureHeight; ++i, j += 4) {
-                        dst[j] = src[i * 3 + 2];     // R
-                        dst[j + 1] = src[i * 3 + 1]; // G
-                        dst[j + 2] = src[i * 3]; // B
-                        dst[j + 3] = 0xFF;                 // A
-                    }
-                    // 解锁缓冲区
-                    ANativeWindow_unlockAndPost(mPreviewWindow);
+void *CameraFactoryV4L2Impl::preview_thread_func(void *vptr_args) {
+    CameraFactoryV4L2Impl *cameraFactory = static_cast<CameraFactoryV4L2Impl *>(vptr_args);
+    LOG_D("=====开启循环读取预览帧");
+    if (cameraFactory) {
+        LOG_E("=====mIsRunning：：：%d", cameraFactory->mIsPreviewRunning);
+        while (cameraFactory->mIsPreviewRunning) {
+            // 等待获取预览的数据
+            video_frame_t *pFrame = cameraFactory->waitPreviewFrame();
+            if (!pFrame) {
+                continue;
+            }
+            // 先将数据转换为bgr格式，方便后续操作
+            auto bgrImg =
+                    ImgUtils::any2BGR(pFrame->data, pFrame->dataSize, pFrame->format, pFrame->width,
+                                      pFrame->height);
+            if (!bgrImg.empty()) {                                       // 如果数据不为空
+                size_t bytesLength = bgrImg.total() * bgrImg.elemSize(); // 计算字节数
+                if (bytesLength > 0) {
+                    // 绘制，绘制完成后发送数据
+                    cameraFactory->drawFrame(bgrImg.data, pFrame->width, pFrame->height);
+                    cameraFactory->putCallbackFrame(
+                            cameraFactory->copyVideoFrame(pFrame, bgrImg.data, bytesLength));
                 }
             }
+            video_free(pFrame);
         }
-        pthread_mutex_unlock(&captureMutex);
     }
+    pthread_exit(nullptr);
+}
+
+void CameraFactoryV4L2Impl::drawFrame(uint8_t *frame, int width, int height) {
+    // 释放源数据
+    pthread_mutex_lock(&surfaceMutex);
+    {
+        if (frame && mPreviewWindow) {
+            ANativeWindow_Buffer buffer;
+            // 锁定缓冲区以获取可以写入的内存区域
+            if (ANativeWindow_lock(mPreviewWindow, &buffer, nullptr) == 0) {
+                auto *dst = (uint8_t *) buffer.bits;
+                // 将RGB数据复制到RGBA图像，并设置alpha值为255
+                for (int i = 0, j = 0; i < width * height; ++i, j += 4) {
+                    dst[j] = frame[i * 3 + 2];     // R
+                    dst[j + 1] = frame[i * 3 + 1]; // G
+                    dst[j + 2] = frame[i * 3]; // B
+                    dst[j + 3] = 0xFF;                 // A
+                }
+                // 解锁缓冲区
+                ANativeWindow_unlockAndPost(mPreviewWindow);
+            }
+        }
+    }
+    pthread_mutex_unlock(&surfaceMutex);
 }
 
 void *CameraFactoryV4L2Impl::callback_thread_func(void *vptr_args) {
@@ -486,17 +516,25 @@ void *CameraFactoryV4L2Impl::callback_thread_func(void *vptr_args) {
         JNIEnv *env = nullptr;
         while (preview->mIsPreviewRunning) {
             //等待获取预览的数据
-            auto pFrame = preview->waitCallbackFrame();
-            if (!pFrame)continue;
-            //将数据回到给上层
-            if (preview->theVM && !env) {
-                preview->theVM->AttachCurrentThread(&env, nullptr);
+            video_frame_t *pFrame = preview->waitCallbackFrame();
+            if (!pFrame) {
+                continue;
             }
-            if (env) {
-                preview->callbackFrame(pFrame->data, pFrame->width, pFrame->height, env);
+            // 绘制，绘制完成后发送数据
+            cv::Mat frameData = ImgUtils::bgr2Any(pFrame->data, preview->requestMode, pFrame->width,
+                                                  pFrame->height);
+            // 释放源数据
+            if (!frameData.empty()) {
+                if (preview->theVM && !env) {
+                    preview->theVM->AttachCurrentThread(&env, nullptr);
+                }
+                if (env) {
+                    preview->callbackFrame(frameData.data, frameData.total() * frameData.elemSize(),
+                                           pFrame->width, pFrame->height, env);
+                }
             }
             //释放销毁当前的frame
-            delete pFrame;
+            video_free(pFrame);
         }
         //删除对应创建
         if (preview->theVM && env) {
@@ -508,38 +546,53 @@ void *CameraFactoryV4L2Impl::callback_thread_func(void *vptr_args) {
 
 }
 
+void CameraFactoryV4L2Impl::video_free(video_frame_t *frame) {
+    if (!frame) {
+        return;
+    }
+    if (frame->data) {
+        free(frame->data);
+    }
+    free(frame);
+}
 
 void CameraFactoryV4L2Impl::clearCaptureFrame() {
-
+    pthread_mutex_lock(&previewMutex);
+    if (!previewFrames.isEmpty()) {
+        for (int i = 0; i < previewFrames.size(); ++i) {
+            video_frame_t *&pFrame = previewFrames[i];
+            video_free(pFrame);
+        }
+        previewFrames.clear();
+    }
+    pthread_mutex_unlock(&previewMutex);
 }
 
 void CameraFactoryV4L2Impl::clearCallbackFrame() {
     pthread_mutex_lock(&callbackMutex);
-    if (!callbackFrames.isEmpty()) {
-        for (int i = 0; i < callbackFrames.size(); ++i) {
-            auto pFrame = callbackFrames[i];
-            delete (pFrame);
-        }
-        callbackFrames.clear();
+    if (lastFrame) {
+        video_free(lastFrame);
+        lastFrame = nullptr;
     }
     pthread_mutex_unlock(&callbackMutex);
 }
 
 
-void CameraFactoryV4L2Impl::putCallbackFrame(video_frame_t *frame) {
-// 执行锁定
-    pthread_mutex_lock(&callbackMutex);
-    // 如果缓存池的数据满了，则吧第一帧的数据删除掉
-    if (mIsPreviewRunning && callbackFrames.size() < MAX_FRAME) {
-        callbackFrames.put(frame);
-        frame = nullptr;
+video_frame_t *CameraFactoryV4L2Impl::waitPreviewFrame() {
+    video_frame_t *frame = nullptr;
+    pthread_mutex_lock(&previewMutex);
+    {
+        // 如果当前内容为空，则等待获取数据，被唤醒
+        if (previewFrames.isEmpty()) {
+            pthread_cond_wait(&previewCond, &previewMutex);
+        }
+        // 如果当前是正在预览，并且预览数据大于0
+        if (mIsPreviewRunning && !previewFrames.isEmpty()) {
+            frame = previewFrames.remove(0);
+        }
     }
-    pthread_cond_signal(&callbackCond);
-    pthread_mutex_unlock(&callbackMutex);
-    if (frame) {
-        // 如果没有写入到缓存，则直接释放当前对象
-        delete frame;
-    }
+    pthread_mutex_unlock(&previewMutex);
+    return frame;
 }
 
 video_frame_t *CameraFactoryV4L2Impl::waitCallbackFrame() {
@@ -547,34 +600,84 @@ video_frame_t *CameraFactoryV4L2Impl::waitCallbackFrame() {
     pthread_mutex_lock(&callbackMutex);
     {
         // 如果当前内容为空，则等待获取数据，被唤醒
-        if (callbackFrames.isEmpty()) {
+        if (previewFrames.isEmpty()) {
             pthread_cond_wait(&callbackCond, &callbackMutex);
         }
         // 如果当前是正在预览，并且预览数据大于0
-        if (mIsPreviewRunning && !callbackFrames.isEmpty()) {
-            frame = callbackFrames.remove(0);
+        if (mIsPreviewRunning && !previewFrames.isEmpty()) {
+            frame = lastFrame;
+            lastFrame = nullptr;
         }
     }
     pthread_mutex_unlock(&callbackMutex);
     return frame;
 }
 
+video_frame_t *CameraFactoryV4L2Impl::video_allocate_frame(size_t len) {
+    video_frame_t *outFrame = (video_frame_t *) malloc(sizeof(*outFrame));
+    if (!outFrame) {
+        return nullptr;
+    }
+    outFrame->data = (uint8_t *) malloc(len);
+    outFrame->dataSize = len;
+    return outFrame;
+}
 
-void CameraFactoryV4L2Impl::callbackFrame(uint8_t *frame, int width, int height, JNIEnv *env) {
+video_frame_t *CameraFactoryV4L2Impl::copyVideoFrame(video_frame_t *inFrame, uint8_t *data, int length) {
+    video_frame_t *outFrame = video_allocate_frame(length);
+    if (!outFrame) {
+        return nullptr;
+    }
+    outFrame->width = inFrame->width;
+    outFrame->height = inFrame->height;
+    outFrame->format = requestMode;
+    std::memcpy(outFrame->data, data, length);
+    return outFrame;
+}
+
+
+void CameraFactoryV4L2Impl::putPreviewFrame(uint8_t *data, uint64_t dataSize) {
+    // 执行锁定
+    pthread_mutex_lock(&previewMutex);
+    // 如果缓存池的数据满了，则吧第一帧的数据删除掉
+    if (mIsPreviewRunning && previewFrames.size() < MAX_FRAME) {
+        video_frame_t *outFrame = video_allocate_frame(dataSize);
+        if (outFrame) {
+            outFrame->width = captureWidth;
+            outFrame->height = captureHeight;
+            outFrame->format = captureFormat;
+            std::memcpy(outFrame->data, data, dataSize);
+            previewFrames.put(outFrame);
+        }
+    }
+    pthread_cond_signal(&previewCond);
+    pthread_mutex_unlock(&previewMutex);
+}
+
+void CameraFactoryV4L2Impl::putCallbackFrame(video_frame_t *frame) {
+    pthread_mutex_lock(&callbackMutex);
+    // 如果缓存池的数据满了，则吧第一帧的数据删除掉
+    if (mIsPreviewRunning && !lastFrame) {
+        lastFrame = frame;
+        frame = nullptr;
+    }
+    pthread_cond_signal(&callbackCond);
+    pthread_mutex_unlock(&callbackMutex);
+    if (frame) {
+        video_free(frame);
+    }
+}
+
+void CameraFactoryV4L2Impl::callbackFrame(uint8_t *frame, int len, int width, int height, JNIEnv *env) {
     if (!env || !previewListener || !onFrameMethod) {
         LOG_D("callbackFrame-return");
         return;
     }
-    auto outImg = ImgUtils::bgr2Any(frame, width, height, requestMode);
-    if (outImg.empty()) {
-        return;
-    }
     // 释放源数据
-    int data_bytes = outImg.total() * outImg.elemSize();
-    if (outImg.data && data_bytes > 0) {
-        jobject buf = env->NewDirectByteBuffer(outImg.data, data_bytes);
+    if (frame && len > 0) {
+        jobject buf = env->NewDirectByteBuffer(frame, len);
         if (buf) {
-            env->CallVoidMethod(previewListener, onFrameMethod, outImg.cols, outImg.rows, buf);
+            env->CallVoidMethod(previewListener, onFrameMethod, width, height, buf);
             if (env->ExceptionCheck()) {
                 LOG_D("ExceptionCheck");
                 env->ExceptionDescribe();

@@ -10,7 +10,6 @@
 #include "cstring"
 #include "Log.h"
 #include <vector>
-#include "iostream"
 
 std::string VideoV4L2Utils::getSupportPreviewSize(int fd) {
     bool isHaveVideoCapture = isSupportVideoCapture(fd);
@@ -29,21 +28,7 @@ std::string VideoV4L2Utils::getSupportPreviewSize(int fd) {
     writer.StartArray();                    // 开始读取列表
     // 获取对应的码流格式信息
     while (ioctl(fd, VIDIOC_ENUM_FMT, &fmt) == 0) {
-        int formatType = v4l2FormatToInt(fmt.pixelformat);
-        if (formatType == -1) {
-            continue;
-        }
-        writer.StartObject();
-
-        writer.String("format");
-
-        writer.Uint(formatType);
-
-        writer.String("size");
-        writer.StartArray();
         getFormatPreviewSize(fd, fmt.pixelformat, writer);
-        writer.EndArray();
-        writer.EndObject();
         fmt.index++;
     }
     writer.EndArray();
@@ -94,28 +79,37 @@ int VideoV4L2Utils::intToV4l2Format(int formatType) {
 }
 
 void VideoV4L2Utils::getFormatPreviewSize(int fd, int format, rapidjson::Writer<rapidjson::StringBuffer> &writer) {
+    auto detailFormat = v4l2FormatToInt(format);
+    if (detailFormat == -1) { // 如果是-1，则不执行
+        return;
+    }
     struct v4l2_frmsizeenum frmSize;      // 获取分辨率信息存储的位置
     memset(&frmSize, 0, sizeof(frmSize)); // 初始化内存空间
 
     frmSize.pixel_format = format; // 赋值类型
     frmSize.index = 0;             // 初始化index状态，确保从0开始
-
     // 开始读取分辨率
     while (ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmSize) == 0) {
         if (frmSize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
+            LOG_D("当前支持的分辨率为:%d*%d", frmSize.discrete.width, frmSize.discrete.height);
             // 设置宽高等信息
             writer.StartObject();
 
+            // width
             writer.String("width");
-            writer.Uint(frmSize.discrete.width);
+            writer.Uint64(frmSize.discrete.width);
 
+            // height
             writer.String("height");
-            writer.Uint(frmSize.discrete.height);
+            writer.Uint64(frmSize.discrete.height);
+
+            // 当前类型
+            writer.String("format");
+            writer.Uint64(detailFormat);
 
             writer.EndObject();
-
-            frmSize.index++;
         }
+        frmSize.index++;
     }
 }
 
@@ -196,8 +190,7 @@ std::variant<std::monostate, std::pair<int, int>> VideoV4L2Utils::getSupportPara
         LOG_E("获取参数范围失败, 错误码: %d", errno);
         return std::monostate{};
     }
-    LOG_D("获取参数范围成功, [%d,%d],,step:%d", qctrl.minimum,
-          qctrl.maximum, qctrl.step);
+    LOG_D("获取参数范围成功, [%d,%d],,step:%d", qctrl.minimum, qctrl.maximum, qctrl.step);
     return std::make_pair(qctrl.minimum, qctrl.maximum);
 }
 

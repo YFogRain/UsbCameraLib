@@ -66,40 +66,37 @@ uvc_frame_t *ImgUtils::any2BGR(uvc_frame_t *inFrame) {
 }
 
 cv::Mat ImgUtils::bgr2Any(uint8_t *inFrame, int width, int height, int mode) {
-    if (!inFrame  || width <= 0 || height <= 0) {
+    if (!inFrame || width == 0 || height == 0) {
+        LOG_E("当前数据不对劲啊～");
         return cv::Mat();
     }
-    if (mode == UVC_DATA_FORMAT_BGR) {
-        return cv::Mat(height, width, CV_8UC3, inFrame);
+    cv::Mat inImg(height, width, CV_8UC3, inFrame);
+    if (mode == UVC_DATA_FORMAT_BGR) { // 如果是bgr。则不需要进行转换，直接可以返回数据
+        return inImg;
     }
+    cv::Mat outImg;
     if (mode == UVC_DATA_FORMAT_RGBA) {
-        cv::Mat outImg = cv::Mat(height, width, CV_8UC4);
-        cv::cvtColor(cv::Mat(height, width, CV_8UC3, inFrame), outImg,
-                     cv::COLOR_BGR2RGBA);
-        return outImg;
+        outImg = cv::Mat(height, width, CV_8UC4);
+        cv::cvtColor(inImg, outImg, cv::COLOR_BGR2RGBA);
+    } else if (mode == UVC_DATA_FORMAT_NV21) {
+        cv::Mat yuvImg(height + height / 2, width, CV_8UC1);
+        cv::cvtColor(inImg, yuvImg, cv::COLOR_BGR2YUV_I420);
+        if (!yuvImg.empty()) {
+            outImg = cv::Mat(height + height / 2, width, CV_8UC1);
+            // 将 Y 平面复制到 NV21 缓冲区
+            int ySize = width * height;
+            memcpy(outImg.data, yuvImg.data, ySize);
+            // 将 UV 平面交织为 VU 顺序
+            uint8_t *uPlane = yuvImg.data + ySize;
+            uint8_t *vPlane = uPlane + (ySize / 4);
+            uint8_t *uvData = outImg.data + ySize;
+            for (int i = 0; i < ySize / 4; ++i) {
+                uvData[i * 2] = vPlane[i];     // V 分量
+                uvData[i * 2 + 1] = uPlane[i]; // U 分量
+            }
+        }
     }
-    if (mode != UVC_DATA_FORMAT_NV21) {
-        return cv::Mat();
-    }
-    cv::Mat yuvImg = cv::Mat(height + height / 2, width, CV_8UC1);
-    cv::cvtColor(cv::Mat(height, width, CV_8UC3, inFrame), yuvImg,
-                 cv::COLOR_BGR2YUV_I420);
-    if (yuvImg.empty()) {//如果没数据，直接返回失败
-        return yuvImg;
-    }
-    //将yuv的数据值翻转一下，转换成nv21
-    cv::Mat nv21Img = cv::Mat(height + height / 2, width, CV_8UC1);
-    int ySize = width * height;
-    memcpy(nv21Img.data, yuvImg.data, ySize);
-    // 将 UV 平面交织为 VU 顺序
-    uint8_t *uPlane = yuvImg.data + ySize;
-    uint8_t *vPlane = uPlane + (ySize / 4);
-    uint8_t *uvData = nv21Img.data + ySize;
-    for (int i = 0; i < ySize / 4; ++i) {
-        uvData[i * 2] = vPlane[i];     // V 分量
-        uvData[i * 2 + 1] = uPlane[i]; // U 分量
-    }
-    return nv21Img;
+    return outImg;
 }
 
 
@@ -166,9 +163,11 @@ cv::Mat ImgUtils::any2BGR(uint8_t *inFrame, int format, int dataBytes, int width
     if (format == PREVIEW_FORMAT_YUY2) {
         cv::cvtColor(cv::Mat(height, width, CV_8UC2, inFrame), outImg, cv::COLOR_YUV2BGR_YUYV);
     } else if (format == PREVIEW_FORMAT_NV12) {
-        cv::cvtColor(cv::Mat(height + height / 2, width, CV_8UC1, inFrame), outImg, cv::COLOR_YUV2BGR_NV12);
+        cv::cvtColor(cv::Mat(height + height / 2, width, CV_8UC1, inFrame), outImg,
+                     cv::COLOR_YUV2BGR_NV12);
     } else if (format == PREVIEW_FORMAT_NV21) {
-        cv::cvtColor(cv::Mat(height + height / 2, width, CV_8UC1, inFrame), outImg, cv::COLOR_YUV2BGR_NV21);
+        cv::cvtColor(cv::Mat(height + height / 2, width, CV_8UC1, inFrame), outImg,
+                     cv::COLOR_YUV2BGR_NV21);
     } else if (format == PREVIEW_FORMAT_MJPEG) {
         outImg = cv::imdecode(cv::Mat(1, dataBytes, CV_8UC1, inFrame), cv::IMREAD_COLOR);
     } else if (format == PREVIEW_FORMAT_BGR24) {
