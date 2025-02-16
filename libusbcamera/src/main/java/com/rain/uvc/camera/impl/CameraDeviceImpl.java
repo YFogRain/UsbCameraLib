@@ -42,6 +42,7 @@ public class CameraDeviceImpl extends ICameraDevice {
     protected void openCamera() {
         openThread = new Thread(() -> {
             try {
+                Log.d("UvcCamera", "开始准备打开设备了～～～～～～～～～～～～～～～");
                 //当前已经打开成功
                 UsbDevice usbDevice = mUsbDevice.get();
                 if (usbDevice == null) {

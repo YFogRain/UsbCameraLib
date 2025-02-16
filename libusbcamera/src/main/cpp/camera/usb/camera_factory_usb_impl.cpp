@@ -17,6 +17,7 @@ CameraFactoryUsbImpl::CameraFactoryUsbImpl(uvc_context_t *context, uvc_device_t 
           mIsPreviewRunning(false), mPreviewWindow(nullptr),
           mDisplayTransformState(TRANSFORM_IDENTITY),
           frameMode(PREVIEW_FORMAT_YUY2),
+          onFrameMethod(nullptr), theVM(nullptr), previewListener(nullptr),
           requestWidth(DEFAULT_PREVIEW_WIDTH), requestHeight(DEFAULT_PREVIEW_HEIGHT),
           requestMode(UVC_DATA_FORMAT_BGR),
           frameBytes(DEFAULT_PREVIEW_WIDTH * DEFAULT_PREVIEW_HEIGHT * 2) {
@@ -103,7 +104,7 @@ bool CameraFactoryUsbImpl::setDisplaySurface(ANativeWindow *preview_window) {
 bool CameraFactoryUsbImpl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
     this->requestMode = mode;
     pthread_mutex_lock(&captureMutex);
-    theVM = vm;
+    this->theVM = vm;
     if (!env->IsSameObject(previewListener, listener)) {
         onFrameMethod = nullptr;
         if (previewListener) {

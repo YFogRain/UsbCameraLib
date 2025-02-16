@@ -93,7 +93,6 @@ class CameraActivity : BaseDataBindActivity<ActivityCameraBinding>() {
 			cameraDevice.setPreviewListener { width, height, frame ->
 				Log.d("CameraActivity", "${width}*${height} : ${frame.capacity()}")
 			}
-			
 			cameraDevice.startPreview()
 			this@CameraActivity.mCameraDevice = cameraDevice
 		}
