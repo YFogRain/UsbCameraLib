@@ -95,7 +95,11 @@ Java_com_rain_uvc_utils_CameraNativeUtils_setPreviewListener(JNIEnv *env, jclass
     if (camera) {
         JavaVM *vm;
         env->GetJavaVM(&vm);
-        return camera->setPreviewDataListener(vm, env, listener, mode);
+        jobject frameResultObj = nullptr;
+        if(listener){
+            frameResultObj =  env->NewGlobalRef(listener);
+        }
+        return camera->setPreviewDataListener(vm, env, frameResultObj, mode);
     }
     return false;
 }

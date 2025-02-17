@@ -394,7 +394,7 @@ std::variant<std::monostate, std::pair<int, int>, std::string, int> CameraFactor
 bool CameraFactoryV4L2Impl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
     this->requestMode = mode;
     pthread_mutex_lock(&callbackMutex);
-    theVM = vm;
+    this->theVM = vm;
     if (!env->IsSameObject(previewListener, listener)) {
         onFrameMethod = nullptr;
         if (previewListener) {
@@ -411,15 +411,17 @@ bool CameraFactoryV4L2Impl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobj
             if (!onFrameMethod) {
                 env->DeleteGlobalRef(listener);
                 previewListener = nullptr;
+                LOG_E("设置监听失败");
                 return false;
             }
         } else {
             env->DeleteGlobalRef(listener);
             onFrameMethod = nullptr;
             previewListener = nullptr;
+            LOG_E("监听设置失败，listener为null");
         }
     } else {
-        LOG_D("callbackFrame-IsSameObject-false");
+        LOG_E("当前为同一个对象，无需设置");
     }
     pthread_mutex_unlock(&callbackMutex);
     return true;

@@ -14,11 +14,13 @@ import com.rain.uvc.demo.base.activity.BaseDataBindActivity
 import com.rain.uvc.demo.databinding.ActivityCameraBinding
 import com.rain.uvc.demo.utils.GsonHelper
 import com.rain.uvc.demo.utils.singleClick
+import com.rain.uvc.listener.IFrameListener
 import com.rain.uvc.state.CameraParameter
 import com.rain.uvc.state.CameraSupportParameters
 import com.rain.uvc.state.DisplayTransformState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.nio.ByteBuffer
 
 /**
  */
@@ -40,11 +42,14 @@ class CameraActivity : BaseDataBindActivity<ActivityCameraBinding>() {
 	}
 	
 	override fun initData() {
+		Log.d("cameraTimeTag", "开始加载时间-initData")
 		if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
 			permissionCall.launch(android.Manifest.permission.CAMERA)
+			Log.d("cameraTimeTag", "开始申请权限-launch")
 			return
 		}
 		//使用post，保证当前的surfaceView中创建surface完成
+		Log.d("cameraTimeTag", "等待view加载完毕后开始执行打开操作")
 		mBinding.surfaceView.post {
 			openCamera()
 		}
@@ -76,24 +81,33 @@ class CameraActivity : BaseDataBindActivity<ActivityCameraBinding>() {
 		mCameraDevice = null
 	}
 	
+	private val mFrameListener = IFrameListener { width, height, frame ->
+//		Log.d("CameraActivity", "${width}*${height} : ${frame.capacity()}")
+	}
+	
 	private fun openCamera() {
 		//获取uvc摄像头列表
+		Log.d("cameraTimeTag", "准备开始执行打开操作")
 		lifecycleScope.launch(Dispatchers.IO) {
 			val usbDevices = CameraUvcManager.getCameraDevices()
+			Log.d("cameraTimeTag", "获取到的usb列表:${usbDevices?.size}")
 			if (usbDevices.isNullOrEmpty()) return@launch
 			val cameraDevice = runCatching { CameraUvcManager.openCameraSync(usbDevices[0]) }.getOrNull()
+			Log.d("cameraTimeTag", "打开结果:${cameraDevice != null}")
 			if (cameraDevice == null) {//报错说明打开失败
 				return@launch
 			}
 			//赋值当前的对象
 			initParameter(cameraDevice)
+			Log.d("cameraTimeTag", ":::初始化参数信息完成")
 			//设置预览控件
 			cameraDevice.setDisplaySurface(mBinding.surfaceView)
+			Log.d("cameraTimeTag", ":::设置预览控件完成")
 			//设置监听
-			cameraDevice.setPreviewListener { width, height, frame ->
-				Log.d("CameraActivity", "${width}*${height} : ${frame.capacity()}")
-			}
+			cameraDevice.setPreviewListener(mFrameListener)
+			Log.d("cameraTimeTag", ":::设置监听控件完成")
 			cameraDevice.startPreview()
+			Log.d("cameraTimeTag", ":::开启预览成功")
 			this@CameraActivity.mCameraDevice = cameraDevice
 		}
 	}

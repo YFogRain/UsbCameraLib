@@ -12,7 +12,7 @@
 #include "android/native_window.h"
 
 CameraFactoryUsbImpl::CameraFactoryUsbImpl(uvc_context_t *context, uvc_device_t *device,
-        uvc_device_handle_t *deviceHandle, int fd)
+                                           uvc_device_handle_t *deviceHandle, int fd)
         : mContext(context), mDevice(device), mDeviceHandle(deviceHandle), mFd(fd),
           mIsPreviewRunning(false), mPreviewWindow(nullptr),
           mDisplayTransformState(TRANSFORM_IDENTITY),
@@ -101,7 +101,8 @@ bool CameraFactoryUsbImpl::setDisplaySurface(ANativeWindow *preview_window) {
     return UVC_SUCCESS;
 }
 
-bool CameraFactoryUsbImpl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
+bool
+CameraFactoryUsbImpl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
     this->requestMode = mode;
     pthread_mutex_lock(&captureMutex);
     this->theVM = vm;
@@ -121,21 +122,24 @@ bool CameraFactoryUsbImpl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobje
             if (!onFrameMethod) {
                 env->DeleteGlobalRef(listener);
                 previewListener = nullptr;
+                LOG_E("设置监听失败");
                 return false;
             }
         } else {
             env->DeleteGlobalRef(listener);
             onFrameMethod = nullptr;
             previewListener = nullptr;
+            LOG_E("监听设置失败，listener为null");
         }
     } else {
-        LOG_D("callbackFrame-IsSameObject-false");
+        LOG_E("当前为同一个对象，无需设置");
     }
     pthread_mutex_unlock(&captureMutex);
     return true;
 }
 
-std::variant<std::monostate, std::pair<int, int>, std::string, int> CameraFactoryUsbImpl::getSupportParameters(int type) {
+std::variant<std::monostate, std::pair<int, int>, std::string, int>
+CameraFactoryUsbImpl::getSupportParameters(int type) {
     if (!mDeviceHandle) {
         return nullptr;
     }
