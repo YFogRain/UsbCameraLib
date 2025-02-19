@@ -3,23 +3,26 @@ package com.rain.uvc.demo
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.rain.uvc.CameraUvcManager
 import com.rain.uvc.demo.base.activity.BaseDataBindActivity
 import com.rain.uvc.demo.base.adapter.BaseRecAdapter
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.camera.CameraActivity
 import com.rain.uvc.demo.databinding.ActivityMainBinding
+import com.rain.uvc.demo.utils.GsonHelper
 
 class MainActivity : BaseDataBindActivity<ActivityMainBinding>() {
-	override val mViewModel :BaseViewModel?=null
+	override val mViewModel: BaseViewModel? = null
 	override fun initLayoutResId() = R.layout.activity_main
 	private val permissionCall = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-		if (!it){
-			Toast.makeText(this,"请检查摄像头权限",Toast.LENGTH_SHORT).show()
+		if (!it) {
+			Toast.makeText(this, "请检查摄像头权限", Toast.LENGTH_SHORT).show()
 		}
 	}
 	private val testList = mutableListOf("开启预览")

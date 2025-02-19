@@ -48,7 +48,6 @@ ICameraFactory *CameraFactoryHelper::openCamera(int fd, int busNum, int devAddre
     return new CameraFactoryUsbImpl(context, device, deviceHandle, fd);
 }
 
-
 /**
  * video类型的打开
  * @param videoPath 对应的video文件的目录地址，如 /dev/videoX
@@ -60,7 +59,7 @@ ICameraFactory *CameraFactoryHelper::openCamera(const char *videoPath) {
         return nullptr;
     }
     struct v4l2_capability cap;
-    if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0) {
+    if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0 || !(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
         LOG_E("获取摄像头数据节点信息失败");
         close(fd);
         return nullptr;

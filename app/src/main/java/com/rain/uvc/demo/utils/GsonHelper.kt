@@ -34,7 +34,7 @@ class GsonHelper private constructor() {
 		if (t == null) return null
 		return runCatching {
 			getGs().toJson(t)
-		}.getOrNull()
+		}.onFailure { it.printStackTrace() }.getOrNull()
 	}
 	
 	inline fun <reified T> jsonToMode(str: String?): T? {

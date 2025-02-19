@@ -11,14 +11,12 @@
 #include "video_v4l2_utils.h"
 
 
-CameraFactoryV4L2Impl::CameraFactoryV4L2Impl(int fd)
-        : mVideoFd(fd), mPreviewWindow(nullptr), mIsPreviewRunning(false), previewWidth(640),
-          previewHeight(480), requestMode(UVC_DATA_FORMAT_BGR),
-          previewFormat(PREVIEW_FORMAT_YUY2), captureWidth(640), captureHeight(480),
-          captureFormat(PREVIEW_FORMAT_YUY2), lastFrame(nullptr),
-          captureBuffers(nullptr), captureBufferLength(0),
-          mDisplayTransformState(TRANSFORM_IDENTITY),
-          theVM(nullptr), previewListener(nullptr), onFrameMethod(nullptr) {
+CameraFactoryV4L2Impl::CameraFactoryV4L2Impl(int fd) : mVideoFd(fd), mPreviewWindow(nullptr),
+        mIsPreviewRunning(false), previewWidth(640), previewHeight(480),
+        requestMode(UVC_DATA_FORMAT_BGR), previewFormat(PREVIEW_FORMAT_YUY2), captureWidth(640),
+        captureHeight(480), captureFormat(PREVIEW_FORMAT_YUY2), lastFrame(nullptr),
+        captureBuffers(nullptr), captureBufferLength(0), mDisplayTransformState(TRANSFORM_IDENTITY),
+        theVM(nullptr), previewListener(nullptr), onFrameMethod(nullptr) {
     // 初始化互斥锁
     pthread_mutex_init(&surfaceMutex, nullptr);
     // 初始化互斥锁
@@ -68,8 +66,7 @@ bool CameraFactoryV4L2Impl::setDisplaySurface(ANativeWindow *preview_window) {
             }
             mPreviewWindow = preview_window;
             if (LIKELY(mPreviewWindow)) {
-                ANativeWindow_setBuffersGeometry(mPreviewWindow, captureWidth, captureHeight,
-                                                 UVC_FORMAT_FRAME_WINDOW);
+                ANativeWindow_setBuffersGeometry(mPreviewWindow, captureWidth, captureHeight, UVC_FORMAT_FRAME_WINDOW);
             }
             ImgUtils::setDisplayTransformState(mPreviewWindow, mDisplayTransformState);
         }
@@ -109,8 +106,7 @@ bool CameraFactoryV4L2Impl::startPreview() {
     LOG_D("当前使用的分辨率信息:%d*%d ,format:%d", captureWidth, captureHeight, captureFormat);
     // 设置窗口的宽高
     if (mPreviewWindow) {
-        ANativeWindow_setBuffersGeometry(mPreviewWindow, captureWidth, captureHeight,
-                                         UVC_FORMAT_FRAME_WINDOW);
+        ANativeWindow_setBuffersGeometry(mPreviewWindow, captureWidth, captureHeight, UVC_FORMAT_FRAME_WINDOW);
     }
     // 2. 设置缓冲区buffer
     if (!prepare_mmap()) { // 初始化缓冲区
@@ -166,8 +162,8 @@ bool CameraFactoryV4L2Impl::prepare_mmap() {
             return false;
         }
         captureBuffers[i].length = buf.length;
-        captureBuffers[i].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED,
-                                       mVideoFd, buf.m.offset);
+        captureBuffers[i].start = mmap(NULL, buf.length,
+                PROT_READ | PROT_WRITE, MAP_SHARED, mVideoFd, buf.m.offset);
         if (captureBuffers[i].start == MAP_FAILED) {
             LOG_E("获取缓冲区数据,错误码:%d", errno);
             return false;
@@ -209,8 +205,7 @@ bool CameraFactoryV4L2Impl::stopPreview() {
             LOG_E("captureThread::当前线程已经结束，或者等待结束线程失败");
         }
         pthread_cond_signal(&callbackCond);
-        if (pthread_kill(callbackThread, 0) == ESRCH ||
-            pthread_join(callbackThread, nullptr) != 0) {
+        if (pthread_kill(callbackThread, 0) == ESRCH || pthread_join(callbackThread, nullptr) != 0) {
             LOG_E("callbackThread::当前线程已经结束，或者等待结束线程失败");
         }
         LOG_D("停止线程结束。。。");
@@ -470,16 +465,13 @@ void *CameraFactoryV4L2Impl::preview_thread_func(void *vptr_args) {
                 continue;
             }
             // 先将数据转换为bgr格式，方便后续操作
-            auto bgrImg =
-                    ImgUtils::any2BGR(pFrame->data, pFrame->dataSize, pFrame->format, pFrame->width,
-                                      pFrame->height);
+            auto bgrImg = ImgUtils::any2BGR(pFrame->data, pFrame->dataSize, pFrame->format, pFrame->width, pFrame->height);
             if (!bgrImg.empty()) {                                       // 如果数据不为空
                 size_t bytesLength = bgrImg.total() * bgrImg.elemSize(); // 计算字节数
                 if (bytesLength > 0) {
                     // 绘制，绘制完成后发送数据
                     cameraFactory->drawFrame(bgrImg.data, pFrame->width, pFrame->height);
-                    cameraFactory->putCallbackFrame(
-                            cameraFactory->copyVideoFrame(pFrame, bgrImg.data, bytesLength));
+                    cameraFactory->putCallbackFrame(cameraFactory->copyVideoFrame(pFrame, bgrImg.data, bytesLength));
                 }
             }
             video_free(pFrame);
@@ -523,16 +515,15 @@ void *CameraFactoryV4L2Impl::callback_thread_func(void *vptr_args) {
                 continue;
             }
             // 绘制，绘制完成后发送数据
-            cv::Mat frameData = ImgUtils::bgr2Any(pFrame->data, preview->requestMode, pFrame->width,
-                                                  pFrame->height);
+            cv::Mat frameData = ImgUtils::bgr2Any(pFrame->data, preview->requestMode, pFrame->width, pFrame->height);
             // 释放源数据
             if (!frameData.empty()) {
                 if (preview->theVM && !env) {
                     preview->theVM->AttachCurrentThread(&env, nullptr);
                 }
                 if (env) {
-                    preview->callbackFrame(frameData.data, frameData.total() * frameData.elemSize(),
-                                           pFrame->width, pFrame->height, env);
+                    preview->callbackFrame(frameData.data, frameData.total() *
+                                                           frameData.elemSize(), pFrame->width, pFrame->height, env);
                 }
             }
             //释放销毁当前的frame
