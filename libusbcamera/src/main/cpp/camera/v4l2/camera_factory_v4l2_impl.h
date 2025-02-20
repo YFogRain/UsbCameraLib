@@ -25,6 +25,7 @@ struct video_frame_t {
     uint32_t height;
     uint8_t *data;
     uint64_t dataSize;
+    int format;
 };
 
 class CameraFactoryV4L2Impl : public ICameraFactory {
@@ -68,19 +69,26 @@ private:
     int captureWidth, captureHeight, captureFormat; // 捕获预览时使用的宽高
 
     int requestMode;
-    pthread_t captureThread;      // 捕获预览流，并且绘制到页面的线程
-    pthread_mutex_t captureMutex; // 捕获线程的互斥锁
-    pthread_cond_t captureCond;   // 等待专用的条件变量
 
+    pthread_t captureThread;      // 捕获预览流，并且绘制到页面的线程
+
+    pthread_mutex_t surfaceMutex; // 预览互斥锁
+
+    pthread_t previewThread;      // 预览线程
+    pthread_mutex_t previewMutex; // 预览线程的互斥锁
+    pthread_cond_t previewCond;   // 预览线程等待专用的条件变量
 
     pthread_t callbackThread;      // 回调线程
     pthread_mutex_t callbackMutex; // 回调线程的互斥锁
     pthread_cond_t callbackCond;   // 回调线程等待专用的条件变量
 
+    ObjectArray<video_frame_t *> previewFrames; // 当前帧缓存，读取绘制使用
 
-    ObjectArray<video_frame_t *> callbackFrames;
+    video_frame_t *lastFrame; // 最后一帧数据，需要发送给外部的
 
     static void *capture_thread_func(void *vptr_args); // 当前捕获线程的回调
+
+    static void *preview_thread_func(void *vptr_args); // 当前预览线程的回调
 
     static void *callback_thread_func(void *vptr_args); // 当前回调线程的回调
 
@@ -91,23 +99,30 @@ private:
     bool prepare_mmap();      // 映射缓冲区到用户空间
     bool startCameraStream(); // 启动视频流
 
-    void drawFrame(uint8_t *frame, int length); // 绘制
+    void drawFrame(uint8_t *frame, int width, int height); // 绘制
 
-//    void putCaptureFrame(uint8_t *data, uint64_t dataSize);
+    void putPreviewFrame(uint8_t *data, uint64_t dataSize);
 
     void putCallbackFrame(video_frame_t *frame);
 
-//    video_frame_t *waitCaptureFrame();
+    video_frame_t *waitPreviewFrame();
 
     video_frame_t *waitCallbackFrame();
 
     void cleanup_buffers(); // 清理buffers
 
-    void callbackFrame(uint8_t *frame, int width, int height, JNIEnv *env); //数据回调
+    void callbackFrame(uint8_t *frame, int len, int width, int height, JNIEnv *env); //数据回调
 
     int loadTypeToId(int type);
 
     int loadValueToPutValue(int type, int value);
+
+    video_frame_t *video_allocate_frame(size_t data_bytes);
+
+    // 数据复制
+    video_frame_t *copyVideoFrame(video_frame_t *inFrame, uint8_t *data, int length);
+
+    static void video_free(video_frame_t *data);
 };
 
 #endif // UVCCAMERA_CAMERAV4L2_H

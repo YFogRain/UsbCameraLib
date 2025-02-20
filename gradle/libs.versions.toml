@@ -18,6 +18,8 @@ coroutines-android = "1.8.0"
 material = "1.12.0"
 constraintlayout = "2.1.4"
 
+navigatuion-version = "2.8.4"
+
 gson = "2.10.1"
 [libraries]
 activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
@@ -27,6 +29,9 @@ material = { module = "com.google.android.material:material", version.ref = "mat
 constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle-process" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+
+navigation-ui-ktx = { module = "androidx.navigation:navigation-ui-ktx", version.ref = "navigatuion-version" }
+navigation-fragment-ktx = { module = "androidx.navigation:navigation-fragment-ktx", version.ref = "navigatuion-version" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }

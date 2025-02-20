@@ -4,16 +4,19 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.text.TextUtils;
 
+import androidx.annotation.NonNull;
+
 import com.rain.uvc.camera.ICameraDevice;
-import com.rain.uvc.camera.impl.CameraDeviceImpl;
 import com.rain.uvc.listener.ICameraOpenListener;
 import com.rain.uvc.provider.OverallContext;
-import com.rain.uvc.state.UvcCameraAccessException;
+import com.rain.uvc.state.CameraStateException;
 import com.rain.uvc.utils.CameraNativeUtils;
+import com.rain.uvc.utils.UsbPermissionHelper;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -22,8 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author yuan
@@ -31,8 +32,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @des
  */
 public class CameraUvcManager {
-
-    private static final Object mLock = new Object();
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private static final ConcurrentHashMap<ICameraDevice, CountDownLatch> runningDevices = new ConcurrentHashMap<>();
@@ -42,6 +41,15 @@ public class CameraUvcManager {
      */
     public static boolean debuggable(boolean status) {
         return CameraNativeUtils.debuggable(status ? 1 : 0);
+    }
+
+    /**
+     * 获取uvc的摄像头列表
+     *
+     * @return 返回摄像头列表
+     */
+    public static String[] getV4L2Devices() {
+        return CameraNativeUtils.nativeLoadV4L2Devices();
     }
 
     /**
@@ -89,59 +97,64 @@ public class CameraUvcManager {
     }
 
     /**
-     * 检查权限
+     * video类型打开
      *
-     * @param permissions 对应需要验证的权限
-     * @return 权限是否已经拥有，false表示未拥有
+     * @param videoPath /dev/videoX路径
+     * @return 打开后的操作对象
+     * @throws CameraStateException 异常信息
      */
-    private static boolean checkPermission(String... permissions) {
-        if (permissions == null) return true;
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return false;
+    public static ICameraDevice openCamera(@NonNull String videoPath) throws CameraStateException {
+        if (!checkPermission(Manifest.permission.CAMERA)) {
+            throw new CameraStateException("请检查权限");
         }
-        for (String per : permissions) {
-            if (!checkSinglePermission(per)) {
-                return true;
-            }
+        if (TextUtils.isEmpty(videoPath)) {
+            throw new CameraStateException("请检查输入的路径");
         }
-        return false;
+        long nativeId = CameraNativeUtils.nativeOpenVideo(videoPath);
+        if (nativeId == 0L) {
+            throw new CameraStateException("请检查当前路径权限且为video类型");
+        }
+        return new ICameraDevice(nativeId, videoPath, null);
     }
 
-    private static boolean checkSinglePermission(String permission) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return true;
-        }
-        int result = OverallContext.baseContext.checkSelfPermission(permission);
-        return result == PackageManager.PERMISSION_GRANTED;
-    }
 
-    /**
-     * 同步打开
-     * 需要在suspend内执行
-     *
-     * @param usbDevice 打开的usb设备
-     * @return 返回打开后的操作对象
-     */
-    public static ICameraDevice openCameraSync(UsbDevice usbDevice) throws UvcCameraAccessException {
-        if (checkPermission(Manifest.permission.CAMERA)) {
-            throw new UvcCameraAccessException("请检查权限");
-        }
-        return openCameraSync(usbDevice, 10 * 1000);
+    public static ICameraDevice openCamera(@NonNull UsbDevice usbDevice) throws CameraStateException {
+        return openCamera(usbDevice, 10 * 1000);
     }
 
     /**
      * 同步打开
-     * 需要在suspend内执行
+     * 需要在子线程内执行
      *
      * @param usbDevice 打开的usb设备
-     * @param timeout   超时时间 ms
+     * @param timeout   超时时间
      * @return 返回打开后的操作对象
      */
-    public static ICameraDevice openCameraSync(UsbDevice usbDevice, long timeout) throws UvcCameraAccessException {
-        if (checkPermission(Manifest.permission.CAMERA)) {
-            throw new UvcCameraAccessException("请检查权限");
+    public static ICameraDevice openCamera(@NonNull UsbDevice usbDevice, long timeout) throws CameraStateException {
+        if (!checkPermission(Manifest.permission.CAMERA)) {
+            throw new CameraStateException("请检查权限");
         }
-        return waitOpenCamera(usbDevice, timeout);
+        UsbManager manager = (UsbManager) OverallContext.baseContext.getSystemService(Context.USB_SERVICE);
+        if (!UsbPermissionHelper.requestPermissionSync(usbDevice, manager, timeout)) {
+            throw new CameraStateException("申请usb临时权限失败");
+        }
+        String[] deviceNames = loadSplit(usbDevice);
+        if (deviceNames == null || deviceNames.length < 2) {
+            throw new CameraStateException("获取usb驱动信息失败");
+        }
+        UsbDeviceConnection usbDeviceConnection = manager.openDevice(usbDevice);
+        if (usbDeviceConnection == null) {
+            throw new CameraStateException("打开usb设备驱动失败");
+        }
+        long nativeId = CameraNativeUtils.nativeOpen(usbDeviceConnection.getFileDescriptor(), getBusNum(deviceNames), getDevAddress(deviceNames));
+        if (nativeId == 0L) {
+            throw new CameraStateException("usb设备打开失败");
+        }
+        return new ICameraDevice(nativeId, usbDevice.getDeviceName(), usbDeviceConnection);
+    }
+
+    public static void openCamera(UsbDevice usbDevice, ICameraOpenListener listener) {
+        openCamera(usbDevice, 10 * 1000, listener);
     }
 
     /**
@@ -151,8 +164,8 @@ public class CameraUvcManager {
      * @param timeout   超时时间 ms
      * @param listener  回调监听
      */
-    public static void openCamera(UsbDevice usbDevice, long timeout, ICameraOpenListener listener) {
-        if (checkPermission(Manifest.permission.CAMERA)) {
+    public static void openCamera(UsbDevice usbDevice, long timeout, @NonNull ICameraOpenListener listener) {
+        if (!checkPermission(Manifest.permission.CAMERA)) {
             listener.failed("请检查权限");
             return;
         }
@@ -160,78 +173,50 @@ public class CameraUvcManager {
         executor.submit(() -> {
             try {
                 // 调用异步方法，等待摄像头打开
-                ICameraDevice cameraDevice = waitOpenCamera(usbDevice, timeout);
+                UsbManager manager = (UsbManager) OverallContext.baseContext.getSystemService(Context.USB_SERVICE);
+                boolean requestSync = UsbPermissionHelper.requestPermissionSync(usbDevice, manager, timeout);
+                if (Thread.currentThread().isInterrupted()) {
+                    return;
+                }
+                if (!requestSync) {
+                    listener.failed("申请usb临时权限失败");
+                    return;
+                }
+
+                String[] deviceNames = loadSplit(usbDevice);
+                if (deviceNames == null || deviceNames.length < 2) {
+                    listener.failed("获取usb驱动信息失败");
+                    return;
+                }
+                UsbDeviceConnection usbDeviceConnection = manager.openDevice(usbDevice);
+                if (Thread.currentThread().isInterrupted()) {
+                    return;
+                }
+                if (usbDeviceConnection == null) {
+                    listener.failed("打开usb设备驱动失败");
+                    return;
+                }
+
+                long nativeId = CameraNativeUtils.nativeOpen(usbDeviceConnection.getFileDescriptor(), getBusNum(deviceNames), getDevAddress(deviceNames));
                 // 摄像头成功打开
-                listener.success(cameraDevice);
-            } catch (UvcCameraAccessException e) {
+                //如果打开成功，当前线程没有被中断，则返回数据，如果中断，则关闭当前
+                if (Thread.currentThread().isInterrupted()) {
+                    if (nativeId != 0L) {
+                        CameraNativeUtils.nativeClose(nativeId);
+                    }
+                    usbDeviceConnection.close();
+                    return;
+                }
+                if (nativeId == 0L) {
+                    listener.failed("usb设备打开失败");
+                    return;
+                }
+                listener.success(new ICameraDevice(nativeId, usbDevice.getDeviceName(), usbDeviceConnection));
+            } catch (Exception e) {
                 // 捕获异常并回调失败
                 listener.failed("打开摄像头时发生错误: " + e.getMessage());
             }
         });
-    }
-
-    /**
-     * 异步打开
-     *
-     * @param usbDevice 打开的usb设备
-     * @param listener  回调监听
-     */
-    public static void openCamera(UsbDevice usbDevice, ICameraOpenListener listener) {
-        if (checkPermission(Manifest.permission.CAMERA)) {
-            listener.failed("请检查权限");
-            return;
-        }
-        // 在子线程中执行打开摄像头的操作
-        openCamera(usbDevice, 10 * 1000, listener);
-    }
-
-
-    /**
-     * 等待打开设备
-     *
-     * @param usbDevice usb设备
-     * @param timeout   超时时间ms
-     * @return 打开后的操作对象
-     */
-    private static ICameraDevice waitOpenCamera(UsbDevice usbDevice, long timeout) throws UvcCameraAccessException {
-        synchronized (mLock) {
-            final CountDownLatch latch = new CountDownLatch(1);
-            CameraDeviceImpl cameraDevice = new CameraDeviceImpl(usbDevice);
-            AtomicBoolean isOpenSuccess = new AtomicBoolean(false);  // 使用 AtomicBoolean 来标识成功或失败
-            StringBuilder errorMessage = new StringBuilder(); // 用于存储失败的错误信息
-            runningDevices.put(cameraDevice, latch);//添加到打开队列
-            cameraDevice.open(new ICameraDevice.ICameraDeviceListener() {
-                @Override
-                public void onSuccess() {
-                    isOpenSuccess.set(true);
-                    latch.countDown();
-                }
-
-                @Override
-                public void onFailed(String message) {
-                    //打开失败
-                    isOpenSuccess.set(false);
-                    errorMessage.append(message);
-                    latch.countDown();
-                }
-            });
-            try {
-                if (!latch.await(timeout, TimeUnit.MILLISECONDS)) {
-                    cameraDevice.close();
-                    throw new UvcCameraAccessException("打开usb设备超时");
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();//恢复中断标志
-                throw new UvcCameraAccessException("等待设备响应时发生中断");
-            } finally {
-                runningDevices.remove(cameraDevice);//打开完毕，移除队列
-            }
-            if (!isOpenSuccess.get()) {
-                cameraDevice.close();
-                throw new UvcCameraAccessException(errorMessage.length() > 0 ? errorMessage.toString() : "设备打开失败");
-            }
-            return cameraDevice;
-        }
     }
 
     public static void cancel() {
@@ -250,6 +235,58 @@ public class CameraUvcManager {
                 runningDevices.clear();
             }
         } catch (Exception ignored) {
+        }
+    }
+
+
+    /**
+     * 检查权限
+     *
+     * @param permissions 对应需要验证的权限
+     * @return 权限是否已经拥有，false表示未拥有
+     */
+    private static boolean checkPermission(String... permissions) {
+        if (permissions == null) return true;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
+        }
+        for (String per : permissions) {
+            if (!checkSinglePermission(per)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean checkSinglePermission(String permission) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
+        }
+        return OverallContext.baseContext.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private static String[] loadSplit(UsbDevice device) {
+        String deviceName = device.getDeviceName();
+        if (TextUtils.isEmpty(deviceName)) {
+            return null;
+        }
+        return deviceName.split("/");
+
+    }
+
+    private static int getBusNum(String[] split) {
+        try {
+            return Integer.parseInt(split[split.length - 2]);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    private static int getDevAddress(String[] split) {
+        try {
+            return Integer.parseInt(split[split.length - 1]);
+        } catch (Exception e) {
+            return -1;
         }
     }
 }

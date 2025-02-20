@@ -11,15 +11,13 @@
 #include <variant>
 #include "android/native_window.h"
 
-CameraFactoryUsbImpl::CameraFactoryUsbImpl(uvc_context_t *context, uvc_device_t *device,
-        uvc_device_handle_t *deviceHandle, int fd)
-        : mContext(context), mDevice(device), mDeviceHandle(deviceHandle), mFd(fd),
-          mIsPreviewRunning(false), mPreviewWindow(nullptr),
-          mDisplayTransformState(TRANSFORM_IDENTITY),
-          frameMode(PREVIEW_FORMAT_YUY2),
-          requestWidth(DEFAULT_PREVIEW_WIDTH), requestHeight(DEFAULT_PREVIEW_HEIGHT),
-          requestMode(UVC_DATA_FORMAT_BGR),
-          frameBytes(DEFAULT_PREVIEW_WIDTH * DEFAULT_PREVIEW_HEIGHT * 2) {
+CameraFactoryUsbImpl::CameraFactoryUsbImpl(uvc_context_t *context, uvc_device_t *device, uvc_device_handle_t *deviceHandle, int fd) : mContext(context),
+        mDevice(device), mDeviceHandle(deviceHandle), mFd(fd), mIsPreviewRunning(false),
+        mPreviewWindow(nullptr), mDisplayTransformState(TRANSFORM_IDENTITY),
+        frameMode(PREVIEW_FORMAT_YUY2), onFrameMethod(nullptr), theVM(nullptr),
+        previewListener(nullptr), requestWidth(DEFAULT_PREVIEW_WIDTH),
+        requestHeight(DEFAULT_PREVIEW_HEIGHT), requestMode(UVC_DATA_FORMAT_BGR),
+        frameBytes(DEFAULT_PREVIEW_WIDTH * DEFAULT_PREVIEW_HEIGHT * 2) {
     // 初始化互斥锁
     pthread_mutex_init(&captureMutex, nullptr);
     pthread_cond_init(&captureCond, nullptr);
@@ -75,8 +73,7 @@ bool CameraFactoryUsbImpl::setPreviewSize(int width, int height, int format) {
     frameMode = format;
     uvc_stream_ctrl_t ctrl;
     // 设置完成后需要提前获取一次，否则打开时无法正常获取到流
-    uvc_error_t ret = uvc_get_stream(mDeviceHandle, &ctrl, getPreviewFormat(), requestWidth,
-                                     requestHeight);
+    uvc_error_t ret = uvc_get_stream(mDeviceHandle, &ctrl, getPreviewFormat(), requestWidth, requestHeight);
     LOG_D("设置预览分辨率同步获取预览流-setPreviewSize-结果:%d", ret);
     return true;
 }
@@ -90,8 +87,7 @@ bool CameraFactoryUsbImpl::setDisplaySurface(ANativeWindow *preview_window) {
             }
             mPreviewWindow = preview_window;
             if (LIKELY(mPreviewWindow)) {
-                ANativeWindow_setBuffersGeometry(mPreviewWindow, frameWidth, frameHeight,
-                                                 UVC_FORMAT_FRAME_WINDOW);
+                ANativeWindow_setBuffersGeometry(mPreviewWindow, frameWidth, frameHeight, UVC_FORMAT_FRAME_WINDOW);
             }
             ImgUtils::setDisplayTransformState(mPreviewWindow, mDisplayTransformState);
         }
@@ -103,7 +99,7 @@ bool CameraFactoryUsbImpl::setDisplaySurface(ANativeWindow *preview_window) {
 bool CameraFactoryUsbImpl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) {
     this->requestMode = mode;
     pthread_mutex_lock(&captureMutex);
-    theVM = vm;
+    this->theVM = vm;
     if (!env->IsSameObject(previewListener, listener)) {
         onFrameMethod = nullptr;
         if (previewListener) {
@@ -120,15 +116,17 @@ bool CameraFactoryUsbImpl::setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobje
             if (!onFrameMethod) {
                 env->DeleteGlobalRef(listener);
                 previewListener = nullptr;
+                LOG_E("设置监听失败");
                 return false;
             }
         } else {
             env->DeleteGlobalRef(listener);
             onFrameMethod = nullptr;
             previewListener = nullptr;
+            LOG_E("监听设置失败，listener为null");
         }
     } else {
-        LOG_D("callbackFrame-IsSameObject-false");
+        LOG_E("当前为同一个对象，无需设置");
     }
     pthread_mutex_unlock(&captureMutex);
     return true;
@@ -404,8 +402,8 @@ std::variant<std::monostate, int, std::string> CameraFactoryUsbImpl::getParamete
             break;
         case CAMERA_PARAMETER_AUTO_WHITE_BALANCE:
             uint8_t autoWhiteBalance;
-            if (uvc_get_white_balance_temperature_auto(mDeviceHandle, &autoWhiteBalance,
-                                                       UVC_GET_CUR) == UVC_SUCCESS) {
+            if (uvc_get_white_balance_temperature_auto(mDeviceHandle, &autoWhiteBalance, UVC_GET_CUR) ==
+                UVC_SUCCESS) {
                 return autoWhiteBalance; // 说明开启的自动模式
             }
             break;
@@ -457,8 +455,7 @@ bool CameraFactoryUsbImpl::stopPreview() {
 
 int CameraFactoryUsbImpl::prepare_preview(uvc_stream_ctrl_t *ctrl) {
     LOG_D("获取对应的流控制器-size:%d-%d", requestWidth, requestHeight);
-    uvc_error_t ret = uvc_get_stream(mDeviceHandle, ctrl, getPreviewFormat(), requestWidth,
-                                     requestHeight);
+    uvc_error_t ret = uvc_get_stream(mDeviceHandle, ctrl, getPreviewFormat(), requestWidth, requestHeight);
     LOG_D("获取对应的流控制器-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
@@ -475,16 +472,14 @@ int CameraFactoryUsbImpl::prepare_preview(uvc_stream_ctrl_t *ctrl) {
     }
     frameBytes = getPreviewBytesSize();
     if (mPreviewWindow) {
-        ANativeWindow_setBuffersGeometry(mPreviewWindow, frameWidth, frameHeight,
-                                         UVC_FORMAT_FRAME_WINDOW);
+        ANativeWindow_setBuffersGeometry(mPreviewWindow, frameWidth, frameHeight, UVC_FORMAT_FRAME_WINDOW);
     }
     return UVC_SUCCESS;
 }
 
 int CameraFactoryUsbImpl::do_preview(uvc_stream_ctrl_t *ctrl) {
     clearCaptureFrame();
-    uvc_error_t ret = uvc_start_streaming(mDeviceHandle, ctrl, uvc_stream_callback, (void *) this,
-                                          0);
+    uvc_error_t ret = uvc_start_streaming(mDeviceHandle, ctrl, uvc_stream_callback, (void *) this, 0);
     LOG_D("开启预览流-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
@@ -506,9 +501,7 @@ void CameraFactoryUsbImpl::uvc_stream_callback(uvc_frame_t *frame, void *vptr_ar
     }
     if ((frame->frame_format != UVC_FRAME_FORMAT_MJPEG &&
          frame->data_bytes < preview->frameBytes) || !frame->data) {
-        LOG_E("当前数据大小不符合；；data_bytes:%zu,frameBytes:%zu",
-              frame->data_bytes,
-              preview->frameBytes);
+        LOG_E("当前数据大小不符合；；data_bytes:%zu,frameBytes:%zu", frame->data_bytes, preview->frameBytes);
         return;
     }
     // 获取bgr类型的数据数组
@@ -678,9 +671,7 @@ std::string CameraFactoryUsbImpl::getSupportedPreviewSizes() {
             if (formatType == -1)
                 continue;
             DL_FOREACH(fmt_desc->frame_descs, frame_desc) {
-                LOG_D("=======================分辨率%d=%d*%d====================",
-                      formatType,
-                      frame_desc->wWidth, frame_desc->wHeight);
+                LOG_D("=======================分辨率%d=%d*%d====================", formatType, frame_desc->wWidth, frame_desc->wHeight);
                 writer.StartObject();
                 // width
                 writer.String("width");
@@ -721,8 +712,7 @@ void CameraFactoryUsbImpl::callbackFrame(uvc_frame_t *frame, JNIEnv *env) {
         LOG_D("callbackFrame-return");
         return;
     }
-    auto outImg = ImgUtils::bgr2Any((uint8_t *) frame->data, frame->width, frame->height,
-                                    requestMode);
+    auto outImg = ImgUtils::bgr2Any((uint8_t *) frame->data, frame->width, frame->height, requestMode);
     if (outImg.empty()) {
         return;
     }
