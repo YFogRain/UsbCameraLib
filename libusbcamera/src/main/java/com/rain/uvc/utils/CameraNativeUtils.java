@@ -40,6 +40,13 @@ public class CameraNativeUtils {
     public static native long nativeOpen(int fd, int busNum, int devAddress);
 
     /**
+     * 读取可使用的v4l2的列表信息
+     *
+     * @return 返回列表地址
+     */
+    public static native String[] nativeLoadV4L2Devices();
+
+    /**
      * 根据对应的FileDescriptor连接指定设备
      *
      * @param videoPath 对应打开的路径

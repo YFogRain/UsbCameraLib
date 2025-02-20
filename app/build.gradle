@@ -73,4 +73,7 @@ dependencies {
     implementation libs.activity.ktx
     implementation libs.gson
     implementation project(":libusbcamera")
+
+    implementation libs.navigation.fragment.ktx
+    implementation libs.navigation.ui.ktx
 }

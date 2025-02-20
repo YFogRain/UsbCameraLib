@@ -1,77 +1,44 @@
 package com.rain.uvc.demo.base.activity
 
-import android.os.Bundle
-import androidx.annotation.CallSuper
 import androidx.annotation.LayoutRes
-import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
 import androidx.databinding.ViewDataBinding
-import com.rain.uvc.demo.base.viewModel.BaseViewModel
+import com.rain.uvc.demo.utils.singleClick
 
 /**
- * dataBinding使用父类
+ * @author yuan
+ * @createTime: 2024/10/29
+ * @des
  */
-abstract class BaseDataBindActivity<DB : ViewDataBinding> : AppCompatActivity() {
-	protected lateinit var mBinding: DB
-	protected open val mViewModel: BaseViewModel? = null
-	
+abstract class BaseDataBindActivity<DB: ViewDataBinding> : BaseActivity() {
+	protected lateinit var mBinding:DB
 	/**
-	 * 初始化layout的id
+	 * 布局中设置的绑定的id
+	 */
+	protected open fun loadVariableId(): Int = -1 //佈局内的id设置null代表不需要dataBind
+	/**
+	 * 布局id
 	 */
 	@LayoutRes
-	protected abstract fun initLayoutResId(): Int
-	
-	/**
-	 * 初始化双向绑定id
-	 */
-	protected open fun initVariableId() = -1
-	
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		mBinding = DataBindingUtil.setContentView(this, initLayoutResId())
-		initViewDataBinding()
-		initIntent(savedInstanceState)
-		init()
-	}
-	
-	private fun initViewDataBinding() {
-		if (mViewModel != null) initVariableId().also {
-			if (it != -1) mBinding.setVariable(it, mViewModel)
-		}
-		mBinding.lifecycleOwner = this
-		initModelObserve()
-	}
-	
-	@CallSuper
-	open fun init() {
-		initView()
-		initEvent()
-		initData()
-	}
+	protected abstract fun loadLayoutResId(): Int //布局id
 	
 	/**
 	 * 初始化绑定model中的LiveData
 	 */
 	open fun initModelObserve() = Unit
 	
-	/**
-	 * 初始化获取intent传递的数据
-	 */
-	open fun initIntent(savedInstanceState: Bundle?) = Unit
+	override fun initCreateView() {
+		mBinding = DataBindingUtil.setContentView(this, loadLayoutResId())
+		mBinding.root.singleClick { hideInput() }
+	}
 	
-	/**
-	 * 初始化点击事件
-	 */
-	open fun initEvent() = Unit
-	
-	/**
-	 * 初始化View
-	 */
-	open fun initView() = Unit
-	
-	/**
-	 * 初始化数据
-	 */
-	open fun initData() = Unit
-	
+	override fun initMVVMState() {
+		super.initMVVMState()
+		mBinding.run {
+			val variableId = loadVariableId()
+			if (variableId != -1 && mViewModel != null) setVariable(variableId, mViewModel)
+			lifecycleOwner = this@BaseDataBindActivity
+		}
+		initModelObserve()
+	}
 }

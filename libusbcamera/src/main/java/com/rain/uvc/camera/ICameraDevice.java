@@ -1,148 +1,149 @@
 package com.rain.uvc.camera;
 
 import android.annotation.SuppressLint;
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.TextureView;
 
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.state.CameraDataFormat;
-import com.rain.uvc.state.CameraPreviewFormat;
 import com.rain.uvc.provider.OverallContext;
+import com.rain.uvc.state.CameraDataFormat;
 import com.rain.uvc.state.CameraParameter;
+import com.rain.uvc.state.CameraPreviewFormat;
 import com.rain.uvc.state.CameraSupportParameters;
+import com.rain.uvc.utils.CameraNativeUtils;
 
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author yuan
- * @createTime: 2025/1/10
- * @des 对外使用的CameraDevice
+ * @createTime: 2025/2/20
+ * @des
  */
-public abstract class ICameraDevice {
-    private static final String ACTION_USB_PERMISSION = "com.dc.camera.uvc.permission.request";
-    //当前缓存的usb设备信息
-    protected final AtomicReference<UsbDevice> mUsbDevice = new AtomicReference<>();
-    //打开结果回调
-    private ICameraDeviceListener iOpenListener;
+public class ICameraDevice {
+    //设备名称，如果为video时为设备路径，usb时通过name检查当前是否是同一个值的回调
+    protected static AtomicLong mNativeAtomic = new AtomicLong(0L);
+    private IDetachedCloseListener iDetachedCloseListener;
     //当前是否正在运行预览
     protected boolean isPreviewRunning;
-    //当前打开状态
-    protected volatile boolean currentOpenIngState;
+    //打开结果回调
+    private UsbDeviceConnection iUsbDeviceConnect;
     //当前是否注册广播成功
     private volatile boolean isReceiverSuccess;
-    //usb设备移除监听，正在打开时，不会回调此方法
-    private IDetachedCloseListener iDetachedCloseListener;
 
-    //usb回调广播，监听权限回调，断开连接
-    private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+    private final String mDeviceName;
+
+
+    //usb移除回调监听
+    private final BroadcastReceiver usbDetachedReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent == null) return;
             String action = intent.getAction();
-            if (TextUtils.isEmpty(action)) return;
+            if (TextUtils.isEmpty(action) || !action.equals(UsbManager.ACTION_USB_DEVICE_DETACHED)) {
+                //当前的action不是我们需要的action
+                return;
+            }
+            //获取传递进来的usb设备
             UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-            UsbDevice localDevice = mUsbDevice.get();
-            if (usbDevice == null || localDevice == null || !localDevice.getDeviceName().equals(usbDevice.getDeviceName())) {
+            if (usbDevice == null || !mDeviceName.equals(usbDevice.getDeviceName())) {
                 return;
             }
-            //设备移除
-            if (action.equals(UsbManager.ACTION_USB_DEVICE_DETACHED)) {
-                if (currentOpenIngState) {
-                    resultOpen(false, "usb设备被移除");
-                } else {
-                    close();
-                    //回调设备移除监听
-                    if (iDetachedCloseListener != null) {
-                        iDetachedCloseListener.onDetach();
-                    }
-
-                }
-                return;
+            //说明当前是需要的类型，直接回调结果
+            if (iDetachedCloseListener != null) {
+                close();
+                iDetachedCloseListener.onDetach();
             }
-            //如果不是usb权限回调，则直接忽略,如果不是正在打开，则也不需要处理
-            if (!action.equals(ACTION_USB_PERMISSION) || !currentOpenIngState) return;
-            boolean isGranted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
-            Log.d("CameraDevice", "收到权限回调啦：：" + isGranted);
-            if (isGranted) {
-                openCamera();
-            } else {
-                resultOpen(false, "usb授权失败");
-            }
-
         }
     };
 
-    public ICameraDevice(UsbDevice device) {
-        this.mUsbDevice.set(device);
+    public ICameraDevice(long nativeId, String deviceName, UsbDeviceConnection connection) {
+        mNativeAtomic.set(nativeId);
+        this.mDeviceName = deviceName;
+        this.iUsbDeviceConnect = connection;
+        if (connection != null) {
+            initReceiver();
+        }
     }
-
 
     /**
-     * 打开对应摄像头驱动
-     *
-     * @param listener 打开结果监听
+     * 关闭摄像头
      */
-    public void open(ICameraDeviceListener listener) {
-        if (currentOpenIngState || cameraIsOpen()) {
-            //当前正在打开中，直接返回
-            Log.e("UvcCamera", "当前设备正在打开，请稍后重试");
-            listener.onFailed("当前设备正在打开，请稍后重试");
-            return;
+    public boolean close() {
+        unReceiver();
+        this.iDetachedCloseListener = null;
+        long nativeId = mNativeAtomic.get();
+        if (nativeId != 0L) { //释放native层的资源
+            CameraNativeUtils.nativeClose(nativeId);
         }
-        currentOpenIngState = true;
-        initReceiver();
-        this.iOpenListener = listener;
-        //获取usb管理实例，来校验权限
-        UsbManager manager = (UsbManager) OverallContext.baseContext.getSystemService(Context.USB_SERVICE);
-        UsbDevice usbDevice = mUsbDevice.get();
-        if (usbDevice == null) {
-            Log.e("UvcCamera", "未获取到对应的usb设备驱动");
-            resultOpen(false, "未获取到对应的usb设备驱动");
-            return;
+        mNativeAtomic.set(0L);
+        if (iUsbDeviceConnect != null) {
+            iUsbDeviceConnect.close();
+            iUsbDeviceConnect = null;
         }
-        //判断是否存在usb权限，如果没有，则需要授权
-        if (!manager.hasPermission(usbDevice)) {
-            Log.e("UvcCamera", "没有usb权限，开始检查权限");
-            PendingIntent broadcast = PendingIntent.getBroadcast(OverallContext.baseContext, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_UPDATE_CURRENT);
-            manager.requestPermission(usbDevice, broadcast);
-            return;
-        }
-        //如果有权限，则直接打开
-        openCamera();
+        return true;
     }
 
-    public boolean close() {
-        //移除监听器
-        unReceiver();
-        currentOpenIngState = false;
-        iDetachedCloseListener = null;
-        boolean result = closeCamera();
-        iOpenListener = null;
+    /**
+     * 开启预览
+     */
+    public boolean startPreview() {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        if (this.isPreviewRunning) {
+            return true;
+        }
+        if (!CameraNativeUtils.nativeStartPreview(nativeId)) {//如果开启失败，则返回false
+            return false;
+        }
+        this.isPreviewRunning = true;
+        return true;
+    }
+
+    /**
+     * 关闭预览
+     */
+    public boolean stopPreview() {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        boolean result = CameraNativeUtils.nativeStopPreview(nativeId);
+        this.isPreviewRunning = false;
         return result;
     }
 
-    protected abstract void openCamera();
+    /**
+     * 当前相机是否已经打开
+     */
+    public boolean cameraIsOpen() {
+        return mNativeAtomic.get() != 0L;
+    }
 
-    protected abstract boolean closeCamera();
-
-    public abstract boolean startPreview();
-
-
-    public abstract boolean stopPreview();
-
-    public abstract boolean setPreviewSize(int width, int height, CameraPreviewFormat formatState);
-
+    /**
+     * 设置预览分辨率
+     *
+     * @param width  宽
+     * @param height 高
+     * @param format 使用的解码类型，当前只支持yuy2/mjpeg
+     */
+    public boolean setPreviewSize(int width, int height, CameraPreviewFormat format) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        return CameraNativeUtils.nativeSetPreviewSize(nativeId, width, height, format.getValue());
+    }
 
     /**
      * 设置对应的预览控件
@@ -150,7 +151,13 @@ public abstract class ICameraDevice {
      * @param surface 当前使用的预览控件
      * @return 是否设置成功
      */
-    public abstract boolean setDisplaySurface(Surface surface);
+    public boolean setDisplaySurface(Surface surface) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        return CameraNativeUtils.nativeSetDisplaySurface(nativeId, surface);
+    }
 
     /**
      * 设置对应的预览控件
@@ -158,7 +165,9 @@ public abstract class ICameraDevice {
      * @param view 当前使用的预览控件
      * @return 是否设置成功
      */
-    public abstract boolean setDisplaySurface(SurfaceView view);
+    public boolean setDisplaySurface(SurfaceView view) {
+        return setDisplaySurface(view.getHolder().getSurface());
+    }
 
     /**
      * 设置对应的预览控件
@@ -166,78 +175,56 @@ public abstract class ICameraDevice {
      * @param view 当前使用的预览控件
      * @return 是否设置成功
      */
-    public abstract boolean setDisplaySurface(TextureView view);
+    public boolean setDisplaySurface(TextureView view) {
+        return setDisplaySurface(new Surface(view.getSurfaceTexture()));
+    }
 
     /**
-     * 设置对应的参数属性
-     *
-     * @param key   支持获取的参数key
-     * @param <T>   当前返回的参数对应的类型
-     * @param value 需要设置的值
-     * @return 返回对应的值，根据key的具体类型来
+     * 设置预览监听
      */
-    public abstract <T> boolean setParameter(CameraParameter.Key<T> key, T value);
+    public boolean setPreviewListener(IFrameListener listener, CameraDataFormat format) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        return CameraNativeUtils.setPreviewListener(nativeId, listener, format.getValue());
+    }
+
 
     /**
-     * 获取对应的参数属性
-     *
-     * @param key 支持获取的参数key
-     * @param <T> 当前返回的参数对应的类型
-     * @return 返回对应的值，根据key的具体类型来
+     * 设置usb摄像头断开关闭回调
      */
-    public abstract <T> T getParameter(CameraParameter.Key<T> key);
-
-    /**
-     * 获取支持的参数信息
-     *
-     * @param key 支持获取的参数key
-     * @param <T> 当前返回的参数对应的类型
-     * @return 返回对应的值，根据key的具体类型来
-     */
-    public abstract <T> T getSupportedParameter(CameraSupportParameters.Key<T> key);
-
-    /**
-     * 设置设备断开回调监听
-     *
-     * @param listener 回到监听器
-     */
-    public void setDetachedCloseListener(IDetachedCloseListener listener) {
+    public boolean setDetachedCloseListener(IDetachedCloseListener listener) {
         this.iDetachedCloseListener = listener;
+        return true;
     }
 
     /**
-     * 当前是否已经打开
+     * 设置参数
      */
-    public abstract boolean cameraIsOpen();
-
-    /**
-     * 当前是否正在预览
-     */
-    public boolean cameraIsPreviewing() {
-        return this.isPreviewRunning;
+    public <V> Boolean setParameter(CameraParameter.Key<V> key, V value) {
+        return CameraNativeUtils.setParameter(mNativeAtomic.get(), key, value);
     }
 
     /**
-     * 设置预览监听，默认返回BGR格式数据
+     * 获取参数
      */
-    public boolean setPreviewListener(IFrameListener listener) {
-        return this.setPreviewListener(listener, CameraDataFormat.BGR);
+    public <T> T getParameter(CameraParameter.Key<T> key) {
+        return CameraNativeUtils.getParameter(mNativeAtomic.get(), key);
     }
 
     /**
-     * 设置对应的预览回调
-     *
-     * @param listener 预览回调监听
+     * 获取支持的类型列表
      */
-    public abstract boolean setPreviewListener(IFrameListener listener, CameraDataFormat format);
+    public <T> T getSupportedParameter(CameraSupportParameters.Key<T> key) {
+        return CameraNativeUtils.getSupportedParameter(mNativeAtomic.get(), key);
+    }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private synchronized void initReceiver() {
         if (isReceiverSuccess) return;
-        IntentFilter intentFilter = new IntentFilter(ACTION_USB_PERMISSION);
-        intentFilter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         try {
-            OverallContext.baseContext.registerReceiver(usbReceiver, intentFilter);
+            OverallContext.baseContext.registerReceiver(usbDetachedReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED));
         } catch (Exception ignored) {
         }
         isReceiverSuccess = true;
@@ -247,29 +234,11 @@ public abstract class ICameraDevice {
     private synchronized void unReceiver() {
         if (isReceiverSuccess) {
             try {
-                OverallContext.baseContext.unregisterReceiver(usbReceiver);
+                OverallContext.baseContext.unregisterReceiver(usbDetachedReceiver);
             } catch (Exception ignored) {
             }
         }
         isReceiverSuccess = false;
-    }
-
-    protected void resultOpen(boolean result, String message) {
-        currentOpenIngState = false;
-        if (iOpenListener == null) return;
-        if (result) {
-            iOpenListener.onSuccess();
-            iOpenListener = null;
-            return;
-        }
-        iOpenListener.onFailed(message);
-        iOpenListener = null;
-    }
-
-    public interface ICameraDeviceListener {
-        void onSuccess();
-
-        void onFailed(String message);
     }
 }
 

@@ -5,8 +5,8 @@ package com.rain.uvc.state;
  * @createTime: 2025/1/13
  * @des
  */
-public class UvcCameraAccessException extends RuntimeException {
-    public UvcCameraAccessException(String message) {
+public class CameraStateException extends RuntimeException {
+    public CameraStateException(String message) {
         super(message);
     }
 }

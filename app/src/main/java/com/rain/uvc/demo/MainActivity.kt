@@ -1,67 +1,23 @@
 package com.rain.uvc.demo
 
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.content.res.Configuration
-import android.util.Log
-import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.LinearLayoutManager
+import android.os.Bundle
+import androidx.navigation.NavController
+import androidx.navigation.findNavController
 import com.rain.uvc.CameraUvcManager
-import com.rain.uvc.demo.base.activity.BaseDataBindActivity
-import com.rain.uvc.demo.base.adapter.BaseRecAdapter
-import com.rain.uvc.demo.base.viewModel.BaseViewModel
-import com.rain.uvc.demo.camera.CameraActivity
-import com.rain.uvc.demo.databinding.ActivityMainBinding
-import com.rain.uvc.demo.utils.GsonHelper
+import com.rain.uvc.demo.base.activity.BaseActivity
 
-class MainActivity : BaseDataBindActivity<ActivityMainBinding>() {
-	override val mViewModel: BaseViewModel? = null
-	override fun initLayoutResId() = R.layout.activity_main
-	private val permissionCall = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-		if (!it) {
-			Toast.makeText(this, "请检查摄像头权限", Toast.LENGTH_SHORT).show()
-		}
-	}
-	private val testList = mutableListOf("开启预览")
-	private val adapter by lazy {
-		object : BaseRecAdapter<String>() {
-			override fun getLayoutResId(viewType: Int) = R.layout.item_test_click_view
-			override fun getVariableId(viewType: Int) = BR.itemTestModel
-		}
+class MainActivity : BaseActivity() {
+	private lateinit var mNavController: NavController
+	override fun initCreateView() {
+		setContentView(R.layout.activity_main)
+		CameraUvcManager.debuggable(true)
 	}
 	
-	override fun initView() {
-		initRec()
-		//申请权限
-		if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-			permissionCall.launch(android.Manifest.permission.CAMERA)
-		}
+	override fun initializeEnd(savedInstanceState: Bundle?) {
+		mNavController = findNavController(R.id.nav_home_container)
 	}
 	
-	private fun initRec() {
-		mBinding.recTestClick.layoutManager = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-			GridLayoutManager(this, 4)
-		} else LinearLayoutManager(this)
-		adapter.setOnItemClickListener {
-			itemClick(adapter.getItemData(it))
-		}
-		mBinding.recTestClick.adapter = adapter
-		adapter.setData(testList)
-	}
-	
-	private fun itemClick(str: String?) {
-		when (str) {
-			"开启预览" -> {
-				if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-					permissionCall.launch(android.Manifest.permission.CAMERA)
-				} else startActivity(Intent(this, CameraActivity::class.java))
-			}
-			else -> {
-				Toast.makeText(this, "未知操作", Toast.LENGTH_SHORT).show()
-			}
-		}
+	override fun onSupportNavigateUp(): Boolean {
+		return mNavController.navigateUp() || super.onSupportNavigateUp()
 	}
 }
