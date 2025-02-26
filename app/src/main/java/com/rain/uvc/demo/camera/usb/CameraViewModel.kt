@@ -8,10 +8,13 @@ import com.rain.uvc.CameraUvcManager
 import com.rain.uvc.camera.ICameraDevice
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.GsonHelper
+import com.rain.uvc.listener.IFrameListener
+import com.rain.uvc.state.CameraDataFormat
 import com.rain.uvc.state.CameraPreviewFormat
 import com.rain.uvc.state.CameraSupportParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -36,6 +39,7 @@ class CameraViewModel : BaseViewModel() {
 			Log.d("cameraPreviewUpdateTag", "分辨率集合:${GsonHelper.getHelper().modeToJson(supportedParameter)}")
 			//设置预览分辨率
 			cameraDevice.setPreviewSize(640, 480, CameraPreviewFormat.YUY2)
+			cameraDevice.setPreviewListener(IFrameListener { width, height, frame -> }, CameraDataFormat.BGR)
 			block.invoke()
 		}
 	}

@@ -24,9 +24,6 @@ import kotlin.coroutines.resume
  */
 val appLifecycleScope by lazy { ProcessLifecycleOwner.get().lifecycleScope }
 
-fun <VB : ViewDataBinding> ViewGroup.getBind(@LayoutRes layoutResId: Int): VB =
-        DataBindingUtil.inflate(LayoutInflater.from(context), layoutResId, this, false)
-
 fun Activity.isOrientationPortrait(): Boolean {
     return resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 }

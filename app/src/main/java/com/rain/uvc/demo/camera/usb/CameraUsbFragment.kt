@@ -4,7 +4,7 @@ import android.hardware.usb.UsbDevice
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
-import androidx.fragment.app.viewModels
+import androidx.core.content.ContextCompat
 import com.rain.uvc.demo.R
 import com.rain.uvc.demo.base.fragment.BaseDataBindFragment
 import com.rain.uvc.demo.databinding.FgCameraBinding
@@ -15,12 +15,13 @@ import com.rain.uvc.demo.utils.popStack
  * @createTime: 2025/2/19
  * @des usb类型相机代码
  */
-class CameraUsbFragment : BaseDataBindFragment<FgCameraBinding>() {
-	override val mViewModel by viewModels<CameraViewModel>()
+class CameraUsbFragment : BaseDataBindFragment<FgCameraBinding, CameraViewModel>() {
 	
 	override fun loadLayoutResId(): Int = R.layout.fg_camera
 	
-	override fun initializeView(savedInstanceState: Bundle?) {
+	override fun initializeCreated(savedInstanceState: Bundle?) {
+		setStatusBarColor(ContextCompat.getColor(requireContext(), R.color.black))
+		setStatusBarTextColor(false)
 		val cameraId = arguments?.getParcelable<UsbDevice>("cameraId")
 		Log.d("CameraUsbFragment", "cameraId:$cameraId")
 		if (cameraId == null) {
@@ -29,8 +30,8 @@ class CameraUsbFragment : BaseDataBindFragment<FgCameraBinding>() {
 			return
 		}
 		mBinding.surfaceView.post {
-			mViewModel.openCamera(cameraId) {
-				mViewModel.startPreview(mBinding.surfaceView)
+			viewModel.openCamera(cameraId) {
+				viewModel.startPreview(mBinding.surfaceView)
 			}
 		}
 	}

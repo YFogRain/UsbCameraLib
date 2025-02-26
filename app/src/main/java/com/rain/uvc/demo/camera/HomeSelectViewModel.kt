@@ -10,6 +10,7 @@ import com.rain.uvc.provider.OverallContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 /**
  * @author yuan
@@ -29,11 +30,20 @@ class HomeSelectViewModel : BaseViewModel() {
 			deviceList.add(loadCamera1())
 			deviceList.add(loadCamera2())
 			deviceList.add(loadCameraUsb())
+			deviceList.add(loadLocale())
+			
 			deviceList.add(loadCameraV4L2())
 			withContext(Dispatchers.Main) {
 				adapter.setData(deviceList)
 			}
 		}
+	}
+	
+	private fun loadLocale(): HomeSelectMode {
+		val homeSelectMode = HomeSelectMode("语言设置", mutableListOf())
+		homeSelectMode.devices.add(HomeDeviceMode("中文", CameraDeviceMode.LOCALE(Locale.CHINESE)))
+		homeSelectMode.devices.add(HomeDeviceMode("英文", CameraDeviceMode.LOCALE(Locale.ENGLISH)))
+		return homeSelectMode
 	}
 	
 	private fun loadCamera1(): HomeSelectMode {

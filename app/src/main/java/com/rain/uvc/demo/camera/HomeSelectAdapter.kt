@@ -16,6 +16,7 @@ import com.rain.uvc.demo.databinding.ItemHomeSelectGroupBinding
 import com.rain.uvc.demo.utils.getBind
 import com.rain.uvc.demo.utils.singleClick
 import kotlinx.parcelize.Parcelize
+import java.util.Locale
 
 /**
  * @author yuan
@@ -122,4 +123,5 @@ sealed class CameraDeviceMode : Parcelable {
 	data class Native2(val cameraId: String) : CameraDeviceMode()
 	data class USB(val device: UsbDevice) : CameraDeviceMode()
 	data class V4L2(val videoPath: String) : CameraDeviceMode()
+	data class LOCALE(val locale: Locale) : CameraDeviceMode()
 }

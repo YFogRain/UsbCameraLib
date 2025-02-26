@@ -2,10 +2,9 @@ package com.rain.uvc.demo.camera.genesis.camera1
 
 import android.os.Bundle
 import android.widget.Toast
-import androidx.fragment.app.viewModels
+import androidx.core.content.ContextCompat
 import com.rain.uvc.demo.R
 import com.rain.uvc.demo.base.fragment.BaseDataBindFragment
-import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.databinding.FgCameraBinding
 import com.rain.uvc.demo.utils.popStack
 
@@ -14,8 +13,7 @@ import com.rain.uvc.demo.utils.popStack
  * @createTime: 2025/2/19
  * @des usb类型相机代码
  */
-class Camera1Fragment : BaseDataBindFragment<FgCameraBinding>() {
-	override val mViewModel by viewModels<CameraViewModel>()
+class Camera1Fragment : BaseDataBindFragment<FgCameraBinding, CameraViewModel>() {
 	
 	override fun loadLayoutResId(): Int = R.layout.fg_camera
 	
@@ -24,7 +22,9 @@ class Camera1Fragment : BaseDataBindFragment<FgCameraBinding>() {
 		return true
 	}
 	
-	override fun initializeView(savedInstanceState: Bundle?) {
+	override fun initializeCreated(savedInstanceState: Bundle?) {
+		setStatusBarColor(ContextCompat.getColor(requireContext(), R.color.black))
+		setStatusBarTextColor(false)
 		val cameraId = arguments?.getInt("cameraId")
 		if (cameraId == null) {
 			Toast.makeText(requireContext(), "未输入id", Toast.LENGTH_SHORT).show()
@@ -32,8 +32,8 @@ class Camera1Fragment : BaseDataBindFragment<FgCameraBinding>() {
 			return
 		}
 		mBinding.surfaceView.post {
-			mViewModel.openCamera(cameraId) {
-				mViewModel.startPreview(mBinding.surfaceView)
+			viewModel.openCamera(cameraId) {
+				viewModel.startPreview(mBinding.surfaceView)
 			}
 		}
 	}
