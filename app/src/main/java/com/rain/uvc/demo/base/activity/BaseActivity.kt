@@ -1,7 +1,6 @@
 package com.rain.uvc.demo.base.activity
 
 import android.content.Context
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -77,11 +76,6 @@ abstract class BaseActivity<VM : BaseViewModel> : AppCompatActivity() {
 	 */
 	protected fun dismissDialogLoad() {
 	}
-	
-	/**
-	 * 是否是白色标题栏
-	 */
-	open val whiteStateBarText = true
 	
 	override fun onDestroy() {
 		dismissDialogLoad()

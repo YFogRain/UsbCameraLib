@@ -16,6 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import com.rain.uvc.demo.base.activity.BaseActivity
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.conversionViewModel
+import com.rain.uvc.demo.utils.viewLifeScope
 
 abstract class BaseFragment<VM : BaseViewModel> : Fragment() {
 	/**
@@ -83,13 +84,13 @@ abstract class BaseFragment<VM : BaseViewModel> : Fragment() {
 	protected open fun isCreatedViewModel(): Boolean = true
 	
 	/**
-	 * 初始化viewModel的loading
+	 * 初始化viewModel的loadingx
 	 */
 	@CallSuper
 	protected open fun initMVVMState() {
 		//设置loading回调
 		if (!isCreatedViewModel()) return
-		viewModel.setDialogStateChange(this.viewLifecycleOwner.lifecycleScope) {
+		viewModel.setDialogStateChange(viewLifeScope) {
 			if (it) showDialogLoad() else dismissDialogLoad()
 		}
 	}

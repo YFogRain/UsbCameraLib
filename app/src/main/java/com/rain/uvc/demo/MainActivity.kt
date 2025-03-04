@@ -7,6 +7,7 @@ import androidx.navigation.findNavController
 import com.rain.uvc.CameraUvcManager
 import com.rain.uvc.demo.base.activity.BaseActivity
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
+import com.rain.uvc.demo.work.WorkHelper
 
 class MainActivity : BaseActivity<BaseViewModel>() {
 	private lateinit var mNavController: NavController
@@ -15,6 +16,7 @@ class MainActivity : BaseActivity<BaseViewModel>() {
 		setStatusBarTextColor(true)
 		setContentView(R.layout.activity_main)
 		CameraUvcManager.debuggable(true)
+		WorkHelper.startWork()
 	}
 	
 	override fun initializeCreated(savedInstanceState: Bundle?) {
@@ -28,7 +30,4 @@ class MainActivity : BaseActivity<BaseViewModel>() {
 	override fun isCreatedViewModel(): Boolean {
 		return false
 	}
-	
-	override val whiteStateBarText: Boolean
-		get() = true
 }
