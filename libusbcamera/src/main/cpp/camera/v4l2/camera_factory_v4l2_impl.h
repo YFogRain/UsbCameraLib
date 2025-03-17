@@ -11,9 +11,9 @@
 #include "opencv2/core/mat.hpp"
 #include <cstdint>
 #include <linux/videodev2.h>
-#include "ObjectArray.h"
 #include <variant>
 #include "android/native_window.h"
+#include "deque"
 
 struct Buffer {
     void *start;
@@ -39,9 +39,11 @@ public:
 
     bool setDisplaySurface(ANativeWindow *preview_window) override; // 设置预览控件
 
-    bool setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) override; // 设置监听回调
+    bool
+    setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int mode) override; // 设置监听回调
 
-    std::variant<std::monostate, std::pair<int, int>, std::string, int> getSupportParameters(int type) override;
+    std::variant<std::monostate, std::pair<int, int>, std::string, int>
+    getSupportParameters(int type) override;
 
     bool setParameter(int type, int value) override; // 设置参数值
 
@@ -82,8 +84,7 @@ private:
     pthread_mutex_t callbackMutex; // 回调线程的互斥锁
     pthread_cond_t callbackCond;   // 回调线程等待专用的条件变量
 
-    ObjectArray<video_frame_t *> previewFrames; // 当前帧缓存，读取绘制使用
-
+    std::deque<video_frame_t *> previewFrames; // 当前帧缓存，读取绘制使用
     video_frame_t *lastFrame; // 最后一帧数据，需要发送给外部的
 
     static void *capture_thread_func(void *vptr_args); // 当前捕获线程的回调

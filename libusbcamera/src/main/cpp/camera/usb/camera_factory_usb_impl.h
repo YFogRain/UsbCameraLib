@@ -7,11 +7,12 @@
 #ifndef UVCCAMERA_CAMERA_FACTORY_USB_IMPL_H
 #define UVCCAMERA_CAMERA_FACTORY_USB_IMPL_H
 
-#include "ObjectArray.h"
 #include "i_camera_factory.h"
 #include "libuvc/libuvc.h"
 #include "android/native_window.h"
 #include "iostream"
+#include <deque>
+
 
 class CameraFactoryUsbImpl : public ICameraFactory {
 public:
@@ -61,7 +62,7 @@ private:
 
     pthread_mutex_t surfaceMutex; // 预览互斥锁
 
-    ObjectArray<uvc_frame_t *> previewFrames;
+    std::deque<uvc_frame_t *> previewFrames;
 
     int prepare_preview(uvc_stream_ctrl_t *ctrl); // 准备预览
 

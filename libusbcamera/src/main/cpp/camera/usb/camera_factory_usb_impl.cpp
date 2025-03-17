@@ -10,6 +10,7 @@
 #include <iostream>
 #include <variant>
 #include "android/native_window.h"
+#include "Log.h"
 
 CameraFactoryUsbImpl::CameraFactoryUsbImpl(uvc_context_t *context, uvc_device_t *device, uvc_device_handle_t *deviceHandle, int fd) : mContext(context),
         mDevice(device), mDeviceHandle(deviceHandle), mFd(fd), mIsPreviewRunning(false),
@@ -518,9 +519,8 @@ void CameraFactoryUsbImpl::uvc_stream_callback(uvc_frame_t *frame, void *vptr_ar
 
 void CameraFactoryUsbImpl::clearCaptureFrame() {
     pthread_mutex_lock(&captureMutex);
-    if (!previewFrames.isEmpty()) {
-        for (int i = 0; i < previewFrames.size(); ++i) {
-            uvc_frame_t *&pFrame = previewFrames[i];
+    if (!previewFrames.empty()) {
+        for (uvc_frame_t *pFrame : previewFrames) { // 直接遍历，避免 size() 变化
             uvc_free_frame(pFrame);
         }
         previewFrames.clear();
@@ -533,7 +533,7 @@ void CameraFactoryUsbImpl::putFrame(uvc_frame_t *frame) {
     pthread_mutex_lock(&captureMutex);
     // 如果缓存池的数据满了，则吧第一帧的数据删除掉
     if (mIsPreviewRunning && previewFrames.size() < MAX_FRAME) {
-        previewFrames.put(frame);
+        previewFrames.push_back(frame);
         frame = nullptr;
     }
     pthread_cond_signal(&captureCond);
@@ -549,12 +549,13 @@ uvc_frame_t *CameraFactoryUsbImpl::waitPreviewFrame() {
     pthread_mutex_lock(&captureMutex);
     {
         // 如果当前内容为空，则等待获取数据，被唤醒
-        if (previewFrames.isEmpty()) {
+        if (previewFrames.empty()) {
             pthread_cond_wait(&captureCond, &captureMutex);
         }
         // 如果当前是正在预览，并且预览数据大于0
-        if (mIsPreviewRunning && !previewFrames.isEmpty()) {
-            frame = previewFrames.remove(0);
+        if (mIsPreviewRunning && !previewFrames.empty()) {
+            frame =  previewFrames.front();//获取首帧
+            previewFrames.pop_front();//删除第一帧
         }
     }
     pthread_mutex_unlock(&captureMutex);

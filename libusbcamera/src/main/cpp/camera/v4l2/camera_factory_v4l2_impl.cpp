@@ -551,9 +551,8 @@ void CameraFactoryV4L2Impl::video_free(video_frame_t *frame) {
 
 void CameraFactoryV4L2Impl::clearCaptureFrame() {
     pthread_mutex_lock(&previewMutex);
-    if (!previewFrames.isEmpty()) {
-        for (int i = 0; i < previewFrames.size(); ++i) {
-            video_frame_t *&pFrame = previewFrames[i];
+    if (!previewFrames.empty()) {
+        for (video_frame_t *pFrame : previewFrames) { // 直接遍历，避免 size() 变化
             video_free(pFrame);
         }
         previewFrames.clear();
@@ -576,12 +575,13 @@ video_frame_t *CameraFactoryV4L2Impl::waitPreviewFrame() {
     pthread_mutex_lock(&previewMutex);
     {
         // 如果当前内容为空，则等待获取数据，被唤醒
-        if (previewFrames.isEmpty()) {
+        if (previewFrames.empty()) {
             pthread_cond_wait(&previewCond, &previewMutex);
         }
         // 如果当前是正在预览，并且预览数据大于0
-        if (mIsPreviewRunning && !previewFrames.isEmpty()) {
-            frame = previewFrames.remove(0);
+        if (mIsPreviewRunning && !previewFrames.empty()) {
+            frame = previewFrames.front();
+            previewFrames.pop_front();
         }
     }
     pthread_mutex_unlock(&previewMutex);
@@ -593,11 +593,11 @@ video_frame_t *CameraFactoryV4L2Impl::waitCallbackFrame() {
     pthread_mutex_lock(&callbackMutex);
     {
         // 如果当前内容为空，则等待获取数据，被唤醒
-        if (previewFrames.isEmpty()) {
+        if (previewFrames.empty()) {
             pthread_cond_wait(&callbackCond, &callbackMutex);
         }
         // 如果当前是正在预览，并且预览数据大于0
-        if (mIsPreviewRunning && !previewFrames.isEmpty()) {
+        if (mIsPreviewRunning && !previewFrames.empty()) {
             frame = lastFrame;
             lastFrame = nullptr;
         }
@@ -640,7 +640,7 @@ void CameraFactoryV4L2Impl::putPreviewFrame(uint8_t *data, uint64_t dataSize) {
             outFrame->height = captureHeight;
             outFrame->format = captureFormat;
             std::memcpy(outFrame->data, data, dataSize);
-            previewFrames.put(outFrame);
+            previewFrames.push_back(outFrame);
         }
     }
     pthread_cond_signal(&previewCond);

@@ -1411,7 +1411,7 @@ int API_EXPORTED libusb_open(libusb_device *dev,
     //调用后端的 open 函数
     r = usbi_backend.open(_dev_handle);
     if (r < 0) {//打开失败
-        usbi_dbg(DEVICE_CTX(dev), "open %d.%d returns %d", dev->bus_number, dev->device_address, r);
+        LOG_E("open %d.%d returns %d", dev->bus_number, dev->device_address, r);
         libusb_unref_device(dev);
         usbi_mutex_destroy(&_dev_handle->lock);
         free(_dev_handle);
