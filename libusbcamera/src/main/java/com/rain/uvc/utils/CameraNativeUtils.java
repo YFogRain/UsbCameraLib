@@ -292,5 +292,7 @@ public class CameraNativeUtils {
     public static native boolean nativeSetDefaultParentPath(String parentPath);
 
     public static native String nativeGetRecordPath(long nativeId);
+
+    public static native String nativeTakePicture(long nativeId, String parentPath, String fileName);
 }
 

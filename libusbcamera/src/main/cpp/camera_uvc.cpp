@@ -236,3 +236,30 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetDefaultParentPath(JNIEnv *env
     setDefaultParent(path_str);
     return true;
 }
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeTakePicture(JNIEnv *env, jclass clazz, jlong native_id, jstring parent_path, jstring file_name) {
+    if (!parent_path) {
+        return nullptr;
+    }
+    const char *parentPath = env->GetStringUTFChars(parent_path, nullptr);
+    if (!parentPath) {
+        return nullptr;
+    }
+    std::string path_str(parentPath);
+    env->ReleaseStringUTFChars(parent_path, parentPath);
+
+    ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
+    if (!camera)return nullptr;
+    std::string fileNameStr;
+    if (file_name) {
+        const char *fileName = env->GetStringUTFChars(file_name, nullptr);
+        if (fileName) {
+            fileNameStr = std::string(fileName);
+            env->ReleaseStringUTFChars(file_name, fileName);
+        }
+    }
+    auto picturePath = camera->getUserStream()->takePicture(fileNameStr, fileNameStr);
+    if (picturePath.empty())return nullptr;
+    return env->NewStringUTF(picturePath.c_str());
+}

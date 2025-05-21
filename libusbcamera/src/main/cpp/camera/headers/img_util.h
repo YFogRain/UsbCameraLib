@@ -20,6 +20,10 @@ public:
     static bool setDisplayTransformState(ANativeWindow *window, int orientation);
 
     static cv::Mat rotation(uint8_t *inFrame, int width, int height, int rotation);
+
+    static std::vector<uint8_t> bgr2Mjpeg(uint8_t *inFrame,  int width, int height, int rotation);
+
+    static bool writeMjpeg(uint8_t *inFrame,  int width, int height, int rotation,const std::string& savePath);
 };
 
 #endif // USBCAMERALIB_IMG_UTIL_H

@@ -338,11 +338,11 @@ void CameraStreamV4l2Impl::thread_func_preview() {
         }
         stream_frame_t *bgrFrame = any2Bgr(pFrame);
         free_stream(pFrame); // 释放源数据
-
         // 绘制
         if (bgrFrame && bgrFrame->data && bgrFrame->data_size > 0) { // 如果数据不为空
             drawFrame(bgrFrame->data, bgrFrame->data_size, bgrFrame->width, bgrFrame->height);
         }
+        putPictureFrame(bgrFrame);
         // 发送给回调线程处理
         putPreviewCallFrames(bgrFrame);
     }

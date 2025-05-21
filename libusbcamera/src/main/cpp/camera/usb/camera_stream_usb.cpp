@@ -255,6 +255,7 @@ void CameraStreamUsbImpl::thread_func_capture() {
             drawFrame(bgrFrame->data, bgrFrame->data_size, bgrFrame->width, bgrFrame->height);
         }
         // 发送给回调线程处理
+        putPictureFrame(bgrFrame);
         putPreviewCallFrames(bgrFrame);
     }
 }

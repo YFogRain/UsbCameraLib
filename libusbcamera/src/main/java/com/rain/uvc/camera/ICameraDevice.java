@@ -9,12 +9,14 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.TextureView;
 
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
+import com.rain.uvc.listener.PictureListener;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraDataFormat;
 import com.rain.uvc.state.CameraParameter;
@@ -23,6 +25,8 @@ import com.rain.uvc.state.CameraSupportParameters;
 import com.rain.uvc.state.RecordFormat;
 import com.rain.uvc.utils.CameraNativeUtils;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -42,7 +46,6 @@ public class ICameraDevice {
     private volatile boolean isReceiverSuccess;
 
     private final String mDeviceName;
-
 
     //usb移除回调监听
     private final BroadcastReceiver usbDetachedReceiver = new BroadcastReceiver() {
@@ -285,6 +288,21 @@ public class ICameraDevice {
             }
         }
         isReceiverSuccess = false;
+    }
+
+
+    public String takePicture(String parentPath) {
+        return takePicture(parentPath, null);
+    }
+
+    public String takePicture(String parentPath, String fileName) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return null;
+        }
+        String path = CameraNativeUtils.nativeTakePicture(nativeId, parentPath, fileName);
+        Log.d("takePicture", "照片信息:" + path);
+        return path;
     }
 }
 

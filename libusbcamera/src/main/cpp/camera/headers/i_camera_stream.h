@@ -19,6 +19,7 @@
 #include <atomic>
 #include <android/native_window.h>
 #include "video_record.h"
+#include <filesystem>
 
 #define MAX_FRAME 2
 
@@ -145,6 +146,41 @@ public:
         }
         mVideoRecord->setRecordFormat(videoFormat);
     };
+
+    std::string takePicture(const std::string &parentPath, const std::string &fileName) {
+        if (parentPath.empty() || !isRunningPreview()) { // 如果没有父文件夹，且没有开始预览，则返回空
+            return std::string{};
+        }
+        try { // 创建父类文件夹
+            std::filesystem::create_directories(parentPath);
+        } catch (const std::exception &e) {
+            return std::string{};
+        }
+        std::string saveFileName = fileName;
+        if (saveFileName.empty()) {
+            saveFileName = "img_" + VideoRecord::formatTime("%Y%m%d_%H_%M%S%f", VideoRecord::getCurrentTime());
+        };
+        saveFileName = saveFileName + ".jpeg";
+
+        std::string fullPath;
+        if (parentPath.back() == '/') {
+            fullPath = parentPath + saveFileName;
+        } else {
+            fullPath = parentPath + "/" + saveFileName;
+        }
+        // 1. 读取流
+        stream_frame_t *frame = waitPictureFrame();
+        if (!frame) {
+            return nullptr;
+        }
+        bool isSaveSuccess = ImgUtils::writeMjpeg(frame->data, frame->width, frame->height, frame->rotation, fullPath);
+        // 2. 释放资源
+        free_stream(frame);
+        if (isSaveSuccess) {
+            return fullPath;
+        }
+        return nullptr;
+    };
 protected:
     JavaVM *theVM = nullptr; //回调对应全局应该保存的东西
     jobject previewListener = nullptr; //回调的对象
@@ -160,6 +196,11 @@ protected:
     int previewHeight = 480;
     int previewFormat = PREVIEW_FORMAT_BGR; // 预览宽高,预览类型
     int previewFps = 30;                    // 预览的fps
+
+    std::mutex pictureMutex; // 拍照使用的锁对象
+    std::condition_variable pictureCond;
+    std::atomic<bool> mIsPictureRunning{false}; // 当前是否拍照状态
+    stream_frame *pictureFrame = nullptr;       // 拍照的数据
 
     void drawFrame(uint8_t *data, size_t dataSize, int w, int h) {
         std::lock_guard<std::mutex> lock(surfaceMutex);
@@ -189,44 +230,6 @@ protected:
         }
     };
 
-    static stream_frame_t *any2Bgr(stream_frame_t *inFrame) {
-        if (!inFrame || !inFrame->data || inFrame->data_size <= 0) {
-            return nullptr;
-        }
-        stream_frame *outFrame = (stream_frame *) malloc(sizeof(*outFrame));
-        if (!outFrame) {
-            return nullptr;
-        }
-        uint32_t width = inFrame->width;
-        uint32_t height = inFrame->height;
-        outFrame->width = width;
-        outFrame->height = height;
-        outFrame->format = PREVIEW_FORMAT_BGR;
-        outFrame->rotation = inFrame->rotation;
-        outFrame->data_size = 0;
-        outFrame->data = nullptr;
-        cv::Mat outImg =
-                ImgUtils::any2Bgr(inFrame->data, inFrame->data_size, inFrame->width, inFrame->height, inFrame->format);
-        if (outImg.empty()) {
-            free_stream(outFrame);
-            return nullptr;
-        }
-        size_t len = outImg.total() * outImg.elemSize();
-        outFrame->data = (uint8_t *) malloc(len);
-        outFrame->data_size = len;
-        std::memcpy(outFrame->data, outImg.data, len);
-        // 因为要保证内存数据有效，这里必须进行一次内存复制
-        return outFrame;
-    };
-
-    static cv::Mat format(stream_frame_t *inFrame, int outFormat) {
-        if (!inFrame || !inFrame->data || inFrame->data_size <= 0) {
-            return cv::Mat();
-        }
-        cv::Mat outImg = ImgUtils::format(inFrame->data, inFrame->width, inFrame->height, outFormat);
-        return outImg;
-    };
-
     void releaseWindows() {
         std::lock_guard<std::mutex> lock(surfaceMutex);
         if (mPreviewWindow) {
@@ -248,11 +251,6 @@ protected:
         previewListener = nullptr;
         onFrameMethod = nullptr;
     };
-
-    void callPreviewFunc(JNIEnv *env, stream_frame_t *frame) {
-        std::lock_guard<std::mutex> lock(previewFuncMutex);
-
-    }
 
     void putRecordFrames(stream_frame_t *inFrame) {
         if (!mVideoRecord || !mVideoRecord->isRecording()) {
@@ -278,6 +276,97 @@ protected:
         //  复制数据
         memcpy(outFrame->data, inFrame->data, inFrame->data_size);
         mVideoRecord->putFrame(outFrame);
+    }
+
+    // 复制一份frame
+    static stream_frame_t *allocate_stream_frame(stream_frame_t *inFrame) {
+        if (!inFrame || !inFrame->data || inFrame->data_size <= 0) {
+            return nullptr;
+        }
+        stream_frame *outFrame = (stream_frame *) malloc(sizeof(*outFrame));
+        if (!outFrame) {
+            return nullptr;
+        }
+        outFrame->width = inFrame->width;
+        outFrame->height = inFrame->height;
+        outFrame->format = inFrame->format;
+        outFrame->rotation = inFrame->rotation;
+        outFrame->data_size = 0;
+        outFrame->data = nullptr;
+        return outFrame;
+    };
+
+    static stream_frame_t *any2Bgr(stream_frame_t *inFrame) {
+        stream_frame *outFrame = allocate_stream_frame(inFrame);
+        if (!outFrame) {
+            return nullptr;
+        }
+        outFrame->format = PREVIEW_FORMAT_BGR;
+        cv::Mat outImg =
+                ImgUtils::any2Bgr(inFrame->data, inFrame->data_size, inFrame->width, inFrame->height, inFrame->format);
+        if (outImg.empty()) {
+            free_stream(outFrame);
+            return nullptr;
+        }
+        size_t len = outImg.total() * outImg.elemSize();
+        outFrame->data = (uint8_t *) malloc(len);
+        outFrame->data_size = len;
+        std::memcpy(outFrame->data, outImg.data, len);
+        // 因为要保证内存数据有效，这里必须进行一次内存复制
+        return outFrame;
+    };
+
+    static stream_frame_t *format(stream_frame_t *inFrame, int outFormat) {
+        stream_frame *outFrame = allocate_stream_frame(inFrame);
+        if (!outFrame) {
+            return nullptr;
+        }
+        outFrame->format = outFormat;
+        cv::Mat outImg = ImgUtils::format(inFrame->data, inFrame->width, inFrame->height, outFormat);
+        if (outImg.empty()) {
+            free_stream(outFrame);
+            return nullptr;
+        }
+        outFrame->data_size = outImg.total() * outImg.elemSize();
+        outFrame->data = (uint8_t *) malloc(outFrame->data_size);
+        std::memcpy(outFrame->data, outImg.data, outFrame->data_size);
+        return outFrame;
+    };
+
+    void putPictureFrame(stream_frame_t *inFrame) {
+        std::lock_guard<std::mutex> lock(pictureMutex);
+        if (mIsPictureRunning.load() && !pictureFrame) {
+            stream_frame *outFrame = allocate_stream_frame(inFrame);
+            if (outFrame) {
+                outFrame->data_size = inFrame->data_size;
+                outFrame->data = (uint8_t *) malloc(outFrame->data_size);
+                std::memcpy(outFrame->data, inFrame->data, inFrame->data_size);
+                pictureFrame = outFrame;
+            }
+        }
+        pictureCond.notify_one();
+    }
+
+    stream_frame_t *waitPictureFrame() {
+        stream_frame_t *frame = nullptr;
+        {
+            std::unique_lock<std::mutex> lock(pictureMutex);
+            mIsPictureRunning.store(true);
+            pictureCond.wait_for(lock, std::chrono::seconds(3), [this] { return pictureFrame; });
+            mIsPictureRunning.store(false);
+            frame = pictureFrame;
+            pictureFrame = nullptr;
+        }
+        return frame;
+    }
+
+    void clearPictureFrame() {
+        std::lock_guard<std::mutex> lock(pictureMutex);
+        mIsPictureRunning.store(false);
+        if (pictureFrame) {
+            free_stream(pictureFrame);
+            pictureFrame = nullptr;
+        }
     }
 
 private:

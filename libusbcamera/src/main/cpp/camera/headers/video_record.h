@@ -18,7 +18,7 @@
 
 extern std::string defaultParentPath;
 
-void setDefaultParent(const std::string & path);
+void setDefaultParent(const std::string &path);
 
 typedef struct record_frame {
     uint8_t *data;    // 数据
@@ -53,7 +53,7 @@ public:
     VideoRecord();
     ~VideoRecord();
     void putFrame(record_frame_t *frame);                                                     // 发送流数据
-    void setRecordFormat(const record_format &recordFormat);                                        // 设置编码格式
+    void setRecordFormat(const record_format &format);                                        // 设置编码格式
     bool prepare(uint32_t w, uint32_t h, int rotation, int fps, const std::string &filename); // 准备
     bool startRecord();                                                                       // 开始录制
     void stopRecord();                                                                        // 结束录制
@@ -64,6 +64,9 @@ public:
         return (w == frameWidth && h == frameHeight) || (h == frameWidth && w == frameHeight);
     }; // 检查数据合法性
 
+    static long getCurrentTime(); // 获取当前时间的格式化字符串
+
+    static std::string formatTime(const std::string &pattern, long time); // 格式化时间
 private:
     std::atomic<bool> mIsRecordRunning; // 当前录制运行的状态
     std::string recordFilePath;         // 文件路径
@@ -81,24 +84,20 @@ private:
 
     void clearRecordFrames(); // 清空缓存数据
 
-    long getCurrentTime(); // 获取当前时间的格式化字符串
-
-    std::string formatTime(const std::string &pattern, long time); // 格式化时间
-
     bool initRecordPath(const std::string &filename);
 
     int initRecordFourcc(); // 初始化录制的编码器
     cv::Size getRotatedSize(int width, int height, int transform) {
         switch (transform) {
-        case TRANSFORM_ROTATE_90:
-        case TRANSFORM_ROTATE_270:
-        case TRANSFORM_FLIP_H_ROTATE_90:
-        case TRANSFORM_FLIP_H_ROTATE_270:
-        case TRANSFORM_FLIP_V_ROTATE_90:
-        case TRANSFORM_FLIP_V_ROTATE_270:
-            return cv::Size(height, width); // 宽高对调
-        default:
-            return cv::Size(width, height); // 保持不变
+            case TRANSFORM_ROTATE_90:
+            case TRANSFORM_ROTATE_270:
+            case TRANSFORM_FLIP_H_ROTATE_90:
+            case TRANSFORM_FLIP_H_ROTATE_270:
+            case TRANSFORM_FLIP_V_ROTATE_90:
+            case TRANSFORM_FLIP_V_ROTATE_270:
+                return cv::Size(height, width); // 宽高对调
+            default:
+                return cv::Size(width, height); // 保持不变
         }
     }
 };

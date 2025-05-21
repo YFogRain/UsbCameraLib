@@ -9,6 +9,7 @@
 #include "Log.h"
 #include "camera_constants.h"
 #include "android/native_window.h"
+#include "fstream"
 
 cv::Mat ImgUtils::any2Bgr(uint8_t *inFrame, size_t data_size, uint32_t width, uint32_t height, int format) {
     cv::Mat outImg(height, width, CV_8UC3);
@@ -173,4 +174,61 @@ cv::Mat ImgUtils::rotation(uint8_t *inFrame, int width, int height, int rotation
     }
 
     return dst;
+}
+
+std::vector<uint8_t> ImgUtils::bgr2Mjpeg(uint8_t *inFrame, int width, int height, int rotation) {
+    // 先旋转数据
+    cv::Mat img = ImgUtils::rotation(inFrame, width, height, rotation);
+    if (img.empty()) {
+        return {};
+    }
+    // 这里转为mjpeg
+    std::vector<uint8_t> mjpegData;
+    std::vector<int> encodeParams = {cv::IMWRITE_JPEG_QUALITY, 100}; // 质量可调，范围0-100
+    if (!cv::imencode(".jpeg", img, mjpegData, encodeParams)) {      // 如果转码失败，则return
+        // 编码失败，返回空vector
+        return {};
+    }
+    return mjpegData;
+}
+
+bool ImgUtils::writeMjpeg(uint8_t *inFrame, int width, int height, int rotation, const std::string &savePath) {
+    std::vector<uint8_t> img = bgr2Mjpeg(inFrame, width, height, rotation);
+    if (img.empty()) {
+        return false;
+    }
+    // 创建并打开输出文件流，默认会创建文件（如果不存在）并清空文件内容
+    std::ofstream ofs(savePath, std::ios::binary);
+    if (!ofs.is_open()) {
+        return false;
+    }
+    bool isSuccess;
+    try {
+        size_t totalSize = img.size();
+        const size_t blockSize = 1024 * 64; // 50KB 分块写入
+        size_t written = 0;
+        while (written < totalSize) {
+            size_t sizeToWrite = std::min(blockSize, totalSize - written);
+            ofs.write(reinterpret_cast<const char *>(img.data() + written), sizeToWrite);
+            if (!ofs) {
+                // 写入失败，直接返回 false
+                return false;
+            }
+            written += sizeToWrite;
+        }
+        ofs.flush();
+        isSuccess = true;
+    } catch (const std::exception &e) {
+        isSuccess = false;
+    }
+    ofs.close();
+    if (!isSuccess) {
+        // 写入失败，尝试删除目标文件
+        try {
+            std::filesystem::remove(savePath);
+        } catch (const std::exception &e) {
+            // 删除失败可选择记录日志，但通常不影响流程
+        }
+    }
+    return isSuccess;
 }
