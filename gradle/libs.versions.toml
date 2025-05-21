@@ -1,5 +1,5 @@
 [versions]
-activityKtx = "1.9.0"
+activityKtx = "1.9.2"
 annotation = "1.9.1"
 minSdk = "21"
 compileSdk = "35"
@@ -9,8 +9,8 @@ rxandroid = "2.1.1"
 jvm-version = "17"
 
 android-gradle-plugin = "8.8.2"
-ksp = "2.0.20-1.0.24"
-kotlin = "2.0.20"
+ksp = "2.1.0-1.0.29"
+kotlin = "2.1.0"
 coreKtx = "1.13.1"
 lifecycle-process = "2.8.5"
 

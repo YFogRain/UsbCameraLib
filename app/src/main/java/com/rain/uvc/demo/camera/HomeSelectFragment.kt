@@ -1,6 +1,7 @@
 package com.rain.uvc.demo.camera
 
 import android.content.pm.PackageManager
+import android.graphics.Path
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -14,6 +15,8 @@ import com.rain.uvc.demo.databinding.FgCameraSelectBinding
 import com.rain.uvc.demo.utils.LanguageHelper
 import com.rain.uvc.demo.utils.jumpNav
 import com.rain.uvc.demo.utils.singleClick
+import com.rain.uvc.utils.CameraNativeUtils
+import java.io.File
 
 /**
  * @author yuan
@@ -57,7 +60,6 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 	}
 	
 	private fun initEvent() {
-		mBinding.cardRefresh.singleClick { viewModel.loadDevice() }
 	}
 	
 	private fun itemClick(groupPosition: Int, childPosition: Int) {

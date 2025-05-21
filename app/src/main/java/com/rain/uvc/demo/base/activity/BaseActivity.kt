@@ -5,11 +5,15 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.enableEdgeToEdge
 import androidx.annotation.CallSuper
 import androidx.annotation.ColorInt
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.rain.uvc.demo.R
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.LanguageHelper
 import com.rain.uvc.demo.utils.conversionViewModel
@@ -29,8 +33,15 @@ abstract class BaseActivity<VM : BaseViewModel> : AppCompatActivity() {
 	
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
+		enableEdgeToEdge()
 		initializeStart(savedInstanceState)
 		initCreateView()
+		ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content)) { v, insets ->
+			val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+			v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+			insets
+		}
+		
 		initMVVMState()
 		initializeCreated(savedInstanceState)
 	}

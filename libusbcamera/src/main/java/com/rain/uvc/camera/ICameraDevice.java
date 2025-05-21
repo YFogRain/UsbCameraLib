@@ -20,6 +20,7 @@ import com.rain.uvc.state.CameraDataFormat;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraPreviewFormat;
 import com.rain.uvc.state.CameraSupportParameters;
+import com.rain.uvc.state.RecordFormat;
 import com.rain.uvc.utils.CameraNativeUtils;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -219,6 +220,51 @@ public class ICameraDevice {
     public <T> T getSupportedParameter(CameraSupportParameters.Key<T> key) {
         return CameraNativeUtils.getSupportedParameter(mNativeAtomic.get(), key);
     }
+
+    public boolean startRecord() {
+        return startRecord(null);
+    }
+
+    public boolean startRecord(String fileName) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        return CameraNativeUtils.nativeStartRecord(nativeId, fileName);
+    }
+
+    public boolean stopRecord() {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        return CameraNativeUtils.nativeStopRecord(nativeId);
+    }
+
+    public void setRecordFormat(RecordFormat format) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return;
+        }
+        CameraNativeUtils.nativeSetRecordFormat(nativeId, format.getValue());
+    }
+
+    public void setParentPath(String parentPath) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return;
+        }
+        CameraNativeUtils.nativeSetParentPath(nativeId, parentPath);
+    }
+
+    public String getRecordPath() {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return null;
+        }
+        return CameraNativeUtils.nativeGetRecordPath(nativeId);
+    }
+
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private synchronized void initReceiver() {

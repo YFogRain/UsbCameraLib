@@ -1,14 +1,13 @@
 #include "Log.h"
-#include "i_camera_factory.h"
+#include <dirent.h>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include "camera_factory_helper.h"
 #include <unistd.h>
 #include <fcntl.h>
-#include <dirent.h>
 #include "libuvc/libuvc_internal.h"
-#include "usb/camera_factory_usb_impl.h"
-#include "v4l2/camera_factory_v4l2_impl.h"
+#include "usb/camera_device_usb.h"
+#include "v4l2/camera_device_v4l2.h"
 
 /**
  * usb类型的打开
@@ -17,7 +16,7 @@
  * @param devAddress 设备地址
  * @return 打开后的对象
  */
-ICameraFactory *CameraFactoryHelper::openCamera(int fd, int busNum, int devAddress) {
+ICameraDevice *CameraFactoryHelper::openCamera(int fd, int busNum, int devAddress) {
     if (fd == -1 || busNum == -1 || devAddress == -1) {
         return nullptr;
     }
@@ -46,15 +45,16 @@ ICameraFactory *CameraFactoryHelper::openCamera(int fd, int busNum, int devAddre
         context = nullptr;
         return nullptr;
     }
-    return new CameraFactoryUsbImpl(context, device, deviceHandle, fd);
+    return new CameraDeviceUsbImpl(context, device, deviceHandle, fd);
 }
+
 
 /**
  * video类型的打开
  * @param videoPath 对应的video文件的目录地址，如 /dev/videoX
  * @return 打开后的对象
  */
-ICameraFactory *CameraFactoryHelper::openCamera(const char *videoPath) {
+ICameraDevice *CameraFactoryHelper::openCamera(const char *videoPath) {
     int fd = open(videoPath, O_RDWR);
     if (fd < 0) {
         return nullptr;
@@ -71,7 +71,27 @@ ICameraFactory *CameraFactoryHelper::openCamera(const char *videoPath) {
     LOG_D("驱动版本号：%d", cap.version);
     LOG_D("设备的能力标志：%d", cap.capabilities);
     LOG_D("设备的当前能力标志：%d", cap.device_caps);
-    return new CameraFactoryV4L2Impl(fd);
+    return new CameraDeviceV4L2Impl(fd);
+}
+
+/**
+ * 关闭设备
+ * @param cameraId 打开的对象id
+ * @return 关闭结果
+ */
+bool CameraFactoryHelper::closeCamera(int64_t cameraId) {
+    if (cameraId == -1 || cameraId == 0) {
+        return false;
+    }
+    ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(cameraId);
+    if (camera) {
+        if (camera->getUserStream()->isRunningPreview()) {
+            camera->getUserStream()->stopPreview();
+        }
+        delete camera;
+        return true;
+    }
+    return false;
 }
 
 std::vector<std::string> CameraFactoryHelper::loadV4L2Devices() {
@@ -89,7 +109,7 @@ std::vector<std::string> CameraFactoryHelper::loadV4L2Devices() {
         LOG_D("当前的设备名称:%s", dev_name.c_str());
         if (dev_name.rfind("video", 0) == 0) { // 找到以 "video" 开头的设备文件
             std::string dev_path = "/dev/" + dev_name;
-            if (isV4L2Supported(dev_path)) {//说明当前是视频的类
+            if (isV4L2Supported(dev_path)) { // 说明当前是视频的类
                 deviceSet.push_back(dev_path);
             }
         }
@@ -111,22 +131,5 @@ bool CameraFactoryHelper::isV4L2Supported(const std::string &dev_name) {
         return false;
     }
     close(fd);
-    return true;
-}
-
-/**
- * 关闭设备
- * @param cameraId 打开的对象id
- * @return 关闭结果
- */
-bool CameraFactoryHelper::closeCamera(int64_t cameraId) {
-    if (cameraId == -1 || cameraId == 0) {
-        return false;
-    }
-    ICameraFactory *camera = reinterpret_cast<ICameraFactory *>(cameraId);
-    if (camera->isRunningPreview()) {
-        camera->stopPreview();
-    }
-    delete camera;
     return true;
 }

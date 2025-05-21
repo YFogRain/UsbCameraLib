@@ -44,6 +44,13 @@ public class CameraUvcManager {
     }
 
     /**
+     * 设置默认保存地址
+     */
+    public static boolean setDefaultRecordParent(@NonNull String path) {
+        return CameraNativeUtils.nativeSetDefaultParentPath(path);
+    }
+
+    /**
      * 获取uvc的摄像头列表
      *
      * @return 返回摄像头列表

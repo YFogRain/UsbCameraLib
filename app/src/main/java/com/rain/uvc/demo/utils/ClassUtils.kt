@@ -18,6 +18,7 @@ import androidx.viewbinding.ViewBinding
 import com.rain.uvc.demo.base.fragment.BaseFragment
 import com.rain.uvc.demo.base.activity.BaseActivity
 import com.rain.uvc.demo.base.activity.BaseDataBindActivity
+import com.rain.uvc.demo.base.activity.BaseMviActivity
 import com.rain.uvc.demo.base.fragment.BaseDataBindFragment
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
@@ -96,6 +97,10 @@ fun Activity.findBaseGenericType(isViewModel: Boolean): Type? {
 	val superclass = this.javaClass.superclass
 	Log.d("ClassUtilsTag", "superclass:$superclass")
 	if (superclass == BaseDataBindActivity::class.java) {
+		val actualTypeArguments = genericSuperclass.actualTypeArguments
+		return if (isViewModel) actualTypeArguments[1] else actualTypeArguments[0]
+	}
+	if (superclass == BaseMviActivity::class.java) {
 		val actualTypeArguments = genericSuperclass.actualTypeArguments
 		return if (isViewModel) actualTypeArguments[1] else actualTypeArguments[0]
 	}
