@@ -99,6 +99,7 @@ public:
     bool setDisplayTransform(int state) {
         LOG_D("当前的设备方向:触发设置方向");
         std::lock_guard<std::mutex> lock(surfaceMutex);
+        mDisplayTransformState = state;
         return ImgUtils::setDisplayTransformState(mPreviewWindow, mDisplayTransformState);;
     }
 

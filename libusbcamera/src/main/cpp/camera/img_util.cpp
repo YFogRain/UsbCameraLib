@@ -69,7 +69,7 @@ cv::Mat ImgUtils::format(uint8_t *inFrame, uint32_t width, uint32_t height, int 
         std::vector<uchar> buffer;
         std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 100};
         cv::imencode(".jpg", inImg, buffer, params);
-        outImg = cv::Mat(buffer).clone();
+        outImg = cv::Mat(buffer);
     }
     return outImg;
 }

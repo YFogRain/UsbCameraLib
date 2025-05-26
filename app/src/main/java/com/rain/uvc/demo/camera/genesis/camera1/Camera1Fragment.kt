@@ -1,6 +1,9 @@
 package com.rain.uvc.demo.camera.genesis.camera1
 
+import android.graphics.Outline
 import android.os.Bundle
+import android.view.View
+import android.view.ViewOutlineProvider
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.rain.uvc.demo.R
@@ -31,6 +34,12 @@ class Camera1Fragment : BaseDataBindFragment<FgCameraBinding, CameraViewModel>()
 			popStack()
 			return
 		}
+		mBinding.surfaceView.outlineProvider = object : ViewOutlineProvider() {
+			override fun getOutline(view: View, outline: Outline) {
+				outline.setOval(0, 0, view.width, view.height)
+			}
+		}
+		mBinding.surfaceView.clipToOutline = true
 		mBinding.surfaceView.post {
 			viewModel.openCamera(cameraId) {
 				viewModel.startPreview(mBinding.surfaceView)

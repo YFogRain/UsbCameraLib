@@ -29,6 +29,7 @@ class CameraUsbFragment : BaseDataBindFragment<FgCameraBinding, CameraViewModel>
 			popStack()
 			return
 		}
+		mBinding.surfaceView.outlineProvider
 		mBinding.surfaceView.post {
 			viewModel.openCamera(cameraId) {
 				viewModel.startPreview(mBinding.surfaceView)

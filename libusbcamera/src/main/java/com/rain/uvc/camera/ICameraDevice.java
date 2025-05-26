@@ -16,7 +16,6 @@ import android.view.TextureView;
 
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.listener.PictureListener;
 import com.rain.uvc.provider.OverallContext;
 import com.rain.uvc.state.CameraDataFormat;
 import com.rain.uvc.state.CameraParameter;
@@ -25,8 +24,6 @@ import com.rain.uvc.state.CameraSupportParameters;
 import com.rain.uvc.state.RecordFormat;
 import com.rain.uvc.utils.CameraNativeUtils;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
