@@ -270,24 +270,31 @@ void CameraStreamUsbImpl::thread_func_preview_call() {
         if (!pFrame) {
             continue;
         }
+        uint32_t width = pFrame->width;   // 数据宽度
+        uint32_t height = pFrame->height;
+
         // 发送到录制的线程去进行录制，（路线线程会重新复制一次数据，不需担心后续内存释放问题）
         putRecordFrames(pFrame);
+        if (!previewListener) {
+            free_stream(pFrame);
+            continue;
+        }
         // 格式化数据格式
-        cv::Mat outFrame = ImgUtils::format(pFrame->data, pFrame->width, pFrame->height, previewFormat);
+        std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, width, height, previewFormat);
         // 释放源数据
         free_stream(pFrame);
         if (outFrame.empty()) {
-            return;
+            continue;
         }
         if (theVM && !env) {
             theVM->AttachCurrentThread(&env, nullptr);
         }
         // 释放源数据
-        int data_bytes = outFrame.total() * outFrame.elemSize();
-        if (outFrame.data && data_bytes > 0) {
-            jobject buf = env->NewDirectByteBuffer(outFrame.data, data_bytes);
+        int data_bytes = outFrame.size();
+        if (outFrame.data() && data_bytes > 0) {
+            jobject buf = env->NewDirectByteBuffer(outFrame.data(), data_bytes);
             if (buf) {
-                env->CallVoidMethod(previewListener, onFrameMethod, outFrame.cols, outFrame.rows, buf);
+                env->CallVoidMethod(previewListener, onFrameMethod, width, height, buf);
                 if (env->ExceptionCheck()) {
                     LOG_D("ExceptionCheck");
                     env->ExceptionDescribe();

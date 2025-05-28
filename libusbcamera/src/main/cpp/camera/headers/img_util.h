@@ -15,7 +15,7 @@ public:
     // 将数据转换为BGR格式
     static cv::Mat any2Bgr(uint8_t *inFrame, size_t data_size, uint32_t width, uint32_t height, int format);
 
-    static cv::Mat format(uint8_t *inFrame, uint32_t width, uint32_t height, int outFormat);
+    static std::vector<uint8_t> format(uint8_t *inFrame, uint32_t width, uint32_t height, int outFormat);
 
     static bool setDisplayTransformState(ANativeWindow *window, int orientation);
 

@@ -13,65 +13,85 @@
 
 cv::Mat ImgUtils::any2Bgr(uint8_t *inFrame, size_t data_size, uint32_t width, uint32_t height, int format) {
     cv::Mat outImg(height, width, CV_8UC3);
-    if (format == PREVIEW_FORMAT_YUY2) {
-        cv::cvtColor(cv::Mat(height, width, CV_8UC2, inFrame), outImg, cv::COLOR_YUV2BGR_YUYV);
-    } else if (format == PREVIEW_FORMAT_NV12) {
-        cv::cvtColor(cv::Mat(height + height / 2, width, CV_8UC1, inFrame), outImg, cv::COLOR_YUV2BGR_NV12);
-    } else if (format == PREVIEW_FORMAT_NV21) {
-        cv::cvtColor(cv::Mat(height + height / 2, width, CV_8UC1, inFrame), outImg, cv::COLOR_YUV2BGR_NV21);
-    } else if (format == PREVIEW_FORMAT_MJPEG) {
-        outImg = cv::imdecode(cv::Mat(1, data_size, CV_8UC1, inFrame), cv::IMREAD_COLOR);
-    } else if (format == PREVIEW_FORMAT_JPEG) {
-        outImg = cv::imdecode(cv::Mat(1, data_size, CV_8UC1, inFrame), cv::IMREAD_COLOR);
-    } else if (format == PREVIEW_FORMAT_BGR) {
-        outImg = cv::Mat(height, width, CV_8UC3, inFrame);
-    } else if (format == PREVIEW_FORMAT_RGB) {
-        cv::cvtColor(cv::Mat(height, width, CV_8UC3, inFrame), outImg, cv::COLOR_RGB2BGR);
-    } else if (format == PREVIEW_FORMAT_RGBA) {
-        cv::cvtColor(cv::Mat(height, width, CV_8UC4, inFrame), outImg, cv::COLOR_RGBA2BGR);
+    switch (format) {
+        case PREVIEW_FORMAT_YUY2:
+            cv::cvtColor(cv::Mat(height, width, CV_8UC2, inFrame), outImg, cv::COLOR_YUV2BGR_YUYV);
+            break;
+        case PREVIEW_FORMAT_NV12:
+            cv::cvtColor(cv::Mat(height + height / 2, width, CV_8UC1, inFrame), outImg, cv::COLOR_YUV2BGR_NV12);
+            break;
+        case PREVIEW_FORMAT_NV21:
+            cv::cvtColor(cv::Mat(height + height / 2, width, CV_8UC1, inFrame), outImg, cv::COLOR_YUV2BGR_NV21);
+            break;
+        case PREVIEW_FORMAT_MJPEG:
+        case PREVIEW_FORMAT_JPEG:
+            outImg = cv::imdecode(cv::Mat(1, data_size, CV_8UC1, inFrame), cv::IMREAD_COLOR);
+            break;
+        case PREVIEW_FORMAT_BGR:
+            outImg = cv::Mat(height, width, CV_8UC3, inFrame);
+            break;
+        case PREVIEW_FORMAT_RGB:
+            cv::cvtColor(cv::Mat(height, width, CV_8UC3, inFrame), outImg, cv::COLOR_RGB2BGR);
+            break;
+        case PREVIEW_FORMAT_RGBA:
+            cv::cvtColor(cv::Mat(height, width, CV_8UC4, inFrame), outImg, cv::COLOR_RGBA2BGR);
+            break;
     }
     return outImg;
 }
 
-cv::Mat ImgUtils::format(uint8_t *inFrame, uint32_t width, uint32_t height, int outFormat) {
+
+std::vector<uint8_t> ImgUtils::format(uint8_t *inFrame, uint32_t width, uint32_t height, int outFormat) {
     cv::Mat inImg(height, width, CV_8UC3, inFrame);
-    if (outFormat == PREVIEW_FORMAT_BGR) { // 如果是bgr。则不需要进行转换，直接可以返回数据
-        return inImg;
-    }
     cv::Mat outImg;
-    if (outFormat == PREVIEW_FORMAT_YUY2) {
-        outImg = cv::Mat(height, width, CV_8UC2);
-        cv::cvtColor(inImg, outImg, cv::COLOR_BGR2YUV_YUYV);
-    } else if (outFormat == PREVIEW_FORMAT_NV21 || outFormat == PREVIEW_FORMAT_NV12) {
-        cv::Mat yuvImg(height + height / 2, width, CV_8UC1);
-        cv::cvtColor(inImg, yuvImg, cv::COLOR_BGR2YUV_I420);
-        if (!yuvImg.empty()) {
-            outImg = cv::Mat(height + height / 2, width, CV_8UC1);
-            // 将 Y 平面复制到 NV21 缓冲区
-            int ySize = width * height;
-            memcpy(outImg.data, yuvImg.data, ySize);
-            // 将 UV 平面交织为 VU 顺序
-            uint8_t *uPlane = yuvImg.data + ySize;
-            uint8_t *vPlane = uPlane + (ySize / 4);
-            uint8_t *uvData = outImg.data + ySize;
-            for (int i = 0; i < ySize / 4; ++i) {
-                uvData[i * 2] = vPlane[i];     // V 分量
-                uvData[i * 2 + 1] = uPlane[i]; // U 分量
+    switch (outFormat) {
+        case PREVIEW_FORMAT_BGR:
+            return std::vector<uint8_t>(inFrame, inFrame + width * height * 3);
+        case PREVIEW_FORMAT_MJPEG:
+        case PREVIEW_FORMAT_JPEG: {
+            std::vector<uint8_t> mjpegData;
+            if (!cv::imencode(".jpeg", inImg, mjpegData, {cv::IMWRITE_JPEG_QUALITY, 100})) { // 如果转码失败，则return
+                // 编码失败，返回空vector
+                return {};
             }
+            return mjpegData;
         }
-    } else if (outFormat == PREVIEW_FORMAT_RGBA) {
-        outImg = cv::Mat(height, width, CV_8UC4);
-        cv::cvtColor(inImg, outImg, cv::COLOR_BGR2RGBA);
-    } else if (outFormat == PREVIEW_FORMAT_RGB) {
-        outImg = cv::Mat(height, width, CV_8UC3);
-        cv::cvtColor(inImg, outImg, cv::COLOR_BGR2RGB);
-    } else if (outFormat == PREVIEW_FORMAT_MJPEG || outFormat == PREVIEW_FORMAT_JPEG) {
-        std::vector<uchar> buffer;
-        std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 100};
-        cv::imencode(".jpg", inImg, buffer, params);
-        outImg = cv::Mat(buffer);
+        case PREVIEW_FORMAT_RGBA:
+            outImg = cv::Mat(height, width, CV_8UC4);
+            cv::cvtColor(inImg, outImg, cv::COLOR_BGR2RGBA);
+            break;
+        case PREVIEW_FORMAT_NV21:
+        case PREVIEW_FORMAT_NV12: {
+            cv::Mat yuvImg(height + height / 2, width, CV_8UC1);
+            cv::cvtColor(inImg, yuvImg, cv::COLOR_BGR2YUV_I420);
+            if (!yuvImg.empty()) {
+                outImg = cv::Mat(height + height / 2, width, CV_8UC1);
+                // 将 Y 平面复制到 NV21 缓冲区
+                int ySize = width * height;
+                memcpy(outImg.data, yuvImg.data, ySize);
+                // 将 UV 平面交织为 VU 顺序
+                uint8_t *uPlane = yuvImg.data + ySize;
+                uint8_t *vPlane = uPlane + (ySize / 4);
+                uint8_t *uvData = outImg.data + ySize;
+                for (int i = 0; i < ySize / 4; ++i) {
+                    uvData[i * 2] = vPlane[i];     // V 分量
+                    uvData[i * 2 + 1] = uPlane[i]; // U 分量
+                }
+            }
+        } break;
+        case PREVIEW_FORMAT_YUY2:
+            outImg = cv::Mat(height, width, CV_8UC2);
+            cv::cvtColor(inImg, outImg, cv::COLOR_BGR2YUV_YUYV);
+            break;
+        case PREVIEW_FORMAT_RGB:
+            outImg = cv::Mat(height, width, CV_8UC3);
+            cv::cvtColor(inImg, outImg, cv::COLOR_BGR2RGB);
+            break;
     }
-    return outImg;
+    if (outImg.empty()) {
+        return {};
+    }
+    return std::vector<uint8_t>(outImg.data, outImg.data + outImg.total() * outImg.elemSize());
 }
 
 
