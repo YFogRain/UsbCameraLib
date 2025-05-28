@@ -11,10 +11,10 @@
 #include "libuvc/libuvc_internal.h"
 
 CameraDeviceUsbImpl::CameraDeviceUsbImpl(uvc_context_t *context,
-                                         uvc_device_t *device,
-                                         uvc_device_handle_t *deviceHandle,
-                                         int fd)
-    : mContext(context), mDevice(device), mDeviceHandle(deviceHandle), mFd(fd) {
+        uvc_device_t *device,
+        uvc_device_handle_t *deviceHandle,
+        int fd)
+        : mContext(context), mDevice(device), mDeviceHandle(deviceHandle), mFd(fd) {
     mCameraStream = new CameraStreamUsbImpl(deviceHandle);
 }
 
@@ -47,156 +47,156 @@ bool CameraDeviceUsbImpl::setParameter(int type, int value) {
     LOG_D("---开始设置%d的参数信息", type);
     uvc_error_t ret = UVC_ERROR_IO;
     switch (type) {
-    case CAMERA_PARAMETER_AUTO_EXPOSURE:
-        ret = uvc_set_ae_mode(mDeviceHandle, value == 1 ? 8 : 1);
-        break;
-    case CAMERA_PARAMETER_EXPOSURE:
-        ret = uvc_set_exposure_abs(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_BRIGHTNESS:
-        ret = uvc_set_brightness(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_CONTRAST:
-        ret = uvc_set_contrast(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_GAIN:
-        ret = uvc_set_gain(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_SATURATION:
-        ret = uvc_set_saturation(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_ZOOM:
-        ret = uvc_set_zoom_abs(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_AUTO_FOCUS:
-        ret = uvc_set_focus_auto(mDeviceHandle, value == 1 ? 1 : 0);
-        break;
-    case CAMERA_PARAMETER_FOCUS:
-        ret = uvc_set_focus_abs(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_IRIS:
-        ret = uvc_set_iris_abs(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_AUTO_HUE:
-        ret = uvc_set_hue_auto(mDeviceHandle, value == 1 ? 1 : 0);
-        break;
-    case CAMERA_PARAMETER_HUE:
-        ret = uvc_set_hue(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_AUTO_WHITE_BALANCE:
-        ret = uvc_set_white_balance_temperature_auto(mDeviceHandle, value == 1 ? 1 : 0);
-        break;
-    case CAMERA_PARAMETER_WHITE_BALANCE:
-        ret = uvc_set_white_balance_temperature(mDeviceHandle, value);
-        break;
-    case CAMERA_PARAMETER_PRIVACY:
-        ret = uvc_set_privacy(mDeviceHandle, value == 1 ? 1 : 0);
-        break;
-    case CAMERA_PARAMETER_DISPLAY_TRANSFORM:
-        LOG_D("-设置预览方向参数");
-        return mCameraStream->setDisplayTransform(value);
+        case CAMERA_PARAMETER_AUTO_EXPOSURE:
+            ret = uvc_set_ae_mode(mDeviceHandle, value == 1 ? 8 : 1);
+            break;
+        case CAMERA_PARAMETER_EXPOSURE:
+            ret = uvc_set_exposure_abs(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_BRIGHTNESS:
+            ret = uvc_set_brightness(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_CONTRAST:
+            ret = uvc_set_contrast(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_GAIN:
+            ret = uvc_set_gain(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_SATURATION:
+            ret = uvc_set_saturation(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_ZOOM:
+            ret = uvc_set_zoom_abs(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_AUTO_FOCUS:
+            ret = uvc_set_focus_auto(mDeviceHandle, value == 1 ? 1 : 0);
+            break;
+        case CAMERA_PARAMETER_FOCUS:
+            ret = uvc_set_focus_abs(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_IRIS:
+            ret = uvc_set_iris_abs(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_AUTO_HUE:
+            ret = uvc_set_hue_auto(mDeviceHandle, value == 1 ? 1 : 0);
+            break;
+        case CAMERA_PARAMETER_HUE:
+            ret = uvc_set_hue(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_AUTO_WHITE_BALANCE:
+            ret = uvc_set_white_balance_temperature_auto(mDeviceHandle, value == 1 ? 1 : 0);
+            break;
+        case CAMERA_PARAMETER_WHITE_BALANCE:
+            ret = uvc_set_white_balance_temperature(mDeviceHandle, value);
+            break;
+        case CAMERA_PARAMETER_PRIVACY:
+            ret = uvc_set_privacy(mDeviceHandle, value == 1 ? 1 : 0);
+            break;
+        case CAMERA_PARAMETER_DISPLAY_TRANSFORM:
+            LOG_D("-设置预览方向参数");
+            return mCameraStream->setDisplayTransform(value);
     }
     return ret == UVC_SUCCESS;
 }
 
 std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter(int type) {
     switch (type) {
-    case CAMERA_PARAMETER_PREVIEW_SIZE:
-        return mCameraStream->getCurrentPreviewSize();
-    case CAMERA_PARAMETER_AUTO_EXPOSURE:
-        uint8_t mode;
-        if (uvc_get_ae_mode(mDeviceHandle, &mode, UVC_GET_CUR) == UVC_SUCCESS) {
-            return mode == 8 ? 1 : 0;
-        }
-        break;
-    case CAMERA_PARAMETER_EXPOSURE:
-        uint32_t exposure;
-        if (uvc_get_exposure_abs(mDeviceHandle, &exposure, UVC_GET_CUR) == UVC_SUCCESS) {
-            return static_cast<int>(exposure);
-        }
-        break;
-    case CAMERA_PARAMETER_BRIGHTNESS:
-        int16_t brightness;
-        if (uvc_get_brightness(mDeviceHandle, &brightness, UVC_GET_CUR) == UVC_SUCCESS) {
-            return brightness;
-        }
-        break;
-    case CAMERA_PARAMETER_CONTRAST:
-        uint16_t contrast;
-        if (uvc_get_contrast(mDeviceHandle, &contrast, UVC_GET_CUR) == UVC_SUCCESS) {
-            return contrast;
-        }
-        break;
-    case CAMERA_PARAMETER_GAIN:
-        uint16_t gain;
-        if (uvc_get_gain(mDeviceHandle, &gain, UVC_GET_CUR) == UVC_SUCCESS) {
-            return gain;
-        }
-        break;
-    case CAMERA_PARAMETER_SATURATION:
-        uint16_t saturation;
-        if (uvc_get_saturation(mDeviceHandle, &saturation, UVC_GET_CUR) == UVC_SUCCESS) {
-            return saturation;
-        }
-        break;
-    case CAMERA_PARAMETER_ZOOM:
-        uint16_t zoom;
-        if (uvc_get_zoom_abs(mDeviceHandle, &zoom, UVC_GET_CUR) == UVC_SUCCESS) {
-            return zoom;
-        }
-        break;
-    case CAMERA_PARAMETER_DISPLAY_TRANSFORM:
-        return mCameraStream->getDisplayTransformState();
+        case CAMERA_PARAMETER_PREVIEW_SIZE:
+            return mCameraStream->getCurrentPreviewSize();
+        case CAMERA_PARAMETER_AUTO_EXPOSURE:
+            uint8_t mode;
+            if (uvc_get_ae_mode(mDeviceHandle, &mode, UVC_GET_CUR) == UVC_SUCCESS) {
+                return mode == 8 ? 1 : 0;
+            }
+            break;
+        case CAMERA_PARAMETER_EXPOSURE:
+            uint32_t exposure;
+            if (uvc_get_exposure_abs(mDeviceHandle, &exposure, UVC_GET_CUR) == UVC_SUCCESS) {
+                return static_cast<int>(exposure);
+            }
+            break;
+        case CAMERA_PARAMETER_BRIGHTNESS:
+            int16_t brightness;
+            if (uvc_get_brightness(mDeviceHandle, &brightness, UVC_GET_CUR) == UVC_SUCCESS) {
+                return brightness;
+            }
+            break;
+        case CAMERA_PARAMETER_CONTRAST:
+            uint16_t contrast;
+            if (uvc_get_contrast(mDeviceHandle, &contrast, UVC_GET_CUR) == UVC_SUCCESS) {
+                return contrast;
+            }
+            break;
+        case CAMERA_PARAMETER_GAIN:
+            uint16_t gain;
+            if (uvc_get_gain(mDeviceHandle, &gain, UVC_GET_CUR) == UVC_SUCCESS) {
+                return gain;
+            }
+            break;
+        case CAMERA_PARAMETER_SATURATION:
+            uint16_t saturation;
+            if (uvc_get_saturation(mDeviceHandle, &saturation, UVC_GET_CUR) == UVC_SUCCESS) {
+                return saturation;
+            }
+            break;
+        case CAMERA_PARAMETER_ZOOM:
+            uint16_t zoom;
+            if (uvc_get_zoom_abs(mDeviceHandle, &zoom, UVC_GET_CUR) == UVC_SUCCESS) {
+                return zoom;
+            }
+            break;
+        case CAMERA_PARAMETER_DISPLAY_TRANSFORM:
+            return mCameraStream->getDisplayTransformState();
 
-    case CAMERA_PARAMETER_AUTO_FOCUS:
-        uint8_t autoFocus;
-        if (uvc_get_focus_auto(mDeviceHandle, &autoFocus, UVC_GET_CUR) == UVC_SUCCESS) {
-            return autoFocus == 1 ? 1 : 0;
-        }
-        break;
-    case CAMERA_PARAMETER_FOCUS:
-        uint16_t focus;
-        if (uvc_get_focus_abs(mDeviceHandle, &focus, UVC_GET_CUR) == UVC_SUCCESS) {
-            return focus;
-        }
-        break;
-    case CAMERA_PARAMETER_IRIS:
-        uint16_t iris;
-        if (uvc_get_iris_abs(mDeviceHandle, &iris, UVC_GET_CUR) == UVC_SUCCESS) {
-            return iris;
-        }
-        break;
-    case CAMERA_PARAMETER_AUTO_HUE:
-        uint8_t autoHue;
-        if (uvc_get_hue_auto(mDeviceHandle, &autoHue, UVC_GET_CUR) == UVC_SUCCESS) {
-            return autoHue == 1 ? 1 : 0;
-        }
-        break;
-    case CAMERA_PARAMETER_HUE:
-        int16_t hue;
-        if (uvc_get_hue(mDeviceHandle, &hue, UVC_GET_CUR) == UVC_SUCCESS) {
-            return hue;
-        }
-        break;
-    case CAMERA_PARAMETER_AUTO_WHITE_BALANCE:
-        uint8_t autoWhiteBalance;
-        if (uvc_get_white_balance_temperature_auto(mDeviceHandle, &autoWhiteBalance, UVC_GET_CUR) == UVC_SUCCESS) {
-            return autoWhiteBalance; // 说明开启的自动模式
-        }
-        break;
-    case CAMERA_PARAMETER_WHITE_BALANCE:
-        // 其他情况，返回当前的模式值
-        uint16_t whiteBalance;
-        if (uvc_get_white_balance_temperature(mDeviceHandle, &whiteBalance, UVC_GET_CUR) == UVC_SUCCESS) {
-            return whiteBalance;
-        }
-        break;
-    case CAMERA_PARAMETER_PRIVACY:
-        uint8_t privacy;
-        if (uvc_get_privacy(mDeviceHandle, &privacy, UVC_GET_CUR) == UVC_SUCCESS) {
-            return privacy == 1 ? 1 : 0;
-        }
-        break;
+        case CAMERA_PARAMETER_AUTO_FOCUS:
+            uint8_t autoFocus;
+            if (uvc_get_focus_auto(mDeviceHandle, &autoFocus, UVC_GET_CUR) == UVC_SUCCESS) {
+                return autoFocus == 1 ? 1 : 0;
+            }
+            break;
+        case CAMERA_PARAMETER_FOCUS:
+            uint16_t focus;
+            if (uvc_get_focus_abs(mDeviceHandle, &focus, UVC_GET_CUR) == UVC_SUCCESS) {
+                return focus;
+            }
+            break;
+        case CAMERA_PARAMETER_IRIS:
+            uint16_t iris;
+            if (uvc_get_iris_abs(mDeviceHandle, &iris, UVC_GET_CUR) == UVC_SUCCESS) {
+                return iris;
+            }
+            break;
+        case CAMERA_PARAMETER_AUTO_HUE:
+            uint8_t autoHue;
+            if (uvc_get_hue_auto(mDeviceHandle, &autoHue, UVC_GET_CUR) == UVC_SUCCESS) {
+                return autoHue == 1 ? 1 : 0;
+            }
+            break;
+        case CAMERA_PARAMETER_HUE:
+            int16_t hue;
+            if (uvc_get_hue(mDeviceHandle, &hue, UVC_GET_CUR) == UVC_SUCCESS) {
+                return hue;
+            }
+            break;
+        case CAMERA_PARAMETER_AUTO_WHITE_BALANCE:
+            uint8_t autoWhiteBalance;
+            if (uvc_get_white_balance_temperature_auto(mDeviceHandle, &autoWhiteBalance, UVC_GET_CUR) == UVC_SUCCESS) {
+                return autoWhiteBalance; // 说明开启的自动模式
+            }
+            break;
+        case CAMERA_PARAMETER_WHITE_BALANCE:
+            // 其他情况，返回当前的模式值
+            uint16_t whiteBalance;
+            if (uvc_get_white_balance_temperature(mDeviceHandle, &whiteBalance, UVC_GET_CUR) == UVC_SUCCESS) {
+                return whiteBalance;
+            }
+            break;
+        case CAMERA_PARAMETER_PRIVACY:
+            uint8_t privacy;
+            if (uvc_get_privacy(mDeviceHandle, &privacy, UVC_GET_CUR) == UVC_SUCCESS) {
+                return privacy == 1 ? 1 : 0;
+            }
+            break;
     }
     return std::monostate{};
 }
@@ -328,14 +328,20 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
     return std::monostate{};
 }
 
-
 std::string CameraDeviceUsbImpl::getSupportedPreviewSizes() {
     if (!mDeviceHandle) {
+        LOG_E("==未获取到文件描述符");
         return std::string();
     }
-    if (!mDeviceHandle->info->stream_ifs) {
+    if (!mDeviceHandle->info || !mDeviceHandle->info->stream_ifs) {
+        LOG_E("==没有流控信息");
         return std::string();
     }
+    LOG_D("UVC版本: %x.%02x",
+          mDeviceHandle->info->ctrl_if.bcdUVC >> 8,
+          mDeviceHandle->info->ctrl_if.bcdUVC & 0xFF);
+
+    LOG_D("开始获取当前的分辨率信息。。");
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 
@@ -345,14 +351,13 @@ std::string CameraDeviceUsbImpl::getSupportedPreviewSizes() {
     DL_FOREACH(mDeviceHandle->info->stream_ifs, stream_if) {
         uvc_format_desc_t *fmt_desc;
         uvc_frame_desc_t *frame_desc;
+        LOG_E("当前的接口数量。。%d", stream_if->bInterfaceNumber);
         DL_FOREACH(stream_if->format_descs, fmt_desc) {
             int formatType = getFormatType(fmt_desc->bDescriptorSubtype);
             // 检查格式，如果不支持则直接跳过
             if (formatType == -1)
                 continue;
             DL_FOREACH(fmt_desc->frame_descs, frame_desc) {
-                LOG_D("=======================分辨率%d=%d*%d====================", formatType,
-                      frame_desc->wWidth, frame_desc->wHeight);
                 writer.StartObject();
                 // width
                 writer.String("width");
@@ -376,14 +381,14 @@ std::string CameraDeviceUsbImpl::getSupportedPreviewSizes() {
 // 根据格式描述符的子类型返回格式类型
 int CameraDeviceUsbImpl::getFormatType(uint8_t descriptorSubtype) {
     switch (descriptorSubtype) {
-    case UVC_VS_FORMAT_UNCOMPRESSED:
-        LOG_D("当前为YUV类型");
-        return PREVIEW_FORMAT_YUY2;
-    case UVC_VS_FORMAT_MJPEG:
-        LOG_D("当前为MJPEG类型");
-        return PREVIEW_FORMAT_MJPEG;
-    default:
-        LOG_D("不支持的格式类型");
-        return -1;
+        case UVC_VS_FORMAT_UNCOMPRESSED:
+            LOG_D("当前为YUV类型");
+            return PREVIEW_FORMAT_YUY2;
+        case UVC_VS_FORMAT_MJPEG:
+            LOG_D("当前为MJPEG类型");
+            return PREVIEW_FORMAT_MJPEG;
+        default:
+            LOG_D("不支持的格式类型");
+            return -1;
     }
 }

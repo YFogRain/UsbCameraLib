@@ -321,20 +321,20 @@ static const char *find_usbfs_path(void) {
  */
 // 解析内核版本，返回 0 表示成功，-1 表示失败
 static int parse_kernel_version(const char *version, struct kernel_version *ver) {
-    LOG_D("内核信息:%{public}s", version);
+    LOG_D("内核信息:%s", version);
     // 删除多余的附加信息部分，例如：-g1d8c45fb67b9、(lwd@ubuntu-SA5248M4)
     // 跳过非数字字符，直到找到版本号部分
     while (*version && !isdigit(*version)) {
         version++;
     }
-    LOG_D("清理冗余之后的字符串为:%{public}s", version);
+    LOG_D("清理冗余之后的字符串为:%s", version);
     // 如果没有找到有效版本号部分
     if (*version == '\0') {
         LOG_E("未匹配到对应的版本号信息");
         return -1;
     }
     int atoms = sscanf(version, "%d.%d.%d", &ver->major, &ver->minor, &ver->sublevel);
-    LOG_D("内核信息解析:%{public}d", atoms);
+    LOG_D("内核信息解析:%d", atoms);
     if (atoms < 2) {
         LOG_E("当前linux内核的版本信息少于2位");
         return -1;
@@ -579,7 +579,7 @@ static int open_sysfs_attr(struct libusb_context *ctx, const char *sysfs_dir, co
 
 /* Note only suitable for attributes which always read >= 0, < 0 is error */
 static int read_sysfs_attr(struct libusb_context *ctx, const char *sysfs_dir, const char *attr,
-                           int max_value, int *value_p) {
+        int max_value, int *value_p) {
     char buf[20], *endptr;
     long value;
     ssize_t r;
@@ -668,7 +668,7 @@ static int sysfs_get_active_config(struct libusb_device *dev, int *config) {
 }
 
 int linux_get_device_address(struct libusb_context *ctx, int detached, uint8_t *busnum,
-                             uint8_t *devaddr, const char *dev_node, const char *sys_name, int fd) {
+        uint8_t *devaddr, const char *dev_node, const char *sys_name, int fd) {
     int sysfs_val;
     int r;
 
@@ -855,7 +855,7 @@ static int parse_config_descriptors(struct libusb_device *dev) {
 }
 
 static int op_get_config_descriptor_by_value(struct libusb_device *dev, uint8_t value,
-                                             void **buffer) {
+        void **buffer) {
     struct linux_device_priv *priv = usbi_get_device_priv(dev);
     struct config_descriptor *config;
     uint8_t idx;
@@ -901,7 +901,7 @@ static int op_get_active_config_descriptor(struct libusb_device *dev, void *buff
 }
 
 static int op_get_config_descriptor(struct libusb_device *dev, uint8_t config_index, void *buffer,
-                                    size_t len) {
+        size_t len) {
     LOG_D("linux-开始获取描述符配置～～");
     struct linux_device_priv *priv = usbi_get_device_priv(dev);
     struct config_descriptor *config;
@@ -986,7 +986,7 @@ static enum libusb_speed usbfs_get_speed(struct libusb_context *ctx, int fd) {
 }
 
 static int initialize_device(struct libusb_device *dev, uint8_t busnum, uint8_t devaddr,
-                             const char *sysfs_dir, int wrapped_fd) {
+        const char *sysfs_dir, int wrapped_fd) {
     struct linux_device_priv *priv = usbi_get_device_priv(dev);
     struct libusb_context *ctx = DEVICE_CTX(dev);
     size_t alloc_len;
@@ -1199,7 +1199,7 @@ static int linux_get_parent_info(struct libusb_device *dev, const char *sysfs_di
 }
 
 int linux_enumerate_device(struct libusb_context *ctx, uint8_t busnum, uint8_t devaddr,
-                           const char *sysfs_dir) {
+        const char *sysfs_dir) {
     unsigned long session_id;
     struct libusb_device *dev;
     int r;
@@ -1442,7 +1442,7 @@ static int initialize_handle(struct libusb_device_handle *handle, int fd) {
 }
 
 static int op_wrap_sys_device(struct libusb_context *ctx, struct libusb_device_handle *handle,
-                              intptr_t sys_dev) {
+        intptr_t sys_dev) {
     struct linux_device_handle_priv *hpriv = usbi_get_device_handle_priv(handle);
     int fd = (int) sys_dev;
     uint8_t busnum, devaddr;
@@ -1613,7 +1613,7 @@ static int release_interface(struct libusb_device_handle *handle, unsigned int i
 }
 
 static int op_set_interface(struct libusb_device_handle *handle, uint8_t interface,
-                            uint8_t altsetting) {
+        uint8_t altsetting) {
     struct linux_device_handle_priv *hpriv = usbi_get_device_handle_priv(handle);
     int fd = hpriv->fd;
     struct usbfs_setinterface setintf;
@@ -1708,7 +1708,7 @@ static int op_reset_device(struct libusb_device_handle *handle) {
 }
 
 static int do_streams_ioctl(struct libusb_device_handle *handle, long req, uint32_t num_streams,
-                            unsigned char *endpoints, int num_endpoints) {
+        unsigned char *endpoints, int num_endpoints) {
     struct linux_device_handle_priv *hpriv = usbi_get_device_handle_priv(handle);
     int r, fd = hpriv->fd;
     struct usbfs_streams *streams;
@@ -1743,7 +1743,7 @@ static int do_streams_ioctl(struct libusb_device_handle *handle, long req, uint3
 }
 
 static int op_alloc_streams(struct libusb_device_handle *handle, uint32_t num_streams,
-                            unsigned char *endpoints, int num_endpoints) {
+        unsigned char *endpoints, int num_endpoints) {
     return do_streams_ioctl(handle,
                             IOCTL_USBFS_ALLOC_STREAMS,
                             num_streams,
@@ -1752,7 +1752,7 @@ static int op_alloc_streams(struct libusb_device_handle *handle, uint32_t num_st
 }
 
 static int op_free_streams(struct libusb_device_handle *handle, unsigned char *endpoints,
-                           int num_endpoints) {
+        int num_endpoints) {
     return do_streams_ioctl(handle, IOCTL_USBFS_FREE_STREAMS, 0, endpoints, num_endpoints);
 }
 
@@ -2399,47 +2399,16 @@ static int handle_bulk_completion(struct usbi_transfer *itransfer, struct usbfs_
     struct linux_transfer_priv *tpriv = usbi_get_transfer_priv(itransfer);
     struct libusb_transfer *transfer = USBI_TRANSFER_TO_LIBUSB_TRANSFER(itransfer);
     int urb_idx = urb - tpriv->urbs;
-
     usbi_mutex_lock(&itransfer->lock);
-    usbi_dbg(TRANSFER_CTX(transfer),
-             "handling completion status %d of bulk urb %d/%d",
-             urb->status,
-             urb_idx + 1,
-             tpriv->num_urbs);
-
     tpriv->num_retired++;
 
     if (tpriv->reap_action != NORMAL) {
-        /* cancelled, submit_fail, or completed early */
         usbi_dbg(TRANSFER_CTX(transfer), "abnormal reap: urb status %d", urb->status);
-
-        /* even though we're in the process of cancelling, it's possible that
-         * we may receive some data in these URBs that we don't want to lose.
-         * examples:
-         * 1. while the kernel is cancelling all the packets that make up an
-         *    URB, a few of them might complete. so we get back a successful
-         *    cancellation *and* some data.
-         * 2. we receive a short URB which marks the early completion condition,
-         *    so we start cancelling the remaining URBs. however, we're too
-         *    slow and another URB completes (or at least completes partially).
-         *    (this can't happen since we always use BULK_CONTINUATION.)
-         *
-         * When this happens, our objectives are not to lose any "surplus" data,
-         * and also to stick it at the end of the previously-received data
-         * (closing any holes), so that libusb reports the total amount of
-         * transferred data and presents it in a contiguous chunk.
-         */
         if (urb->actual_length > 0) {
             unsigned char *target = transfer->buffer + itransfer->transferred;
-
-            usbi_dbg(TRANSFER_CTX(transfer),
-                     "received %d bytes of surplus data",
-                     urb->actual_length);
+            usbi_dbg(TRANSFER_CTX(transfer), "received %d bytes of surplus data", urb->actual_length);
             if (urb->buffer != target) {
-                usbi_dbg(TRANSFER_CTX(transfer),
-                         "moving surplus data from offset %zu to offset %zu",
-                         (unsigned char *) urb->buffer - transfer->buffer,
-                         target - transfer->buffer);
+                usbi_dbg(TRANSFER_CTX(transfer), "moving surplus data from offset %zu to offset %zu", (unsigned char *) urb->buffer - transfer->buffer, target - transfer->buffer);
                 memmove(target, urb->buffer, urb->actual_length);
             }
             itransfer->transferred += urb->actual_length;
@@ -2763,7 +2732,7 @@ static int reap_for_handle(struct libusb_device_handle *handle) {
 }
 
 static int op_handle_events(struct libusb_context *ctx, void *event_data, unsigned int count,
-                            unsigned int num_ready) {
+        unsigned int num_ready) {
     struct pollfd *fds = event_data;
     unsigned int n;
     int r;
@@ -2833,7 +2802,7 @@ static int op_handle_events(struct libusb_context *ctx, void *event_data, unsign
 
 
 int android_generate_device(struct libusb_context *ctx, struct libusb_device **dev, int fd,
-                            int busNum, int devAddress) {
+        int busNum, int devAddress) {
     unsigned long session_id;
     int r;
     //使用总线编号和设备地址生成一个会话 ID

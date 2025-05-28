@@ -40,8 +40,7 @@ class CameraViewModel : BaseViewModel() {
 			val supportedParameter = cameraDevice.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
 			Log.d("cameraPreviewUpdateTag", "分辨率集合:${GsonHelper.getHelper().modeToJson(supportedParameter)}")
 			//设置预览分辨率
-			cameraDevice.setPreviewSize(640, 480, CameraPreviewFormat.YUY2)
-			cameraDevice.setParameter(CameraParameter.DISPLAY_TRANSFORM,DisplayTransformState.TRANSFORM_ROTATE_90)
+			cameraDevice.setPreviewSize(640, 480, CameraPreviewFormat.MJPEG)
 			cameraDevice.setPreviewListener(IFrameListener { width, height, frame -> }, CameraDataFormat.BGR)
 			block.invoke()
 		}

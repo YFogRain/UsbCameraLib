@@ -110,7 +110,6 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetSupportedParameters(JNIEnv *e
         std::string str = std::to_string(value);
         return env->NewStringUTF(str.c_str());
     } else if (std::holds_alternative<std::string>(result)) {
-        LOG_D("获取到了char类型");
         auto value = std::get<std::string>(result);
         LOG_D("当前获取到的值为:%s", value.c_str());
         return env->NewStringUTF(value.c_str());
