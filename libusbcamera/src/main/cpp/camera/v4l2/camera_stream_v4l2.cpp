@@ -358,7 +358,7 @@ void CameraStreamV4l2Impl::thread_func_preview_call() {
         }
         putRecordFrames(pFrame);
         // 格式化数据格式
-        cv::Mat outFrame = ImgUtils::format(pFrame->data, pFrame->width, pFrame->height, previewFormat);
+        std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, pFrame->width, pFrame->height, previewFormat);
         // 释放源数据
         free_stream(pFrame);
 
@@ -369,11 +369,11 @@ void CameraStreamV4l2Impl::thread_func_preview_call() {
             theVM->AttachCurrentThread(&env, nullptr);
         }
         // 释放源数据
-        int data_bytes = outFrame.total() * outFrame.elemSize();
-        if (outFrame.data && data_bytes > 0) {
-            jobject buf = env->NewDirectByteBuffer(outFrame.data, data_bytes);
+        int data_bytes = outFrame.size();
+        if (outFrame.data() && data_bytes > 0) {
+            jobject buf = env->NewDirectByteBuffer(outFrame.data(), data_bytes);
             if (buf) {
-                env->CallVoidMethod(previewListener, onFrameMethod, outFrame.cols, outFrame.rows, buf);
+                env->CallVoidMethod(previewListener, onFrameMethod, pFrame->width, pFrame->height, buf);
                 if (env->ExceptionCheck()) {
                     LOG_D("ExceptionCheck");
                     env->ExceptionDescribe();

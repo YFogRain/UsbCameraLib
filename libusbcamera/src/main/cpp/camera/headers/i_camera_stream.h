@@ -323,14 +323,14 @@ protected:
             return nullptr;
         }
         outFrame->format = outFormat;
-        cv::Mat outImg = ImgUtils::format(inFrame->data, inFrame->width, inFrame->height, outFormat);
+        std::vector<uint8_t> outImg = ImgUtils::format(inFrame->data, inFrame->width, inFrame->height, outFormat);
         if (outImg.empty()) {
             free_stream(outFrame);
             return nullptr;
         }
-        outFrame->data_size = outImg.total() * outImg.elemSize();
+        outFrame->data_size = outImg.size();
         outFrame->data = (uint8_t *) malloc(outFrame->data_size);
-        std::memcpy(outFrame->data, outImg.data, outFrame->data_size);
+        std::memcpy(outFrame->data, outImg.data(), outFrame->data_size);
         return outFrame;
     };
 
