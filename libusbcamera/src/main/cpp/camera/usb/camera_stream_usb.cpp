@@ -18,8 +18,6 @@ CameraStreamUsbImpl::~CameraStreamUsbImpl() {
         delete mVideoRecord;
     }
     mVideoRecord = nullptr;
-    releaseWindows();
-    releasePreviewFunc();
     mDeviceHandle = nullptr;
 }
 

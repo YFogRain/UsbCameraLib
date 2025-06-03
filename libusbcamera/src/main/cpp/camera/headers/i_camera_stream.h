@@ -50,6 +50,28 @@ public:
     virtual bool stopPreview() = 0;                                     // 开启预览
     virtual bool setPreviewSize(int width, int height, int format) = 0; // 设置预览分辨率
 
+    void releaseWindows() {
+        std::lock_guard<std::mutex> lock(surfaceMutex);
+        if (mPreviewWindow) {
+            ANativeWindow_release(mPreviewWindow);
+            mPreviewWindow = nullptr;
+        }
+    };
+
+    void releasePreviewFunc() {
+        std::lock_guard<std::mutex> lock(previewFuncMutex);
+        if (previewListener && theVM) {
+            JNIEnv *env = nullptr;
+            if (theVM->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_OK) {
+                // 在析构函数中删除全局引用
+                env->DeleteGlobalRef(previewListener);  // 删除全局引用
+            }
+        }
+        theVM = nullptr;
+        previewListener = nullptr;
+        onFrameMethod = nullptr;
+    };
+
     bool setPreviewDataListener(JavaVM *vm, JNIEnv *env, jobject listener, int format) {
         std::lock_guard<std::mutex> lock(previewFuncMutex);
         previewFormat = format;
@@ -229,28 +251,6 @@ protected:
         if (LIKELY(mPreviewWindow)) {
             ANativeWindow_setBuffersGeometry(mPreviewWindow, width, height, UVC_FORMAT_FRAME_WINDOW);
         }
-    };
-
-    void releaseWindows() {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (mPreviewWindow) {
-            ANativeWindow_release(mPreviewWindow);
-            mPreviewWindow = nullptr;
-        }
-    };
-
-    void releasePreviewFunc() {
-        std::lock_guard<std::mutex> lock(previewFuncMutex);
-        if (previewListener && theVM) {
-            JNIEnv *env = nullptr;
-            if (theVM->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_OK) {
-                // 在析构函数中删除全局引用
-                env->DeleteGlobalRef(previewListener);  // 删除全局引用
-            }
-        }
-        theVM = nullptr;
-        previewListener = nullptr;
-        onFrameMethod = nullptr;
     };
 
     void putRecordFrames(stream_frame_t *inFrame) {

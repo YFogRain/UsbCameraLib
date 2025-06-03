@@ -20,8 +20,6 @@ CameraStreamV4l2Impl::~CameraStreamV4l2Impl() {
         delete mVideoRecord;
     }
     mVideoRecord = nullptr;
-    releaseWindows();
-    releasePreviewFunc();
     videoFd = -1;
 }
 
