@@ -16,6 +16,8 @@ CameraDeviceV4L2Impl::CameraDeviceV4L2Impl(int fd) : mVideoFd(fd) {
 
 CameraDeviceV4L2Impl::~CameraDeviceV4L2Impl() {
     mCameraStream->stopPreview();
+    mCameraStream->releaseWindows();
+    mCameraStream->releasePreviewFunc();
     delete mCameraStream;
     if (mVideoFd != -1) {
         close(mVideoFd);
