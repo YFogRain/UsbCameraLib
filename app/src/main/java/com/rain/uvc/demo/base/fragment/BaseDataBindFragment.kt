@@ -6,13 +6,14 @@ import android.view.ViewGroup
 import androidx.annotation.LayoutRes
 import androidx.databinding.DataBindingUtil
 import androidx.databinding.ViewDataBinding
+import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.singleClick
 
 /**
  * dataBind基类 - VB 为[ViewDataBinding]
  * 在[loadVariableId]不为-1的情况下进行[ViewDataBinding]和[mViewModel]的绑定
  */
-abstract class BaseDataBindFragment<DB : ViewDataBinding> : BaseFragment() {
+abstract class BaseDataBindFragment<DB : ViewDataBinding, VM : BaseViewModel> : BaseFragment<VM>() {
 	protected lateinit var mBinding: DB
 	
 	/**
@@ -40,10 +41,10 @@ abstract class BaseDataBindFragment<DB : ViewDataBinding> : BaseFragment() {
 	
 	override fun initMVVMState() {
 		super.initMVVMState()
-		mBinding.run {
-			val variableId = loadVariableId()
-			if (variableId != -1 && mViewModel != null) setVariable(variableId, mViewModel)
-			lifecycleOwner = viewLifecycleOwner //navigation的生命周期需要跟view绑定，否则会出现异常
+		mBinding.lifecycleOwner = viewLifecycleOwner
+		val variableId = loadVariableId()
+		if (isCreatedViewModel() && variableId != -1) {
+			mBinding.setVariable(variableId, viewModel)
 		}
 		initModelObserve()
 	}

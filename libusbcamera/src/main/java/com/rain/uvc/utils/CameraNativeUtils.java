@@ -281,5 +281,18 @@ public class CameraNativeUtils {
         return null;
     }
 
+    public static native boolean nativeStartRecord(long nativeId, String fileName);
+
+    public static native boolean nativeStopRecord(long nativeId);
+
+    public static native void nativeSetRecordFormat(long nativeId, int format);
+
+    public static native void nativeSetParentPath(long nativeId, String parentPath);
+
+    public static native boolean nativeSetDefaultParentPath(String parentPath);
+
+    public static native String nativeGetRecordPath(long nativeId);
+
+    public static native String nativeTakePicture(long nativeId, String parentPath, String fileName);
 }
 

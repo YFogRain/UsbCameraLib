@@ -4,7 +4,7 @@ package com.rain.uvc.state;
  * 当前支持的格式
  */
 public enum CameraPreviewFormat {
-    YUY2(0), NV12(1), NV21(2), MJPEG(3), JPEG(4), RGB(5), BGR(6);
+    BGR(0), YUY2(1), NV21(2), NV12(3), RGB(5), MJPEG(6), JPEG(7);
     private final int value;
 
     CameraPreviewFormat(int value) {
@@ -16,10 +16,21 @@ public enum CameraPreviewFormat {
     }
 
     public static CameraPreviewFormat valueToFormatMode(int format) {
-        if (format == 1) {
-            return CameraPreviewFormat.MJPEG;
+        switch (format) {
+            case 0:
+                return CameraPreviewFormat.BGR;
+            case 2:
+                return CameraPreviewFormat.NV21;
+            case 3:
+                return CameraPreviewFormat.NV12;
+            case 5:
+                return CameraPreviewFormat.RGB;
+            case 6:
+                return CameraPreviewFormat.MJPEG;
+            case 7:
+                return CameraPreviewFormat.JPEG;
+            default:
+                return CameraPreviewFormat.YUY2;
         }
-        return CameraPreviewFormat.YUY2;
     }
 }
-

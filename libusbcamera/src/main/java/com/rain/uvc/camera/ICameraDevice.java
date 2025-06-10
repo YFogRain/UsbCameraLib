@@ -9,6 +9,7 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.TextureView;
@@ -20,6 +21,7 @@ import com.rain.uvc.state.CameraDataFormat;
 import com.rain.uvc.state.CameraParameter;
 import com.rain.uvc.state.CameraPreviewFormat;
 import com.rain.uvc.state.CameraSupportParameters;
+import com.rain.uvc.state.RecordFormat;
 import com.rain.uvc.utils.CameraNativeUtils;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,7 +43,6 @@ public class ICameraDevice {
     private volatile boolean isReceiverSuccess;
 
     private final String mDeviceName;
-
 
     //usb移除回调监听
     private final BroadcastReceiver usbDetachedReceiver = new BroadcastReceiver() {
@@ -220,6 +221,51 @@ public class ICameraDevice {
         return CameraNativeUtils.getSupportedParameter(mNativeAtomic.get(), key);
     }
 
+    public boolean startRecord() {
+        return startRecord(null);
+    }
+
+    public boolean startRecord(String fileName) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        return CameraNativeUtils.nativeStartRecord(nativeId, fileName);
+    }
+
+    public boolean stopRecord() {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return false;
+        }
+        return CameraNativeUtils.nativeStopRecord(nativeId);
+    }
+
+    public void setRecordFormat(RecordFormat format) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return;
+        }
+        CameraNativeUtils.nativeSetRecordFormat(nativeId, format.getValue());
+    }
+
+    public void setParentPath(String parentPath) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return;
+        }
+        CameraNativeUtils.nativeSetParentPath(nativeId, parentPath);
+    }
+
+    public String getRecordPath() {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return null;
+        }
+        return CameraNativeUtils.nativeGetRecordPath(nativeId);
+    }
+
+
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private synchronized void initReceiver() {
         if (isReceiverSuccess) return;
@@ -239,6 +285,21 @@ public class ICameraDevice {
             }
         }
         isReceiverSuccess = false;
+    }
+
+
+    public String takePicture(String parentPath) {
+        return takePicture(parentPath, null);
+    }
+
+    public String takePicture(String parentPath, String fileName) {
+        long nativeId = mNativeAtomic.get();
+        if (nativeId == 0L) {
+            return null;
+        }
+        String path = CameraNativeUtils.nativeTakePicture(nativeId, parentPath, fileName);
+        Log.d("takePicture", "照片信息:" + path);
+        return path;
     }
 }
 

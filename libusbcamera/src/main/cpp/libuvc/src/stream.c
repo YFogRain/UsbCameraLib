@@ -861,18 +861,18 @@ void _uvc_process_payload(uvc_stream_handle_t *strmh, uint8_t *payload, size_t p
             return;
         }
         //如果 fid 发生变化且已有数据
-        if (strmh->fid != (header_info & 1) && strmh->got_bytes != 0) {
+        if (strmh->fid != (header_info & UVC_STREAM_FID) && strmh->got_bytes != 0) {
             _uvc_swap_buffers(strmh);
         }
         //更新 fid（场标识符），表示当前帧是奇数或偶数帧
-        strmh->fid = header_info & 1;
+        strmh->fid = header_info & UVC_STREAM_FID;
         //根据头部信息，提取时间戳（PTS）
-        if (header_info & (1 << 2)) {
+        if (header_info & UVC_STREAM_PTS) {
             strmh->pts = DW_TO_INT(payload + variable_offset);
             variable_offset += 4;
         }
         //提取和上一个屏幕时间（last_scr）
-        if (header_info & (1 << 3)) {
+        if (header_info & UVC_STREAM_SCR) {
             strmh->last_scr = DW_TO_INT(payload + variable_offset);
             variable_offset += 6;
         }
@@ -895,7 +895,7 @@ void _uvc_process_payload(uvc_stream_handle_t *strmh, uint8_t *payload, size_t p
         memcpy(strmh->outbuf + strmh->got_bytes, payload + header_len, data_len);
         strmh->got_bytes += data_len;//更新 strmh->got_bytes 记录当前已接收的数据量
         //如果头部信息的第 1 位被设置（EOF标志）或接收到的字节等于最大帧大小
-        if (header_info & (1 << 1) || strmh->got_bytes == strmh->cur_ctrl.dwMaxVideoFrameSize) {
+        if (header_info & UVC_STREAM_EOF || strmh->got_bytes == strmh->cur_ctrl.dwMaxVideoFrameSize) {
             //来交换缓冲区，表示已接收完整帧
             _uvc_swap_buffers(strmh);
         }

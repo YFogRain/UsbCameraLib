@@ -15,6 +15,15 @@ extern int DEBUG_ENABLE;
 #define        SAFE_DELETE(p)                { if (p) { delete (p); (p) = NULL; } }
 #define        SAFE_DELETE_ARRAY(p)        { if (p) { delete [](p); (p) = NULL; } }
 #define        NUM_ARRAY_ELEMENTS(p)        ((int) sizeof(p) / sizeof(p[0]))
+#define		MARK(...)
+#define FPRINTF(stream, ...) MARK(__VA_ARGS__); usleep(1000);
+#define FPRINTF_ERR(stream, ...) LOG_D(__VA_ARGS__)
+
+#define		ENTER()				LOG_D("begin")
+#define		RETURN(code,type)	{type RESULT = code; LOG_D("end (%d)", (int)RESULT); return RESULT;}
+#define		RET(code)			{LOGD("end"); return code;}
+#define		EXIT()				{LOG_D("end"); return;}
+#define		PRE_EXIT()			LOGD("end")
 
 #if defined(__GNUC__)
 // the macro for branch prediction optimaization for gcc(-O2/-O3 required)
@@ -26,4 +35,5 @@ extern int DEBUG_ENABLE;
 #define		LIKELY(x)					((x))
 #define		UNLIKELY(x)					((x))
 #endif
+
 #endif //UVCCAMERA_LOG_H

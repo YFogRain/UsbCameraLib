@@ -1,35 +1,49 @@
 package com.rain.uvc.demo.base.activity
 
+import android.content.Context
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
-import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.enableEdgeToEdge
 import androidx.annotation.CallSuper
 import androidx.annotation.ColorInt
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.rain.uvc.demo.R
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
+import com.rain.uvc.demo.utils.LanguageHelper
+import com.rain.uvc.demo.utils.conversionViewModel
 
 /**
  * @author yuan
  * @createTime: 2024/10/29
  * @des
  */
-abstract class BaseActivity : AppCompatActivity() {
+@Suppress("DEPRECATION")
+abstract class BaseActivity<VM : BaseViewModel> : AppCompatActivity() {
+	
 	/**
 	 * viewModel对象
 	 */
-	protected open val mViewModel: BaseViewModel? = null
+	protected val viewModel: VM by lazy { conversionViewModel() }
 	
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		initializeStart()
-		stateBarTextColor()
+		enableEdgeToEdge()
+		initializeStart(savedInstanceState)
 		initCreateView()
+		ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content)) { v, insets ->
+			val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+			v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+			insets
+		}
+		
 		initMVVMState()
-		initializeEnd(savedInstanceState)
+		initializeCreated(savedInstanceState)
 	}
 	
 	/**
@@ -40,12 +54,14 @@ abstract class BaseActivity : AppCompatActivity() {
 	/**
 	 * view初始化之后
 	 */
-	abstract fun initializeEnd(savedInstanceState: Bundle?)
+	protected open fun initializeStart(savedInstanceState: Bundle?) {}
+	
+	protected abstract fun initializeCreated(savedInstanceState: Bundle?)
 	
 	/**
-	 * view初始化之前
+	 * 是否创建viewModel，默认为创建
 	 */
-	open fun initializeStart() {}
+	protected open fun isCreatedViewModel(): Boolean = true
 	
 	/**
 	 * 初始化viewModel的loading
@@ -53,7 +69,8 @@ abstract class BaseActivity : AppCompatActivity() {
 	@CallSuper
 	protected open fun initMVVMState() {
 		//设置loading回调
-		mViewModel?.setDialogStateChange(lifecycleScope) {
+		if (!isCreatedViewModel()) return
+		viewModel.setDialogStateChange(this.lifecycleScope) {
 			if (it) showDialogLoad() else dismissDialogLoad()
 		}
 	}
@@ -61,6 +78,7 @@ abstract class BaseActivity : AppCompatActivity() {
 	/**
 	 * 显示loading
 	 */
+	private var loading: AlertDialog? = null
 	protected fun showDialogLoad() {
 	}
 	
@@ -75,29 +93,6 @@ abstract class BaseActivity : AppCompatActivity() {
 		super.onDestroy()
 	}
 	
-	/**
-	 * 设置标题栏文字颜色 白色和黑色
-	 */
-	@Suppress("DEPRECATION")
-	private fun stateBarTextColor() {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && whiteStateBarText) {
-			window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-		}
-	}
-	
-	/**
-	 * 是否是白色标题栏
-	 */
-	open val whiteStateBarText = true
-	
-	/**
-	 * 设置toolbar的颜色
-	 */
-	
-	protected fun setBarColor(@ColorInt color: Int) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) window.statusBarColor = color
-	}
-	
 	protected fun hideInput() {
 		try {
 			val inputManager = this.getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
@@ -109,8 +104,31 @@ abstract class BaseActivity : AppCompatActivity() {
 		}
 	}
 	
-	override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-		Log.d("BaseActivity", "keyCode:${keyCode},event:${event}")
-		return super.onKeyDown(keyCode, event)
+	override fun attachBaseContext(newBase: Context) {
+		super.attachBaseContext(LanguageHelper.attachContext(newBase))
+	}
+	
+	/**
+	 * 设置状态栏的颜色
+	 */
+	fun setStatusBarColor(@ColorInt color: Int) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+			window.statusBarColor = color
+		}
+	}
+	
+	/**
+	 * 设置状态栏文字的颜色
+	 * @param isLight true 白色 false 黑色(浅色背景时，文字为深色，深色时相反)
+	 */
+	fun setStatusBarTextColor(isLight: Boolean) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+			val flags = window.decorView.systemUiVisibility
+			window.decorView.systemUiVisibility = if (isLight) {
+				flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+			} else {
+				flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+			}
+		}
 	}
 }

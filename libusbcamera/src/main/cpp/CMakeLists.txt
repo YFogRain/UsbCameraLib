@@ -49,10 +49,17 @@ add_library(uvcCamera SHARED
         camera_uvc.cpp
 
         camera/camera_factory_helper.cpp
-        camera/usb/camera_factory_usb_impl.cpp
-        camera/v4l2/camera_factory_v4l2_impl.cpp
+        camera/usb/camera_device_usb.cpp
+        camera/usb/camera_stream_usb.cpp
+        camera/v4l2/camera_device_v4l2.cpp
+        camera/v4l2/camera_stream_v4l2.cpp
         camera/v4l2/video_v4l2_utils.cpp
         camera/img_util.cpp
+        camera/video_record.cpp
+        camera/appender/FileAppender.cpp
+        camera/appender/ConsoleAppender.cpp
+        camera/appender/utils/cover_utils.cpp
+        camera/manager/LogManager.cpp
 )
 
 
@@ -62,6 +69,9 @@ target_include_directories(uvcCamera PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/camera/headers"
         "${CMAKE_CURRENT_SOURCE_DIR}/log"
         "${CMAKE_CURRENT_SOURCE_DIR}/opencv/include"
+        camera/appender/headers
+        camera/appender/utils/headers
+        camera/manager
         log)
 
 file(GLOB 3RDPARTY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/opencv/3rdparty/libs/${ANDROID_ABI}/*.a)
@@ -71,8 +81,10 @@ target_link_libraries(uvcCamera
         log
         uvc
         z
+        mediandk
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_core.a
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_imgproc.a
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_imgcodecs.a
+        ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_videoio.a
         ${3RDPARTY_LIB}
 )

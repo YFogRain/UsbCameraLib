@@ -32,7 +32,7 @@ import java.util.concurrent.Executors;
  * @des
  */
 public class CameraUvcManager {
-    private static final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private static ExecutorService executor;
 
     private static final ConcurrentHashMap<ICameraDevice, CountDownLatch> runningDevices = new ConcurrentHashMap<>();
 
@@ -41,6 +41,13 @@ public class CameraUvcManager {
      */
     public static boolean debuggable(boolean status) {
         return CameraNativeUtils.debuggable(status ? 1 : 0);
+    }
+
+    /**
+     * 设置默认保存地址
+     */
+    public static boolean setDefaultRecordParent(@NonNull String path) {
+        return CameraNativeUtils.nativeSetDefaultParentPath(path);
     }
 
     /**
@@ -169,6 +176,9 @@ public class CameraUvcManager {
             listener.failed("请检查权限");
             return;
         }
+        if (executor == null) {
+            executor = Executors.newSingleThreadExecutor();
+        }
         // 在子线程中执行打开摄像头的操作
         executor.submit(() -> {
             try {
@@ -219,9 +229,12 @@ public class CameraUvcManager {
         });
     }
 
+
     public static void cancel() {
         try {
-            executor.shutdownNow();
+            if (executor != null) {
+                executor.shutdownNow();
+            }
         } catch (Exception ignored) {
         }
         try {

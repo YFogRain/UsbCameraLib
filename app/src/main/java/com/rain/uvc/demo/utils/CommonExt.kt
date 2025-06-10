@@ -6,15 +6,8 @@ import android.content.res.Configuration
 import android.hardware.usb.UsbDevice
 import android.opengl.GLSurfaceView
 import android.util.Log
-import android.view.LayoutInflater
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import android.view.ViewGroup
-import androidx.annotation.LayoutRes
-import androidx.databinding.DataBindingUtil
-import androidx.databinding.ViewDataBinding
-import androidx.lifecycle.ProcessLifecycleOwner
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.resume
@@ -22,11 +15,6 @@ import kotlin.coroutines.resume
 /**
  * 扩展函数类
  */
-val appLifecycleScope by lazy { ProcessLifecycleOwner.get().lifecycleScope }
-
-fun <VB : ViewDataBinding> ViewGroup.getBind(@LayoutRes layoutResId: Int): VB =
-        DataBindingUtil.inflate(LayoutInflater.from(context), layoutResId, this, false)
-
 fun Activity.isOrientationPortrait(): Boolean {
     return resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 }

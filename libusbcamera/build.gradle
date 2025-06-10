@@ -9,6 +9,7 @@ android {
     defaultConfig {
         minSdk  libs.versions.minSdk.get().toInteger()
 
+        ndkVersion "29.0.13113456"
         consumerProguardFiles "consumer-rules.pro"
         ndk{
             abiFilters "arm64-v8a","armeabi-v7a","x86_64"
@@ -35,5 +36,5 @@ android {
 }
 
 dependencies {
-    implementation "androidx.annotation:annotation:1.9.1"
+    implementation libs.annotation
 }

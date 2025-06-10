@@ -1,28 +1,34 @@
 [versions]
-activityKtx = "1.9.0"
+activityKtx = "1.10.1"
+annotation = "1.9.1"
 minSdk = "21"
-compileSdk = "34"
-targetSdk = "34"
+compileSdk = "35"
+targetSdk = "35"
 rxjava = "2.2.19"
 rxandroid = "2.1.1"
 jvm-version = "17"
 
-android-gradle-plugin = "8.7.3"
-ksp = "2.0.20-1.0.24"
-kotlin = "2.0.20"
-coreKtx = "1.13.1"
-lifecycle-process = "2.8.4"
+android-gradle-plugin = "8.8.2"
+ksp = "2.1.0-1.0.29"
+kotlin = "2.1.0"
+coreKtx = "1.16.0"
+lifecycle-process = "2.9.0"
 
 appcompat = "1.7.0"
-coroutines-android = "1.8.0"
 material = "1.12.0"
-constraintlayout = "2.1.4"
+constraintlayout = "2.2.1"
+navigatuion-version = "2.9.0"
+coroutines-android = "1.10.2"
+gson = "2.13.0"
+datastore-preferences = "1.1.7"
 
-navigatuion-version = "2.8.4"
-
-gson = "2.10.1"
+work-runtime-ktx = "2.10.0"
+junit = "4.13.2"
+junitVersion = "1.2.1"
+espressoCore = "3.5.1"
 [libraries]
 activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
+annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
@@ -33,6 +39,14 @@ gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 navigation-ui-ktx = { module = "androidx.navigation:navigation-ui-ktx", version.ref = "navigatuion-version" }
 navigation-fragment-ktx = { module = "androidx.navigation:navigation-fragment-ktx", version.ref = "navigatuion-version" }
 
+coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines-android" }
+
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore-preferences" }
+
+work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work-runtime-ktx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }
 android-lib = { id = "com.android.library", version.ref = "android-gradle-plugin" }

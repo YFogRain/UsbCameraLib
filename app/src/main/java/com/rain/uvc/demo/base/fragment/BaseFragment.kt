@@ -1,6 +1,5 @@
 package com.rain.uvc.demo.base.fragment
 
-import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -9,29 +8,30 @@ import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.OnBackPressedCallback
 import androidx.annotation.CallSuper
+import androidx.annotation.ColorInt
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.rain.uvc.demo.base.activity.BaseActivity
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
+import com.rain.uvc.demo.utils.conversionViewModel
+import com.rain.uvc.demo.utils.viewLifeScope
 
-/**
- * @author yuan
- * @createTime: 2024/9/18
- * @des
- */
-abstract class BaseFragment : Fragment() {
+abstract class BaseFragment<VM : BaseViewModel> : Fragment() {
+	/**
+	 * viewBind的对象
+	 */
+	protected val viewModel: VM by lazy { conversionViewModel() }
+	
 	//返回键拦截
 	private val backDispatcher by lazy { requireActivity().onBackPressedDispatcher }
 	
 	private var isCreateReset: Boolean = true //是否销毁重建的，只有执行了onAttach方法，才会设置为false，因此，在onViewCreate时才能准确判断
 	
-	/**
-	 * viewBind的对象
-	 */
-	protected open val mViewModel: BaseViewModel? = null
-	
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
+		isCreateReset = false
 		Log.d("BaseFragment", "onCreate-${this.javaClass}")
 		backDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
 			override fun handleOnBackPressed() {
@@ -45,7 +45,6 @@ abstract class BaseFragment : Fragment() {
 	}
 	
 	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-		Log.d("BaseFragment", "onCreateView-${this.javaClass}")
 		return initCreateView(inflater, container)
 	}
 	
@@ -53,26 +52,16 @@ abstract class BaseFragment : Fragment() {
 		super.onViewCreated(view, savedInstanceState)
 		Log.d("BaseFragment", "onViewCreated-${this.javaClass}")
 		initMVVMState()
-		initializeView(savedInstanceState)
-		if (!isCreateReset) initializeData(savedInstanceState)
-	}
-	
-	override fun onAttach(context: Context) {
-		super.onAttach(context)
-		Log.d("BaseFragment", "onAttach-${this.javaClass}")
-		isCreateReset = false
+		initializeCreated(savedInstanceState)
+		if (!isCreateReset) initializeFirstCreated(savedInstanceState)
 	}
 	
 	override fun onDestroyView() {
 		dismissDialogLoad()
-		Log.d("BaseFragment", "onDestroyView-${this.javaClass}")
 		isCreateReset = true
 		super.onDestroyView()
 	}
 	
-	/**
-	 * 初始化view创建
-	 */
 	abstract fun initCreateView(inflater: LayoutInflater, container: ViewGroup?): View?
 	
 	/**
@@ -85,17 +74,23 @@ abstract class BaseFragment : Fragment() {
 	/**
 	 * view初始化之后
 	 */
-	abstract fun initializeView(savedInstanceState: Bundle?)
+	protected abstract fun initializeCreated(savedInstanceState: Bundle?)
 	
-	protected open fun initializeData(savedInstanceState: Bundle?){}
+	protected open fun initializeFirstCreated(savedInstanceState: Bundle?) {}
 	
 	/**
-	 * 初始化viewModel的loading
+	 * 是否创建viewModel，默认为创建
+	 */
+	protected open fun isCreatedViewModel(): Boolean = true
+	
+	/**
+	 * 初始化viewModel的loadingx
 	 */
 	@CallSuper
 	protected open fun initMVVMState() {
 		//设置loading回调
-		mViewModel?.setDialogStateChange(lifecycleScope) {
+		if (!isCreatedViewModel()) return
+		viewModel.setDialogStateChange(viewLifeScope) {
 			if (it) showDialogLoad() else dismissDialogLoad()
 		}
 	}
@@ -103,6 +98,7 @@ abstract class BaseFragment : Fragment() {
 	/**
 	 * 显示loading
 	 */
+	private var loading: AlertDialog? = null
 	protected fun showDialogLoad() {
 	}
 	
@@ -120,6 +116,14 @@ abstract class BaseFragment : Fragment() {
 		} catch (e: Exception) {
 			e.printStackTrace()
 		}
+	}
+	
+	protected fun setStatusBarColor(@ColorInt color: Int) {
+		(activity as? BaseActivity<*>)?.setStatusBarColor(color)
+	}
+	
+	protected fun setStatusBarTextColor(isLight: Boolean) {
+		(activity as? BaseActivity<*>)?.setStatusBarTextColor(isLight)
 	}
 	
 }

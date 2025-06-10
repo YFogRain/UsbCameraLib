@@ -39,6 +39,7 @@
 #include "libuvc/libuvc.h"
 #include "libuvc/libuvc_internal.h"
 #include "../../log/Log.h"
+#include "libusbi.h"
 
 int uvc_already_open(uvc_context_t *ctx, struct libusb_device *usb_dev);
 
@@ -51,64 +52,64 @@ void uvc_free_device_info(uvc_device_info_t *info);
 uvc_error_t uvc_scan_control(uvc_device_handle_t *devh, uvc_device_info_t *info);
 
 uvc_error_t uvc_parse_vc(uvc_device_t *dev,
-                         uvc_device_info_t *info,
-                         const unsigned char *block, size_t block_size);
+        uvc_device_info_t *info,
+        const unsigned char *block, size_t block_size);
 
 uvc_error_t uvc_parse_vc_selector_unit(uvc_device_t *dev,
-                                       uvc_device_info_t *info,
-                                       const unsigned char *block, size_t block_size);
+        uvc_device_info_t *info,
+        const unsigned char *block, size_t block_size);
 
 uvc_error_t uvc_parse_vc_extension_unit(uvc_device_t *dev,
-                                        uvc_device_info_t *info,
-                                        const unsigned char *block,
-                                        size_t block_size);
+        uvc_device_info_t *info,
+        const unsigned char *block,
+        size_t block_size);
 
 uvc_error_t uvc_parse_vc_header(uvc_device_t *dev,
-                                uvc_device_info_t *info,
-                                const unsigned char *block, size_t block_size);
+        uvc_device_info_t *info,
+        const unsigned char *block, size_t block_size);
 
 uvc_error_t uvc_parse_vc_input_terminal(uvc_device_t *dev,
-                                        uvc_device_info_t *info,
-                                        const unsigned char *block,
-                                        size_t block_size);
+        uvc_device_info_t *info,
+        const unsigned char *block,
+        size_t block_size);
 
 uvc_error_t uvc_parse_vc_processing_unit(uvc_device_t *dev,
-                                         uvc_device_info_t *info,
-                                         const unsigned char *block,
-                                         size_t block_size);
+        uvc_device_info_t *info,
+        const unsigned char *block,
+        size_t block_size);
 
 uvc_error_t uvc_scan_streaming(uvc_device_t *dev,
-                               uvc_device_info_t *info,
-                               int interface_idx);
+        uvc_device_info_t *info,
+        int interface_idx);
 
 uvc_error_t uvc_parse_vs(uvc_device_t *dev,
-                         uvc_device_info_t *info,
-                         uvc_streaming_interface_t *stream_if,
-                         const unsigned char *block, size_t block_size);
+        uvc_device_info_t *info,
+        uvc_streaming_interface_t *stream_if,
+        const unsigned char *block, size_t block_size);
 
 uvc_error_t uvc_parse_vs_format_uncompressed(uvc_streaming_interface_t *stream_if,
-                                             const unsigned char *block,
-                                             size_t block_size);
+        const unsigned char *block,
+        size_t block_size);
 
 uvc_error_t uvc_parse_vs_format_mjpeg(uvc_streaming_interface_t *stream_if,
-                                      const unsigned char *block,
-                                      size_t block_size);
+        const unsigned char *block,
+        size_t block_size);
 
 uvc_error_t uvc_parse_vs_frame_uncompressed(uvc_streaming_interface_t *stream_if,
-                                            const unsigned char *block,
-                                            size_t block_size);
+        const unsigned char *block,
+        size_t block_size);
 
 uvc_error_t uvc_parse_vs_frame_format(uvc_streaming_interface_t *stream_if,
-                                      const unsigned char *block,
-                                      size_t block_size);
+        const unsigned char *block,
+        size_t block_size);
 
 uvc_error_t uvc_parse_vs_frame_frame(uvc_streaming_interface_t *stream_if,
-                                     const unsigned char *block,
-                                     size_t block_size);
+        const unsigned char *block,
+        size_t block_size);
 
 uvc_error_t uvc_parse_vs_input_header(uvc_streaming_interface_t *stream_if,
-                                      const unsigned char *block,
-                                      size_t block_size);
+        const unsigned char *block,
+        size_t block_size);
 
 void LIBUSB_CALL _uvc_status_callback(struct libusb_transfer *transfer);
 
@@ -280,7 +281,7 @@ uint8_t uvc_get_device_address(uvc_device_t *dev) {
 }
 
 static uvc_error_t uvc_open_internal(uvc_device_t *dev, struct libusb_device_handle *usb_devh,
-                                     uvc_device_handle_t **devh);
+        uvc_device_handle_t **devh);
 
 #if LIBUSB_API_VERSION >= 0x01000107
 
@@ -375,7 +376,7 @@ static uvc_error_t uvc_open_internal(
     internal_devh->is_isight = (desc.idVendor == 0x05ac &&
                                 desc.idProduct == 0x8501);//检查设备是否是 Apple 的 iSight 摄像头
     //处理状态中断传输
-    LOG_D("是否存在中断传输断点-bEndpointAddress:%d",internal_devh->info->ctrl_if.bEndpointAddress);
+    LOG_D("是否存在中断传输断点-bEndpointAddress:%d", internal_devh->info->ctrl_if.bEndpointAddress);
     if (internal_devh->info->ctrl_if.bEndpointAddress) {//如果设备的控制接口有中断端点
         internal_devh->status_xfer = libusb_alloc_transfer(0);
         if (!internal_devh->status_xfer) {//
@@ -433,7 +434,7 @@ static uvc_error_t uvc_open_internal(
  * @param info Where to store a pointer to the new info struct
  */
 uvc_error_t uvc_get_device_info(uvc_device_handle_t *devh,
-                                uvc_device_info_t **info) {
+        uvc_device_info_t **info) {
     uvc_error_t ret;
     uvc_device_info_t *internal_info;
     //使用 calloc 为 internal_info 分配内存空间
@@ -1115,8 +1116,8 @@ uvc_error_t uvc_scan_control(uvc_device_handle_t *devh, uvc_device_info_t *info)
  * @ingroup device
  */
 uvc_error_t uvc_parse_vc_header(uvc_device_t *dev,
-                                uvc_device_info_t *info,
-                                const unsigned char *block, size_t block_size) {
+        uvc_device_info_t *info,
+        const unsigned char *block, size_t block_size) {
     size_t i;
     uvc_error_t scan_ret, ret = UVC_SUCCESS;
     info->ctrl_if.bcdUVC = SW_TO_SHORT(&block[3]);//解析 UVC 版本号
@@ -1129,6 +1130,7 @@ uvc_error_t uvc_parse_vc_header(uvc_device_t *dev,
             info->ctrl_if.dwClockFrequency = DW_TO_INT(block + 7);
             break;
         case 0x0110:
+        case 0x0150:
             break;
         default:
             UVC_EXIT(UVC_ERROR_NOT_SUPPORTED);
@@ -1153,8 +1155,8 @@ uvc_error_t uvc_parse_vc_header(uvc_device_t *dev,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vc_input_terminal(uvc_device_t *dev,
-                                        uvc_device_info_t *info,
-                                        const unsigned char *block, size_t block_size) {
+        uvc_device_info_t *info,
+        const unsigned char *block, size_t block_size) {
     uvc_input_terminal_t *term;
     size_t i;
 
@@ -1188,8 +1190,8 @@ uvc_error_t uvc_parse_vc_input_terminal(uvc_device_t *dev,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vc_processing_unit(uvc_device_t *dev,
-                                         uvc_device_info_t *info,
-                                         const unsigned char *block, size_t block_size) {
+        uvc_device_info_t *info,
+        const unsigned char *block, size_t block_size) {
     uvc_processing_unit_t *unit;
     size_t i;
 
@@ -1213,8 +1215,8 @@ uvc_error_t uvc_parse_vc_processing_unit(uvc_device_t *dev,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vc_selector_unit(uvc_device_t *dev,
-                                       uvc_device_info_t *info,
-                                       const unsigned char *block, size_t block_size) {
+        uvc_device_info_t *info,
+        const unsigned char *block, size_t block_size) {
     uvc_selector_unit_t *unit;
 
     UVC_ENTER();
@@ -1233,8 +1235,8 @@ uvc_error_t uvc_parse_vc_selector_unit(uvc_device_t *dev,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vc_extension_unit(uvc_device_t *dev,
-                                        uvc_device_info_t *info,
-                                        const unsigned char *block, size_t block_size) {
+        uvc_device_info_t *info,
+        const unsigned char *block, size_t block_size) {
     uvc_extension_unit_t *unit = calloc(1, sizeof(*unit));
     const uint8_t *start_of_controls;
     int size_of_controls, num_in_pins;
@@ -1302,12 +1304,12 @@ uvc_error_t uvc_parse_vc(
  * @ingroup device
  */
 uvc_error_t uvc_scan_streaming(uvc_device_t *dev,
-                               uvc_device_info_t *info,
-                               int interface_idx) {
+        uvc_device_info_t *info,
+        int interface_idx) {
     const struct libusb_interface_descriptor *if_desc;
     const unsigned char *buffer;
     size_t buffer_left, block_size;
-    uvc_error_t ret, parse_ret;
+    uvc_error_t ret;
     uvc_streaming_interface_t *stream_if;
 
     ret = UVC_SUCCESS;
@@ -1315,23 +1317,27 @@ uvc_error_t uvc_scan_streaming(uvc_device_t *dev,
     if_desc = &(info->config->interface[interface_idx].altsetting[0]);
     buffer = if_desc->extra;//指向接口描述符中的额外数据（通过 if_desc->extra 获取）
     buffer_left = if_desc->extra_length;//保存剩余数据的长度（if_desc->extra_length）
+    //有些设备在端点描述符之后有它的格式描述
+    if ((!buffer || !buffer_left) && (if_desc->bNumEndpoints && if_desc->endpoint)) {
+        buffer = if_desc->endpoint[0].extra;//如果没有额外数据，则使用端点的额外数据
+        buffer_left = if_desc->endpoint[0].extra_length;//获取端点的额外数据长度
+    }
     stream_if = calloc(1, sizeof(*stream_if));//为流媒体接口分配内存并初始化
     stream_if->parent = info;//该流媒体接口属于给定的设备信息结构
     stream_if->bInterfaceNumber = if_desc->bInterfaceNumber;//设置流媒体接口的接口编号。
     LOG_D("设备信息解析完成-接口编号:%d", stream_if->bInterfaceNumber);
     DL_APPEND(info->stream_ifs, stream_if)//将新的流媒体接口添加到 info->stream_ifs 链表中。
-    while (buffer_left >= 3) {//循环遍历剩余的附加数据块，直到没有足够的字节可供解析。
-        block_size = buffer[0];//获取当前数据块的大小
-        //函数来解析当前的数据块。该函数会根据数据块的内容提取视频流相关的信息（如分辨率、帧率等）
-        parse_ret = uvc_parse_vs(dev, info, stream_if, buffer, block_size);
-        if (parse_ret != UVC_SUCCESS) {
-            ret = parse_ret;
-            break;
+    if (buffer) {
+        while (buffer_left >= 3) {//循环遍历剩余的附加数据块，直到没有足够的字节可供解析。
+            block_size = buffer[0];//获取当前数据块的大小
+            //函数来解析当前的数据块。该函数会根据数据块的内容提取视频流相关的信息（如分辨率、帧率等）
+            uvc_parse_vs(dev, info, stream_if, buffer, block_size);
+            //更新 buffer_left 和 buffer，指向下一个数据块
+            buffer_left -= block_size;
+            buffer += block_size;
         }
-        //更新 buffer_left 和 buffer，指向下一个数据块
-        buffer_left -= block_size;
-        buffer += block_size;
     }
+
     return ret;
 }
 
@@ -1340,8 +1346,8 @@ uvc_error_t uvc_scan_streaming(uvc_device_t *dev,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vs_input_header(uvc_streaming_interface_t *stream_if,
-                                      const unsigned char *block,
-                                      size_t block_size) {
+        const unsigned char *block,
+        size_t block_size) {
     UVC_ENTER();
 
     stream_if->bEndpointAddress = block[6] & 0x8f;
@@ -1357,8 +1363,8 @@ uvc_error_t uvc_parse_vs_input_header(uvc_streaming_interface_t *stream_if,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vs_format_uncompressed(uvc_streaming_interface_t *stream_if,
-                                             const unsigned char *block,
-                                             size_t block_size) {
+        const unsigned char *block,
+        size_t block_size) {
     UVC_ENTER();
 
     uvc_format_desc_t *format = calloc(1, sizeof(*format));
@@ -1387,8 +1393,8 @@ uvc_error_t uvc_parse_vs_format_uncompressed(uvc_streaming_interface_t *stream_i
  * @ingroup device
  */
 uvc_error_t uvc_parse_vs_frame_format(uvc_streaming_interface_t *stream_if,
-                                      const unsigned char *block,
-                                      size_t block_size) {
+        const unsigned char *block,
+        size_t block_size) {
     UVC_ENTER();
 
     uvc_format_desc_t *format = calloc(1, sizeof(*format));
@@ -1417,8 +1423,8 @@ uvc_error_t uvc_parse_vs_frame_format(uvc_streaming_interface_t *stream_if,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vs_format_mjpeg(uvc_streaming_interface_t *stream_if,
-                                      const unsigned char *block,
-                                      size_t block_size) {
+        const unsigned char *block,
+        size_t block_size) {
     UVC_ENTER();
 
     uvc_format_desc_t *format = calloc(1, sizeof(*format));
@@ -1446,8 +1452,8 @@ uvc_error_t uvc_parse_vs_format_mjpeg(uvc_streaming_interface_t *stream_if,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vs_frame_frame(uvc_streaming_interface_t *stream_if,
-                                     const unsigned char *block,
-                                     size_t block_size) {
+        const unsigned char *block,
+        size_t block_size) {
     uvc_format_desc_t *format;
     uvc_frame_desc_t *frame;
 
@@ -1498,10 +1504,13 @@ uvc_error_t uvc_parse_vs_frame_frame(uvc_streaming_interface_t *stream_if,
  * @ingroup device
  */
 uvc_error_t uvc_parse_vs_frame_uncompressed(uvc_streaming_interface_t *stream_if,
-                                            const unsigned char *block,
-                                            size_t block_size) {
+        const unsigned char *block,
+        size_t block_size) {
     uvc_format_desc_t *format;
     uvc_frame_desc_t *frame;
+    uint8_t frame_type;
+    uint8_t n;
+    uint32_t interval;
 
     const unsigned char *p;
     int i;
@@ -1513,7 +1522,7 @@ uvc_error_t uvc_parse_vs_frame_uncompressed(uvc_streaming_interface_t *stream_if
 
     frame->parent = format;
 
-    frame->bDescriptorSubtype = block[2];
+    frame_type = frame->bDescriptorSubtype = block[2];
     frame->bFrameIndex = block[3];
     frame->bmCapabilities = block[4];
     frame->wWidth = block[5] + (block[6] << 8);
@@ -1522,23 +1531,29 @@ uvc_error_t uvc_parse_vs_frame_uncompressed(uvc_streaming_interface_t *stream_if
     frame->dwMaxBitRate = DW_TO_INT(&block[13]);
     frame->dwMaxVideoFrameBufferSize = DW_TO_INT(&block[17]);
     frame->dwDefaultFrameInterval = DW_TO_INT(&block[21]);
-    frame->bFrameIntervalType = block[25];
+    n = frame->bFrameIntervalType = block[25];
 
-    if (block[25] == 0) {
+    if (!n) {
         frame->dwMinFrameInterval = DW_TO_INT(&block[26]);
         frame->dwMaxFrameInterval = DW_TO_INT(&block[30]);
         frame->dwFrameIntervalStep = DW_TO_INT(&block[34]);
     } else {
-        frame->intervals = calloc(block[25] + 1, sizeof(frame->intervals[0]));
+        frame->intervals = calloc(n + 1, sizeof(frame->intervals[0]));
         p = &block[26];
 
-        for (i = 0; i < block[25]; ++i) {
-            frame->intervals[i] = DW_TO_INT(p);
+        for (i = 0; i < n; ++i) {
+            interval = DW_TO_INT(p);
+            frame->intervals[i] = interval ? interval : 1;
             p += 4;
         }
-        frame->intervals[block[25]] = 0;
+        frame->intervals[n] = 0;
+
+        frame->dwDefaultFrameInterval = MIN(frame->intervals[n-1], MAX(frame->intervals[0], frame->dwDefaultFrameInterval));
     }
 
+    if (frame_type == UVC_VS_FRAME_UNCOMPRESSED) {
+        frame->dwMaxVideoFrameBufferSize = format->bBitsPerPixel * frame->wWidth * frame->wHeight / 8;
+    }
     DL_APPEND(format->frame_descs, frame);
 
     UVC_EXIT(UVC_SUCCESS);
@@ -1550,8 +1565,8 @@ uvc_error_t uvc_parse_vs_frame_uncompressed(uvc_streaming_interface_t *stream_if
  * @ingroup device
  */
 uvc_error_t uvc_parse_vs_still_image_frame(uvc_streaming_interface_t *stream_if,
-                                           const unsigned char *block,
-                                           size_t block_size) {
+        const unsigned char *block,
+        size_t block_size) {
 
     struct uvc_still_frame_desc *frame;
     uvc_format_desc_t *format;
@@ -1892,8 +1907,8 @@ void LIBUSB_CALL _uvc_status_callback(struct libusb_transfer *transfer) {
  * @ingroup device
  */
 void uvc_set_status_callback(uvc_device_handle_t *devh,
-                             uvc_status_callback_t cb,
-                             void *user_ptr) {
+        uvc_status_callback_t cb,
+        void *user_ptr) {
     UVC_ENTER();
 
     devh->status_cb = cb;
@@ -1907,8 +1922,8 @@ void uvc_set_status_callback(uvc_device_handle_t *devh,
  * @ingroup device
  */
 void uvc_set_button_callback(uvc_device_handle_t *devh,
-                             uvc_button_callback_t cb,
-                             void *user_ptr) {
+        uvc_button_callback_t cb,
+        void *user_ptr) {
     UVC_ENTER();
 
     devh->button_cb = cb;
@@ -1930,7 +1945,7 @@ const uvc_format_desc_t *uvc_get_format_descs(uvc_device_handle_t *devh) {
 
 
 uvc_error_t uvc_get_device_with_fd(uvc_context_t *ctx, uvc_device_t **device, int fd, int busNum,
-                                   int devAddress) {
+        int devAddress) {
     LOG_D("开始查找对应的fd的设备咯：%d:::%d/%d", fd, busNum, devAddress);
     struct libusb_device *usb_dev = libusb_get_device_with_fd(ctx->usb_ctx, fd, busNum, devAddress);
     if (LIKELY(usb_dev)) {

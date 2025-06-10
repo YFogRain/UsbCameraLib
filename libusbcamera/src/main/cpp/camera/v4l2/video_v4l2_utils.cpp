@@ -53,10 +53,10 @@ int VideoV4L2Utils::v4l2FormatToInt(int format) {
         return PREVIEW_FORMAT_JPEG;
     } else if (format == V4L2_PIX_FMT_RGB24) {
         LOG_D("当前使用的分辨率为:rgb24");
-        return PREVIEW_FORMAT_RGB24;
+        return PREVIEW_FORMAT_RGB;
     } else if (format == V4L2_PIX_FMT_BGR24) {
         LOG_D("当前使用的分辨率为:bgr24");
-        return PREVIEW_FORMAT_BGR24;
+        return PREVIEW_FORMAT_BGR;
     }
     return -1;
 }
@@ -70,9 +70,9 @@ int VideoV4L2Utils::intToV4l2Format(int formatType) {
         return V4L2_PIX_FMT_MJPEG;
     } else if (formatType == PREVIEW_FORMAT_JPEG) {
         return V4L2_PIX_FMT_JPEG;
-    } else if (formatType == PREVIEW_FORMAT_RGB24) {
+    } else if (formatType == PREVIEW_FORMAT_RGB) {
         return V4L2_PIX_FMT_RGB24;
-    } else if (formatType == PREVIEW_FORMAT_BGR24) {
+    } else if (formatType == PREVIEW_FORMAT_BGR) {
         return V4L2_PIX_FMT_BGR24;
     }
     return V4L2_PIX_FMT_YUYV;
