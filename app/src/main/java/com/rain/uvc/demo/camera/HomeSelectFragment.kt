@@ -68,8 +68,8 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 		when (val device = item.deviceType) {
 			is CameraDeviceMode.Native1 -> jumpNav(R.id.camera_to_native1, "cameraId" to device.cameraId)
 			is CameraDeviceMode.Native2 -> jumpNav(R.id.camera_to_native2, "cameraId" to device.cameraId)
-			is CameraDeviceMode.USB -> jumpNav(R.id.camera_to_usb, "cameraId" to device.device)
-			is CameraDeviceMode.V4L2 -> jumpNav(R.id.camera_to_v4l2, "cameraId" to device.videoPath)
+			is CameraDeviceMode.USB -> jumpNav(R.id.camera_cpp, "usb_device" to device.device)
+			is CameraDeviceMode.V4L2 -> jumpNav(R.id.camera_cpp, "video_path" to device.videoPath)
 			is CameraDeviceMode.LOCALE -> {
 				Log.d("HomeSelectFragment", "当前语言类型:${device.locale.toLanguageTag()}")
 				LanguageHelper.updateLocale(requireContext(), device.locale)

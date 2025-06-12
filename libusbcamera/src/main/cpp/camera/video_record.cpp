@@ -18,10 +18,10 @@ std::string defaultParentPath = "";
 
 void setDefaultParent(const std::string &path) { defaultParentPath = path; }
 
+
 VideoRecord::VideoRecord()
         : mIsRecordRunning(false), frameWidth(0), frameHeight(0), format(mjpeg), recordFilePath(""),
-          parentPath(defaultParentPath),
-          mRotation(0) {}
+          parentPath(defaultParentPath), mRotation(0) {}
 
 VideoRecord::~VideoRecord() {}
 
@@ -50,11 +50,11 @@ std::string VideoRecord::formatTime(const std::string &pattern, long timeMillis)
 
 void VideoRecord::setParentPath(const std::string &path) { this->parentPath = path; }
 
-void VideoRecord::setRecordFormat(const record_format &recordFormat) { this->format = recordFormat; }
+void VideoRecord::setRecordFormat(const record_format &format) { this->format = format; }
 
 bool VideoRecord::prepare(uint32_t w, uint32_t h, int rotation, int fps, const std::string &filename) {
     std::lock_guard<std::mutex> lock(recordMutex);
-    if (w == 0 || h == 0 || filename.empty()) {
+    if (w == 0 || h == 0 || parentPath.empty()) {
         return false;
     }
     if (mIsRecordRunning.load()) {
@@ -68,7 +68,7 @@ bool VideoRecord::prepare(uint32_t w, uint32_t h, int rotation, int fps, const s
     if (!initRecordPath(filename)) {
         return false;
     }
-
+    LOG_D("使用帧率为: %d", fps);
     // 获取opencv的编码器
     int fourcc = initRecordFourcc();
     if (!videoWriter.open(this->recordFilePath, fourcc, fps, size, true)) {

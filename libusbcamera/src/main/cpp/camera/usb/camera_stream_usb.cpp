@@ -63,6 +63,7 @@ bool CameraStreamUsbImpl::stopPreview() {
     LOG_D("停止预览结束");
     clearCaptureFrames();
     clearPreviewFrames();
+    clearPictureFrame();
     return UVC_SUCCESS;
 }
 

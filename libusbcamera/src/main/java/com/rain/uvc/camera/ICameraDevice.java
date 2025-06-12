@@ -297,6 +297,8 @@ public class ICameraDevice {
         if (nativeId == 0L) {
             return null;
         }
+        Log.d("takePicture", "当前使用的文件夹路径:" + parentPath);
+        Log.d("takePicture", "当前使用的文件名称:" + fileName);
         String path = CameraNativeUtils.nativeTakePicture(nativeId, parentPath, fileName);
         Log.d("takePicture", "照片信息:" + path);
         return path;

@@ -13,13 +13,6 @@
         android:label="HomeSplashFragment"
         tools:layout="@layout/fg_camera_select">
         <!-- 跳转到打开相机 -->
-        <action
-            android:id="@+id/camera_to_usb"
-            app:destination="@id/camera_usb" />
-        <!-- 跳转到出厂 -->
-        <action
-            android:id="@+id/camera_to_v4l2"
-            app:destination="@id/camera_v4l2" />
 
         <action
             android:id="@+id/camera_to_native1"
@@ -28,6 +21,10 @@
         <action
             android:id="@+id/camera_to_native2"
             app:destination="@id/camera_native2" />
+
+        <action
+            android:id="@+id/camera_to_cpp"
+            app:destination="@id/camera_cpp" />
     </fragment>
 
     <fragment
@@ -54,26 +51,18 @@
     </fragment>
 
     <fragment
-        android:id="@+id/camera_usb"
-        android:name="com.rain.uvc.demo.camera.usb.CameraUsbFragment"
-        android:label="usb camera"
+        android:id="@+id/camera_cpp"
+        android:name="com.rain.uvc.demo.camera.cpp.CameraCppFragment"
+        android:label="native层usb相机"
         tools:layout="@layout/fg_camera">
-
         <argument
-            android:name="cameraId"
+            android:name="video_path"
+            app:argType="string"
+            app:nullable="true" />
+        <argument
+            android:name="usb_device"
             android:defaultValue="@null"
             app:argType="android.hardware.usb.UsbDevice"
-            app:nullable="true" />
-    </fragment>
-
-    <fragment
-        android:id="@+id/camera_v4l2"
-        android:name="com.rain.uvc.demo.camera.v4l2.CameraV4L2Fragment"
-        android:label="v4l2 camera"
-        tools:layout="@layout/fg_camera">
-        <argument
-            android:name="cameraId"
-            app:argType="string"
             app:nullable="true" />
     </fragment>
 </navigation>

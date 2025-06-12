@@ -21,6 +21,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeOpen(JNIEnv *env, jclass clazz, 
     }
     return 0;
 }
+
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeOpenVideo(JNIEnv *env, jclass clazz,
         jstring video_path) {
@@ -34,6 +35,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeOpenVideo(JNIEnv *env, jclass cl
     }
     return 0L;
 }
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeClose(JNIEnv *env, jclass clazz, jlong native_id) {
     return CameraFactoryHelper::closeCamera(native_id);
@@ -48,6 +50,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeStartPreview(JNIEnv *env, jclass
     }
     return false;
 }
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeStopPreview(JNIEnv *env, jclass clazz,
         jlong nativeId) {
@@ -57,6 +60,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeStopPreview(JNIEnv *env, jclass 
     }
     return false;
 }
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetDisplaySurface(JNIEnv *env, jclass clazz,
         jlong nativeId,
@@ -97,6 +101,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_setPreviewListener(JNIEnv *env, jclass
     }
     return false;
 }
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetSupportedParameters(JNIEnv *env, jclass clazz,
         jlong native_id, jint type) {
@@ -120,7 +125,6 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetSupportedParameters(JNIEnv *e
     }
     return nullptr;
 }
-
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetParameterValue(JNIEnv *env, jclass clazz,
@@ -170,16 +174,19 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeLoadV4L2Devices(JNIEnv *env, jcl
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeStartRecord(JNIEnv *env, jclass clazz, jlong native_id, jstring file_name) {
-    if (!file_name)return false;
     ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
     if (!camera)return false;
-    const char *path = env->GetStringUTFChars(file_name, nullptr);
-    if (!path)return false;
-    // 用 path_cstr 初始化 std::string
-    std::string path_str(path);
-    env->ReleaseStringUTFChars(file_name, path);
+    std::string path_str{};
+    if (file_name){
+        const char *path = env->GetStringUTFChars(file_name, nullptr);
+        if (path){
+            path_str = std::string(path);
+        }
+        env->ReleaseStringUTFChars(file_name, path);
+    }
     return camera->getUserStream()->startRecord(path_str);
 }
+
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeStopRecord(JNIEnv *env, jclass clazz, jlong native_id) {
@@ -188,6 +195,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeStopRecord(JNIEnv *env, jclass c
     camera->getUserStream()->stopRecord();
     return true;
 }
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetRecordFormat(JNIEnv *env, jclass clazz, jlong native_id, jint format) {
@@ -195,6 +203,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetRecordFormat(JNIEnv *env, jcl
     if (!camera)return;
     camera->getUserStream()->setRecordFormat(format);
 }
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetParentPath(JNIEnv *env, jclass clazz, jlong native_id, jstring parent_path) {
@@ -210,6 +219,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetParentPath(JNIEnv *env, jclas
     }
     camera->getUserStream()->setRecordParentPath(path_str);
 }
+
 extern "C"
 JNIEXPORT jstring JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetRecordPath(JNIEnv *env, jclass clazz, jlong native_id) {
@@ -219,6 +229,7 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetRecordPath(JNIEnv *env, jclas
     if (path.empty())return nullptr;
     return env->NewStringUTF(path.c_str());
 }
+
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetDefaultParentPath(JNIEnv *env, jclass clazz, jstring parent_path) {
@@ -235,14 +246,17 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetDefaultParentPath(JNIEnv *env
     setDefaultParent(path_str);
     return true;
 }
+
 extern "C"
 JNIEXPORT jstring JNICALL
 Java_com_rain_uvc_utils_CameraNativeUtils_nativeTakePicture(JNIEnv *env, jclass clazz, jlong native_id, jstring parent_path, jstring file_name) {
     if (!parent_path) {
+        LOG_E("未获取到父文件路径");
         return nullptr;
     }
     const char *parentPath = env->GetStringUTFChars(parent_path, nullptr);
     if (!parentPath) {
+        LOG_E("未获取到父文件路径");
         return nullptr;
     }
     std::string path_str(parentPath);
@@ -258,7 +272,8 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeTakePicture(JNIEnv *env, jclass 
             env->ReleaseStringUTFChars(file_name, fileName);
         }
     }
-    auto picturePath = camera->getUserStream()->takePicture(fileNameStr, fileNameStr);
+    auto picturePath = camera->getUserStream()->takePicture(parentPath, fileNameStr);
+    LOG_E("拍照完成后的路径:%s", picturePath.c_str());
     if (picturePath.empty())return nullptr;
     return env->NewStringUTF(picturePath.c_str());
 }

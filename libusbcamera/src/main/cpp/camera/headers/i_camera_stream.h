@@ -136,6 +136,7 @@ public:
     bool startRecord(const std::string &fileName) {
         bool isPrepare =
                 mVideoRecord->prepare(previewWidth, previewHeight, mDisplayTransformState, previewFps, fileName);
+        LOG_D("准备录制结果:%s", isPrepare ? "成功" : "失败");
         if (!isPrepare) {
             return false;
         }
@@ -172,11 +173,13 @@ public:
 
     std::string takePicture(const std::string &parentPath, const std::string &fileName) {
         if (parentPath.empty() || !isRunningPreview()) { // 如果没有父文件夹，且没有开始预览，则返回空
+            LOG_E("没有打开预览");
             return std::string{};
         }
         try { // 创建父类文件夹
             std::filesystem::create_directories(parentPath);
         } catch (const std::exception &e) {
+            LOG_E("创建父文件夹失败:%s", e.what());
             return std::string{};
         }
         std::string saveFileName = fileName;
@@ -191,12 +194,15 @@ public:
         } else {
             fullPath = parentPath + "/" + saveFileName;
         }
+        LOG_D("图像保存地址:%s", fullPath.c_str());
         // 1. 读取流
         stream_frame_t *frame = waitPictureFrame();
         if (!frame) {
+            LOG_E("未获取到图片帧");
             return nullptr;
         }
         bool isSaveSuccess = ImgUtils::writeMjpeg(frame->data, frame->width, frame->height, frame->rotation, fullPath);
+        LOG_D("保存图像结果:%s", isSaveSuccess ? "成功" : "失败");
         // 2. 释放资源
         free_stream(frame);
         if (isSaveSuccess) {

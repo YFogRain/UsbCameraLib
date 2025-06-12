@@ -126,6 +126,7 @@ bool CameraStreamV4l2Impl::stopPreview() {
     cleanup_buffers();
     clearPreviewFrames();
     clearPreviewResultFrames();
+    clearPictureFrame();
     LOG_D("停止预览结束");
     return true;
 }

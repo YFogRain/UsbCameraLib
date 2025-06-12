@@ -68,6 +68,9 @@ public:
 
     static std::string formatTime(const std::string &pattern, long time); // 格式化时间
 private:
+    std::chrono::time_point<std::chrono::steady_clock> lastFrameTime;
+    std::chrono::milliseconds frameInterval; // 帧间隔时间
+
     std::atomic<bool> mIsRecordRunning; // 当前录制运行的状态
     std::string recordFilePath;         // 文件路径
     std::string parentPath;             // 保存的文件夹路径

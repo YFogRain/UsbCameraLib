@@ -58,16 +58,19 @@ add_library(uvcCamera SHARED
         camera/video_record.cpp
 )
 
-
 target_include_directories(uvcCamera PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/libuvc/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/rapidjson/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/camera/headers"
         "${CMAKE_CURRENT_SOURCE_DIR}/log"
         "${CMAKE_CURRENT_SOURCE_DIR}/opencv/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/include"
 )
 
 file(GLOB 3RDPARTY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/opencv/3rdparty/libs/${ANDROID_ABI}/*.a)
+
+file(GLOB FFMPEG_LIBS ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/staticlibs/${ANDROID_ABI}/*.a)
+file(GLOB FFMPEG_LIBS_3r ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/3rdparty/libs/${ANDROID_ABI}/*.a)
 
 target_link_libraries(uvcCamera
         android
@@ -80,4 +83,6 @@ target_link_libraries(uvcCamera
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_imgcodecs.a
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_videoio.a
         ${3RDPARTY_LIB}
+        ${FFMPEG_LIBS_3r}
+        ${FFMPEG_LIBS}
 )

@@ -24,8 +24,8 @@ fun <T : SurfaceView> T.isSurfaceCreated(): Boolean {
     return runCatching {
         val classLoader = if (this is GLSurfaceView) {
             //海燕华捷需要获取其超类的当前值
-            this.javaClass.superclass.superclass
-        } else this.javaClass.superclass
+            this.javaClass.superclass
+        } else this.javaClass
         val field = classLoader.getDeclaredField("mSurfaceCreated")
         field.isAccessible = true
         return@runCatching field.get(this) as? Boolean

@@ -36,4 +36,5 @@ class CameraUsbFragment : BaseDataBindFragment<FgCameraBinding, CameraViewModel>
 			}
 		}
 	}
+	
 }

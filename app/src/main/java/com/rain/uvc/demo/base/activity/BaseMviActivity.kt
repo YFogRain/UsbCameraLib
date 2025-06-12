@@ -33,7 +33,3 @@ abstract class BaseMviActivity<VB : ViewBinding, VM : BaseViewModel> : BaseActiv
 	}
 	
 }
-
-abstract class BaseViewModel : ViewModel() {
-	private val loadDialogStared by lazy { MutableSharedFlow<IUIDialogState>() } //冷流，防止数据倒灌
-}

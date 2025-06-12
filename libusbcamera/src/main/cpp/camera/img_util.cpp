@@ -50,7 +50,8 @@ std::vector<uint8_t> ImgUtils::format(uint8_t *inFrame, uint32_t width, uint32_t
         case PREVIEW_FORMAT_MJPEG:
         case PREVIEW_FORMAT_JPEG: {
             std::vector<uint8_t> mjpegData;
-            if (!cv::imencode(".jpeg", inImg, mjpegData, {cv::IMWRITE_JPEG_QUALITY, 100})) { // 如果转码失败，则return
+            if (!cv::imencode(".jpeg", inImg, mjpegData, {cv::IMWRITE_JPEG_QUALITY,
+                                                          100})) { // 如果转码失败，则return
                 // 编码失败，返回空vector
                 return {};
             }
@@ -78,7 +79,8 @@ std::vector<uint8_t> ImgUtils::format(uint8_t *inFrame, uint32_t width, uint32_t
                     uvData[i * 2 + 1] = uPlane[i]; // U 分量
                 }
             }
-        } break;
+        }
+            break;
         case PREVIEW_FORMAT_YUY2:
             outImg = cv::Mat(height, width, CV_8UC2);
             cv::cvtColor(inImg, outImg, cv::COLOR_BGR2YUV_YUYV);
@@ -240,6 +242,7 @@ bool ImgUtils::writeMjpeg(uint8_t *inFrame, int width, int height, int rotation,
         isSuccess = true;
     } catch (const std::exception &e) {
         isSuccess = false;
+        LOG_E("写入文件失败: %s", e.what());
     }
     ofs.close();
     if (!isSuccess) {
@@ -248,6 +251,7 @@ bool ImgUtils::writeMjpeg(uint8_t *inFrame, int width, int height, int rotation,
             std::filesystem::remove(savePath);
         } catch (const std::exception &e) {
             // 删除失败可选择记录日志，但通常不影响流程
+            LOG_E("删除文件失败: %s", e.what());
         }
     }
     return isSuccess;
