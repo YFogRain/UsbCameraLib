@@ -60,6 +60,7 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 	}
 	
 	private fun initEvent() {
+		mBinding.cardRefresh.singleClick { viewModel.loadDevice() }
 	}
 	
 	private fun itemClick(groupPosition: Int, childPosition: Int) {
