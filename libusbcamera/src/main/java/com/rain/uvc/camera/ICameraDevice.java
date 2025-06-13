@@ -14,6 +14,9 @@ import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.TextureView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import com.rain.uvc.listener.IDetachedCloseListener;
 import com.rain.uvc.listener.IFrameListener;
 import com.rain.uvc.provider.OverallContext;
@@ -167,7 +170,7 @@ public class ICameraDevice {
      * @param view 当前使用的预览控件
      * @return 是否设置成功
      */
-    public boolean setDisplaySurface(SurfaceView view) {
+    public boolean setDisplaySurface(@NonNull SurfaceView view) {
         return setDisplaySurface(view.getHolder().getSurface());
     }
 
@@ -177,7 +180,7 @@ public class ICameraDevice {
      * @param view 当前使用的预览控件
      * @return 是否设置成功
      */
-    public boolean setDisplaySurface(TextureView view) {
+    public boolean setDisplaySurface(@NonNull TextureView view) {
         return setDisplaySurface(new Surface(view.getSurfaceTexture()));
     }
 
@@ -204,21 +207,23 @@ public class ICameraDevice {
     /**
      * 设置参数
      */
-    public <V> Boolean setParameter(CameraParameter.Key<V> key, V value) {
+    public <V> Boolean setParameter(@NonNull CameraParameter.Key<V> key,@NonNull V value) {
         return CameraNativeUtils.setParameter(mNativeAtomic.get(), key, value);
     }
 
     /**
      * 获取参数
      */
-    public <T> T getParameter(CameraParameter.Key<T> key) {
+    @Nullable
+    public <T> T getParameter(@NonNull CameraParameter.Key<T> key) {
         return CameraNativeUtils.getParameter(mNativeAtomic.get(), key);
     }
 
     /**
      * 获取支持的类型列表
      */
-    public <T> T getSupportedParameter(CameraSupportParameters.Key<T> key) {
+    @Nullable
+    public <T> T getSupportedParameter(@NonNull CameraSupportParameters.Key<T> key) {
         return CameraNativeUtils.getSupportedParameter(mNativeAtomic.get(), key);
     }
 
@@ -258,6 +263,7 @@ public class ICameraDevice {
         CameraNativeUtils.nativeSetParentPath(nativeId, parentPath);
     }
 
+    @Nullable
     public String getRecordPath() {
         long nativeId = mNativeAtomic.get();
         if (nativeId == 0L) {
@@ -288,11 +294,12 @@ public class ICameraDevice {
         isReceiverSuccess = false;
     }
 
-
+    @Nullable
     public String takePicture(String parentPath) {
         return takePicture(parentPath, null);
     }
 
+    @Nullable
     public String takePicture(String parentPath, String fileName) {
         long nativeId = mNativeAtomic.get();
         if (nativeId == 0L) {

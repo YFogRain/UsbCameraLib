@@ -9,9 +9,7 @@ import com.rain.uvc.CameraUvcManager
 import com.rain.uvc.camera.ICameraDevice
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.GsonHelper
-import com.rain.uvc.mode.CameraSize
 import com.rain.uvc.provider.OverallContext
-import com.rain.uvc.state.CameraDataFormat
 import com.rain.uvc.state.CameraParameter
 import com.rain.uvc.state.CameraPreviewFormat
 import com.rain.uvc.state.CameraSupportParameters
@@ -94,20 +92,21 @@ class CameraCppViewModel : BaseViewModel() {
 		val supportPreviewSize = cameraDevice.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
 		Log.d("CameraCppViewModel", "分辨率列表:${GsonHelper.getHelper().modeToJson(supportPreviewSize)}")
 		Log.d("CameraCppViewModel", "自动曝光支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.AUTO_EXPOSURE)}")
-		Log.d("CameraCppViewModel", "曝光度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.EXPOSURE)}")
+		Log.d("CameraCppViewModel", "曝光度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.EXPOSURE).let { "${it?.min}-${it?.max}" }}")
 		Log.d("CameraCppViewModel", "人脸检测支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.FACE_DETECT)}")
-		Log.d("CameraCppViewModel", "亮度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.BRIGHTNESS)}")
-		Log.d("CameraCppViewModel", "对比度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.CONTRAST)}")
-		Log.d("CameraCppViewModel", "增益值范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.GAIN)}")
-		Log.d("CameraCppViewModel", "饱和度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.SATURATION)}")
-		Log.d("CameraCppViewModel", "缩放范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.ZOOM)}")
-		Log.d("CameraCppViewModel", "白平衡支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.WHITE_BALANCE)}")
-		Log.d("CameraCppViewModel", "场景模式支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.SCENE_MODE)}")
+		Log.d("CameraCppViewModel", "亮度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.BRIGHTNESS).let { "${it?.min}-${it?.max}" }}")
+		Log.d("CameraCppViewModel", "对比度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.CONTRAST).let { "${it?.min}-${it?.max}" }}")
+		Log.d("CameraCppViewModel", "增益值范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.GAIN).let { "${it?.min}-${it?.max}" }}")
+		Log.d("CameraCppViewModel", "饱和度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.SATURATION).let { "${it?.min}-${it?.max}" }}")
+		Log.d("CameraCppViewModel", "缩放范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.ZOOM).let { "${it?.min}-${it?.max}" }}")
+		Log.d("CameraCppViewModel", "焦距范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.FOCUS).let { "${it?.min}-${it?.max}" }}")
+		Log.d("CameraCppViewModel", "白平衡支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.WHITE_BALANCE).let { "${it?.min}-${it?.max}" }}")
+		Log.d("CameraCppViewModel", "场景模式支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.SCENE_MODE).let { "${it?.min}-${it?.max}" }}")
 		Log.d("CameraCppViewModel", "隐私模式支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.PRIVACY)}")
 		Log.d("CameraCppViewModel", "自动白平衡支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.AUTO_WHITE_BALANCE)}")
-		Log.d("CameraCppViewModel", "hue支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.HUE)}")
+		Log.d("CameraCppViewModel", "hue支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.HUE).let { "${it?.min}-${it?.max}" }}")
 		
-		Log.d("CameraCppViewModel", "当前分辨率:${cameraDevice.getParameter(CameraParameter.PREVIEW_SIZE)}")
+		Log.d("CameraCppViewModel", "当前分辨率:${cameraDevice.getParameter(CameraParameter.PREVIEW_SIZE).let { "${it?.width}*${it?.height}" }}")
 		Log.d("CameraCppViewModel", "自动曝光模式:${cameraDevice.getParameter(CameraParameter.AUTO_EXPOSURE)}")
 		Log.d("CameraCppViewModel", "曝光度:${cameraDevice.getParameter(CameraParameter.EXPOSURE)}")
 		Log.d("CameraCppViewModel", "亮度:${cameraDevice.getParameter(CameraParameter.BRIGHTNESS)}")

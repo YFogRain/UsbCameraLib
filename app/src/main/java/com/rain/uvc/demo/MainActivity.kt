@@ -2,8 +2,6 @@ package com.rain.uvc.demo
 
 import android.os.Bundle
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.navigation.NavController
 import androidx.navigation.findNavController
 import com.rain.uvc.CameraUvcManager

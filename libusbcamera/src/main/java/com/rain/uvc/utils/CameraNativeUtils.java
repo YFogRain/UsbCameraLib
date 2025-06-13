@@ -1,7 +1,11 @@
 package com.rain.uvc.utils;
 
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Surface;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.rain.uvc.listener.IFrameListener;
 import com.rain.uvc.mode.CameraSize;
@@ -128,13 +132,12 @@ public class CameraNativeUtils {
      * @param key      对应支持的参数key
      * @return 返回值，如果不支持或者不存在，则返回null
      */
+    @Nullable
     public static <T> T getParameter(long nativeId, CameraParameter.Key<T> key) {
-        if (nativeId == 0L) return null;
-        int id = ketTypeToNativeId(key.type);
-        if (id == -1) {
+        if (nativeId == 0L) {
             return null;
         }
-        String value = nativeGetParameterValue(nativeId, id);
+        String value = nativeGetParameterValue(nativeId, ketTypeToNativeId(key.type));
         if (CameraSize.class.isAssignableFrom(key.mClass)) {
             String[] array = null;
             if (!TextUtils.isEmpty(value)) {
@@ -144,22 +147,36 @@ public class CameraNativeUtils {
                 return null;
             }
             return (T) new CameraSize(Integer.parseInt(array[0]), Integer.parseInt(array[1]), CameraPreviewFormat.valueToFormatMode(Integer.parseInt(array[2])));
-        }
-        if (DisplayTransformState.class.isAssignableFrom(key.mClass)) {
+        } else if (DisplayTransformState.class.isAssignableFrom(key.mClass)) {
             int orientation = -1;
             if (!TextUtils.isEmpty(value)) {
                 orientation = Integer.parseInt(value);
             }
             return (T) DisplayTransformState.orientationToState(orientation);
-        }
-
-        if (Integer.class.isAssignableFrom(key.mClass)) {
+        } else if (String.class.isAssignableFrom(key.mClass)) {
+            return (T) value;
+        } else if (Integer.class.isAssignableFrom(key.mClass) || int.class.isAssignableFrom(key.mClass)) {
             if (!TextUtils.isEmpty(value)) {
-                return (T) Integer.getInteger(value);
+                Log.d("CameraNativeUtils", "return - int:" + value);
+                return (T) Integer.valueOf(value);
             }
             return null;
-        }
-        if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
+        } else if (Long.class.isAssignableFrom(key.mClass) || long.class.isAssignableFrom(key.mClass)) {
+            if (!TextUtils.isEmpty(value)) {
+                return (T) Long.valueOf(value);
+            }
+            return null;
+        } else if (Double.class.isAssignableFrom(key.mClass) || double.class.isAssignableFrom(key.mClass)) {
+            if (!TextUtils.isEmpty(value)) {
+                return (T) Double.valueOf(value);
+            }
+            return null;
+        } else if (Float.class.isAssignableFrom(key.mClass) || float.class.isAssignableFrom(key.mClass)) {
+            if (!TextUtils.isEmpty(value)) {
+                return (T) Float.valueOf(value);
+            }
+            return null;
+        } else if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
             int state = 0;
             if (!TextUtils.isEmpty(value)) {
                 state = Integer.parseInt(value);
@@ -177,18 +194,15 @@ public class CameraNativeUtils {
      * @param value    对应的值
      * @return 是否支持
      */
-    public static <T> boolean setParameter(long nativeId, CameraParameter.Key<T> key, T value) {
+    public static <T> boolean setParameter(long nativeId, @NonNull CameraParameter.Key<T> key, @NonNull T value) {
         if (nativeId == 0L) return false;
         if (int.class.isAssignableFrom(key.mClass) || Integer.class.isAssignableFrom(key.mClass)) {
             return nativeSetParameterValue(nativeId, ketTypeToNativeId(key.type), (int) value);
-        }
-        if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
+        } else if (boolean.class.isAssignableFrom(key.mClass) || Boolean.class.isAssignableFrom(key.mClass)) {
             return nativeSetParameterValue(nativeId, ketTypeToNativeId(key.type), (boolean) value ? 1 : 0);
-        }
-        if (DisplayTransformState.class.isAssignableFrom(key.mClass)) {
+        } else if (DisplayTransformState.class.isAssignableFrom(key.mClass)) {
             return nativeSetParameterValue(nativeId, ketTypeToNativeId(key.type), ((DisplayTransformState) value).getAngle());
-        }
-        if (CameraSize.class.isAssignableFrom(key.mClass)) {
+        } else if (CameraSize.class.isAssignableFrom(key.mClass)) {
             CameraSize size = (CameraSize) value;
             return nativeSetPreviewSize(nativeId, size.getWidth(), size.getHeight(), size.getFormat().getValue());
         }
@@ -236,7 +250,8 @@ public class CameraNativeUtils {
         return -1;
     }
 
-    public static <T> T getSupportedParameter(long nativeId, CameraSupportParameters.Key<T> key) {
+    @Nullable
+    public static <T> T getSupportedParameter(long nativeId, @NonNull CameraSupportParameters.Key<T> key) {
         if (nativeId == 0L) return null;
         String result = nativeGetSupportedParameters(nativeId, ketTypeToNativeId(key.type));
         if (key.type.equals(CameraParameterType.PREVIEW_SIZE)) {
