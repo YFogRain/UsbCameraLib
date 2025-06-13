@@ -64,7 +64,7 @@ bool CameraStreamUsbImpl::stopPreview() {
     clearCaptureFrames();
     clearPreviewFrames();
     clearPictureFrame();
-    return UVC_SUCCESS;
+    return true;
 }
 
 bool CameraStreamUsbImpl::setPreviewSize(int width, int height, int format) {
