@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class ICameraDevice {
     //设备名称，如果为video时为设备路径，usb时通过name检查当前是否是同一个值的回调
-    protected static AtomicLong mNativeAtomic = new AtomicLong(0L);
+    protected AtomicLong mNativeAtomic = new AtomicLong(0L);
     private IDetachedCloseListener iDetachedCloseListener;
     //当前是否正在运行预览
     protected boolean isPreviewRunning;
@@ -82,6 +82,7 @@ public class ICameraDevice {
         unReceiver();
         this.iDetachedCloseListener = null;
         long nativeId = mNativeAtomic.get();
+        Log.d("ICameraDevice", "关闭时对应的nativeId:" + nativeId);
         if (nativeId != 0L) { //释放native层的资源
             CameraNativeUtils.nativeClose(nativeId);
         }

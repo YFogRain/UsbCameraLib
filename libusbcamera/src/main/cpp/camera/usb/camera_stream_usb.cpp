@@ -150,7 +150,7 @@ void CameraStreamUsbImpl::uvc_stream_callback(uvc_frame_t *frame, void *vptr_arg
         return;
     }
     if ((frame->frame_format != UVC_FRAME_FORMAT_MJPEG && frame->data_bytes < preview->frameBytes) || !frame->data) {
-        LOG_E("当前数据大小不符合；；data_bytes:%zu,frameBytes:%zu", frame->data_bytes,
+        LOG_E("当前数据大小不符合::data_bytes:%zu,frameBytes:%zu", frame->data_bytes,
               preview->frameBytes);
         return;
     }
@@ -276,9 +276,12 @@ void CameraStreamUsbImpl::thread_func_preview_call() {
 
         // 发送到录制的线程去进行录制，（路线线程会重新复制一次数据，不需担心后续内存释放问题）
         putRecordFrames(pFrame);
-        if (!previewListener) {
-            free_stream(pFrame);
-            continue;
+        {
+            std::lock_guard<std::mutex> lock(previewMutex);
+            if (!previewListener) {
+                free_stream(pFrame);
+                continue;
+            }
         }
         // 格式化数据格式
         std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, width, height, previewFormat);
@@ -307,6 +310,5 @@ void CameraStreamUsbImpl::thread_func_preview_call() {
     }
     if (theVM && env) {
         theVM->DetachCurrentThread();
-
     }
 }

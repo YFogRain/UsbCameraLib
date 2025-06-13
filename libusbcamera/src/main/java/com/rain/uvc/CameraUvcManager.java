@@ -8,6 +8,7 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.text.TextUtils;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -157,6 +158,7 @@ public class CameraUvcManager {
         if (nativeId == 0L) {
             throw new CameraStateException("usb设备打开失败");
         }
+        Log.d("CameraUvcManager", usbDevice.getDeviceName() + "-当前设备的内存映射id为:" + nativeId);
         return new ICameraDevice(nativeId, usbDevice.getDeviceName(), usbDeviceConnection);
     }
 

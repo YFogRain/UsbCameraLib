@@ -902,20 +902,12 @@ static int op_get_active_config_descriptor(struct libusb_device *dev, void *buff
 
 static int op_get_config_descriptor(struct libusb_device *dev, uint8_t config_index, void *buffer,
         size_t len) {
-    LOG_D("linux-开始获取描述符配置～～");
     struct linux_device_priv *priv = usbi_get_device_priv(dev);
     struct config_descriptor *config;
-    LOG_D("linux-当前描述符信息～～,:%d", priv->fd);
-
-    LOG_D("linux-当前描述符信息～config_index,:%d", config_index);
-    LOG_D("linux-当前描述符信息～～bNumConfigurations,:%d",
-          dev->device_descriptor.bNumConfigurations);
     if (config_index >= dev->device_descriptor.bNumConfigurations)
         return LIBUSB_ERROR_NOT_FOUND;
-    LOG_D("linux-获取描述符config_descriptors");
     config = &priv->config_descriptors[config_index];
     len = MIN(len, config->actual_len);
-    LOG_D("linux-当前长度:%ld", len);
     memcpy(buffer, config->desc, len);
     return len;
 }

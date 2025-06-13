@@ -29,9 +29,11 @@ class HomeSelectViewModel : BaseViewModel() {
 			val deviceList = mutableListOf<HomeSelectMode>()
 			deviceList.add(loadCamera1())
 			deviceList.add(loadCamera2())
+			deviceList.add(HomeSelectMode("双目相机", mutableListOf()).also {
+				it.devices.add(HomeDeviceMode("双目相机", CameraDeviceMode.OTHER))
+			})
 			deviceList.add(loadCameraUsb())
 			deviceList.add(loadLocale())
-			
 			deviceList.add(loadCameraV4L2())
 			withContext(Dispatchers.Main) {
 				adapter.setData(deviceList)

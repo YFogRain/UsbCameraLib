@@ -84,14 +84,11 @@ bool CameraFactoryHelper::closeCamera(int64_t cameraId) {
         return false;
     }
     ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(cameraId);
-    if (camera) {
-        if (camera->getUserStream()->isRunningPreview()) {
-            camera->getUserStream()->stopPreview();
-        }
-        delete camera;
-        return true;
+    if (camera->getUserStream()->isRunningPreview()) {
+        camera->getUserStream()->stopPreview();
     }
-    return false;
+    delete camera;
+    return true;
 }
 
 std::vector<std::string> CameraFactoryHelper::loadV4L2Devices() {

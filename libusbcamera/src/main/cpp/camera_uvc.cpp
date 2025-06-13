@@ -177,9 +177,9 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeStartRecord(JNIEnv *env, jclass 
     ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
     if (!camera)return false;
     std::string path_str{};
-    if (file_name){
+    if (file_name) {
         const char *path = env->GetStringUTFChars(file_name, nullptr);
-        if (path){
+        if (path) {
             path_str = std::string(path);
         }
         env->ReleaseStringUTFChars(file_name, path);
