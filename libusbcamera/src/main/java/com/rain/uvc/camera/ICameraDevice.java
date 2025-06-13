@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class ICameraDevice {
     //设备名称，如果为video时为设备路径，usb时通过name检查当前是否是同一个值的回调
-    protected AtomicLong mNativeAtomic = new AtomicLong(0L);
+    protected final AtomicLong mNativeAtomic = new AtomicLong(0L);
     private IDetachedCloseListener iDetachedCloseListener;
     //当前是否正在运行预览
     protected boolean isPreviewRunning;
