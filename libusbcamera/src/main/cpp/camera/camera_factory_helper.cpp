@@ -35,7 +35,7 @@ ICameraDevice *CameraFactoryHelper::openCamera(int fd, int busNum, int devAddres
         return nullptr;
     }
     uvc_device_handle_t *deviceHandle;
-    ret = uvc_open(device, &deviceHandle); // 打开设备
+    ret = uvc_open(device, &deviceHandle, fd); // 打开设备
     LOG_D("uvc设备打开结果:%d", ret);
     if (ret != UVC_SUCCESS || !deviceHandle) {
         deviceHandle = nullptr;

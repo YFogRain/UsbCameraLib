@@ -711,7 +711,7 @@ struct discovered_devs *discovered_devs_append(
 /* Allocate a new device with a specific session ID. The returned device has
  * a reference count of 1. */
 struct libusb_device *usbi_alloc_device(struct libusb_context *ctx,
-                                        unsigned long session_id) {
+        unsigned long session_id) {
     //计算设备结构体大小
     size_t priv_size = usbi_backend.device_priv_size;
     //使用 calloc 为设备分配内存（PTR_ALIGN：确保指针对齐以优化内存访问效率。）
@@ -786,7 +786,7 @@ int usbi_sanitize_device(struct libusb_device *dev) {
  * a specific session ID. Returns the matching device if it was found, and
  * NULL otherwise. */
 struct libusb_device *usbi_get_device_by_session_id(struct libusb_context *ctx,
-                                                    unsigned long session_id) {
+        unsigned long session_id) {
     struct libusb_device *dev;
     struct libusb_device *ret = NULL;
 
@@ -823,7 +823,7 @@ struct libusb_device *usbi_get_device_by_session_id(struct libusb_context *ctx,
  * \ref libusb_error according to errors encountered by the backend.
  */
 ssize_t API_EXPORTED libusb_get_device_list(libusb_context *ctx,
-                                            libusb_device ***list) {
+        libusb_device ***list) {
     struct discovered_devs *discdevs = discovered_devs_alloc();
     struct libusb_device **ret;
     int r = 0;
@@ -892,7 +892,7 @@ ssize_t API_EXPORTED libusb_get_device_list(libusb_context *ctx,
  * \param unref_devices whether to unref the devices in the list
  */
 void API_EXPORTED libusb_free_device_list(libusb_device **list,
-                                          int unref_devices) {
+        int unref_devices) {
     if (!list)
         return;
 
@@ -945,7 +945,7 @@ uint8_t API_EXPORTED libusb_get_port_number(libusb_device *dev) {
  * \returns \ref LIBUSB_ERROR_OVERFLOW if the array is too small
  */
 int API_EXPORTED libusb_get_port_numbers(libusb_device *dev,
-                                         uint8_t *port_numbers, int port_numbers_len) {
+        uint8_t *port_numbers, int port_numbers_len) {
     int i = port_numbers_len;
     struct libusb_context *ctx = DEVICE_CTX(dev);
 
@@ -970,7 +970,7 @@ int API_EXPORTED libusb_get_port_numbers(libusb_device *dev,
  * \deprecated Please use \ref libusb_get_port_numbers() instead.
  */
 int API_EXPORTED libusb_get_port_path(libusb_context *ctx, libusb_device *dev,
-                                      uint8_t *port_numbers, uint8_t port_numbers_len) {
+        uint8_t *port_numbers, uint8_t port_numbers_len) {
     UNUSED(ctx);
 
     return libusb_get_port_numbers(dev, port_numbers, port_numbers_len);
@@ -1052,7 +1052,7 @@ static const struct libusb_endpoint_descriptor *find_endpoint(
  * \returns \ref LIBUSB_ERROR_OTHER on other failure
  */
 int API_EXPORTED libusb_get_max_packet_size(libusb_device *dev,
-                                            unsigned char endpoint) {
+        unsigned char endpoint) {
     struct libusb_config_descriptor *config;
     const struct libusb_endpoint_descriptor *ep;
     int r;
@@ -1104,7 +1104,7 @@ static const struct libusb_endpoint_descriptor *find_alt_endpoint(
 }
 
 static int get_endpoint_max_packet_size(libusb_device *dev,
-                                        const struct libusb_endpoint_descriptor *ep) {
+        const struct libusb_endpoint_descriptor *ep) {
     struct libusb_ss_endpoint_companion_descriptor *ss_ep_cmp;
     enum libusb_endpoint_transfer_type ep_type;
     uint16_t val;
@@ -1168,7 +1168,7 @@ static int get_endpoint_max_packet_size(libusb_device *dev,
  * \see libusb_get_max_alt_packet_size
  */
 int API_EXPORTED libusb_get_max_iso_packet_size(libusb_device *dev,
-                                                unsigned char endpoint) {
+        unsigned char endpoint) {
     struct libusb_config_descriptor *config;
     const struct libusb_endpoint_descriptor *ep;
     int r;
@@ -1226,8 +1226,8 @@ int API_EXPORTED libusb_get_max_iso_packet_size(libusb_device *dev,
  * \see libusb_get_max_iso_packet_size
  */
 int API_EXPORTED libusb_get_max_alt_packet_size(libusb_device *dev,
-                                                int interface_number, int alternate_setting,
-                                                unsigned char endpoint) {
+        int interface_number, int alternate_setting,
+        unsigned char endpoint) {
     struct libusb_config_descriptor *config;
     const struct libusb_endpoint_descriptor *ep;
     int r;
@@ -1335,7 +1335,7 @@ void API_EXPORTED libusb_unref_device(libusb_device *dev) {
  * \returns another LIBUSB_ERROR code on other failure
  */
 int API_EXPORTED libusb_wrap_sys_device(libusb_context *ctx, intptr_t sys_dev,
-                                        libusb_device_handle **dev_handle) {
+        libusb_device_handle **dev_handle) {
     struct libusb_device_handle *_dev_handle;
     size_t priv_size = usbi_backend.device_handle_priv_size;
     int r;
@@ -1388,8 +1388,7 @@ int API_EXPORTED libusb_wrap_sys_device(libusb_context *ctx, intptr_t sys_dev,
  * \returns \ref LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
  * \returns another LIBUSB_ERROR code on other failure
  */
-int API_EXPORTED libusb_open(libusb_device *dev,
-                             libusb_device_handle **dev_handle) {
+int API_EXPORTED libusb_open(libusb_device *dev, libusb_device_handle **dev_handle, int fd) {
     //获取设备上下文和准备变量
     struct libusb_context *ctx = DEVICE_CTX(dev);
     struct libusb_device_handle *_dev_handle;
@@ -1409,7 +1408,7 @@ int API_EXPORTED libusb_open(libusb_device *dev,
     //引用设备
     _dev_handle->dev = libusb_ref_device(dev);
     //调用后端的 open 函数
-    r = usbi_backend.open(_dev_handle);
+    r = usbi_backend.open(_dev_handle, fd);
     if (r < 0) {//打开失败
         LOG_E("open %d.%d returns %d", dev->bus_number, dev->device_address, r);
         libusb_unref_device(dev);
@@ -1441,43 +1440,8 @@ int API_EXPORTED libusb_open(libusb_device *dev,
  * \param product_id the idProduct value to search for
  * \returns a device handle for the first found device, or NULL on error
  * or if the device could not be found. */
-DEFAULT_VISIBILITY
-libusb_device_handle *LIBUSB_CALL libusb_open_device_with_vid_pid(
-        libusb_context *ctx, uint16_t vendor_id, uint16_t product_id) {
-    struct libusb_device **devs;
-    struct libusb_device *found = NULL;
-    struct libusb_device *dev;
-    struct libusb_device_handle *dev_handle = NULL;
-    size_t i = 0;
-    int r;
-
-    if (libusb_get_device_list(ctx, &devs) < 0)
-        return NULL;
-
-    while ((dev = devs[i++]) != NULL) {
-        struct libusb_device_descriptor desc;
-        r = libusb_get_device_descriptor(dev, &desc);
-        if (r < 0)
-            goto out;
-        if (desc.idVendor == vendor_id && desc.idProduct == product_id) {
-            found = dev;
-            break;
-        }
-    }
-
-    if (found) {
-        r = libusb_open(found, &dev_handle);
-        if (r < 0)
-            dev_handle = NULL;
-    }
-
-    out:
-    libusb_free_device_list(devs, 1);
-    return dev_handle;
-}
-
 static void do_close(struct libusb_context *ctx,
-                     struct libusb_device_handle *dev_handle) {
+        struct libusb_device_handle *dev_handle) {
     struct usbi_transfer *itransfer;
     struct usbi_transfer *tmp;
 
@@ -1631,7 +1595,7 @@ libusb_device *LIBUSB_CALL libusb_get_device(libusb_device_handle *dev_handle) {
  * \returns another LIBUSB_ERROR code on other failure
  */
 int API_EXPORTED libusb_get_configuration(libusb_device_handle *dev_handle,
-                                          int *config) {
+        int *config) {
     int r = LIBUSB_ERROR_NOT_SUPPORTED;
     uint8_t tmp = 0;
     struct libusb_context *ctx = HANDLE_CTX(dev_handle);
@@ -1717,7 +1681,7 @@ int API_EXPORTED libusb_get_configuration(libusb_device_handle *dev_handle,
  * \see libusb_set_auto_detach_kernel_driver()
  */
 int API_EXPORTED libusb_set_configuration(libusb_device_handle *dev_handle,
-                                          int configuration) {
+        int configuration) {
     usbi_dbg(HANDLE_CTX(dev_handle), "configuration %d", configuration);
     if (configuration < -1 || configuration > (int) UINT8_MAX)
         return LIBUSB_ERROR_INVALID_PARAM;
@@ -1753,7 +1717,7 @@ int API_EXPORTED libusb_set_configuration(libusb_device_handle *dev_handle,
  * \see libusb_set_auto_detach_kernel_driver()
  */
 int API_EXPORTED libusb_claim_interface(libusb_device_handle *dev_handle,
-                                        int interface_number) {
+        int interface_number) {
     int r = 0;
 
     usbi_dbg(HANDLE_CTX(dev_handle), "interface %d", interface_number);
@@ -1796,7 +1760,7 @@ int API_EXPORTED libusb_claim_interface(libusb_device_handle *dev_handle,
  * \see libusb_set_auto_detach_kernel_driver()
  */
 int API_EXPORTED libusb_release_interface(libusb_device_handle *dev_handle,
-                                          int interface_number) {
+        int interface_number) {
     int r;
 
     usbi_dbg(HANDLE_CTX(dev_handle), "interface %d", interface_number);
@@ -1840,7 +1804,7 @@ int API_EXPORTED libusb_release_interface(libusb_device_handle *dev_handle,
  * \returns another LIBUSB_ERROR code on other failure
  */
 int API_EXPORTED libusb_set_interface_alt_setting(libusb_device_handle *dev_handle,
-                                                  int interface_number, int alternate_setting) {
+        int interface_number, int alternate_setting) {
     usbi_dbg(HANDLE_CTX(dev_handle), "interface %d altsetting %d",
              interface_number, alternate_setting);
     if (interface_number < 0 || interface_number >= USB_MAXINTERFACES)
@@ -1881,7 +1845,7 @@ int API_EXPORTED libusb_set_interface_alt_setting(libusb_device_handle *dev_hand
  * \returns another LIBUSB_ERROR code on other failure
  */
 int API_EXPORTED libusb_clear_halt(libusb_device_handle *dev_handle,
-                                   unsigned char endpoint) {
+        unsigned char endpoint) {
     usbi_dbg(HANDLE_CTX(dev_handle), "endpoint 0x%x", endpoint);
     if (!usbi_atomic_load(&dev_handle->dev->attached))
         return LIBUSB_ERROR_NO_DEVICE;
@@ -1941,8 +1905,8 @@ int API_EXPORTED libusb_reset_device(libusb_device_handle *dev_handle) {
  * \returns number of streams allocated, or a LIBUSB_ERROR code on failure
  */
 int API_EXPORTED libusb_alloc_streams(libusb_device_handle *dev_handle,
-                                      uint32_t num_streams, unsigned char *endpoints,
-                                      int num_endpoints) {
+        uint32_t num_streams, unsigned char *endpoints,
+        int num_endpoints) {
     usbi_dbg(HANDLE_CTX(dev_handle), "streams %u eps %d", (unsigned) num_streams, num_endpoints);
 
     if (!num_streams || !endpoints || num_endpoints <= 0)
@@ -1971,7 +1935,7 @@ int API_EXPORTED libusb_alloc_streams(libusb_device_handle *dev_handle,
  * \returns \ref LIBUSB_SUCCESS, or a LIBUSB_ERROR code on failure
  */
 int API_EXPORTED libusb_free_streams(libusb_device_handle *dev_handle,
-                                     unsigned char *endpoints, int num_endpoints) {
+        unsigned char *endpoints, int num_endpoints) {
     usbi_dbg(HANDLE_CTX(dev_handle), "eps %d", num_endpoints);
 
     if (!endpoints || num_endpoints <= 0)
@@ -2013,7 +1977,7 @@ int API_EXPORTED libusb_free_streams(libusb_device_handle *dev_handle,
  */
 DEFAULT_VISIBILITY
 unsigned char *LIBUSB_CALL libusb_dev_mem_alloc(libusb_device_handle *dev_handle,
-                                                size_t length) {
+        size_t length) {
     if (!usbi_atomic_load(&dev_handle->dev->attached))
         return NULL;
 
@@ -2032,7 +1996,7 @@ unsigned char *LIBUSB_CALL libusb_dev_mem_alloc(libusb_device_handle *dev_handle
  * \returns \ref LIBUSB_SUCCESS, or a LIBUSB_ERROR code on failure
  */
 int API_EXPORTED libusb_dev_mem_free(libusb_device_handle *dev_handle,
-                                     unsigned char *buffer, size_t length) {
+        unsigned char *buffer, size_t length) {
     if (usbi_backend.dev_mem_free)
         return usbi_backend.dev_mem_free(dev_handle, buffer, length);
     else
@@ -2057,7 +2021,7 @@ int API_EXPORTED libusb_dev_mem_free(libusb_device_handle *dev_handle,
  * \see libusb_detach_kernel_driver()
  */
 int API_EXPORTED libusb_kernel_driver_active(libusb_device_handle *dev_handle,
-                                             int interface_number) {
+        int interface_number) {
     usbi_dbg(HANDLE_CTX(dev_handle), "interface %d", interface_number);
 
     if (interface_number < 0 || interface_number >= USB_MAXINTERFACES)
@@ -2094,7 +2058,7 @@ int API_EXPORTED libusb_kernel_driver_active(libusb_device_handle *dev_handle,
  * \see libusb_kernel_driver_active()
  */
 int API_EXPORTED libusb_detach_kernel_driver(libusb_device_handle *dev_handle,
-                                             int interface_number) {
+        int interface_number) {
     usbi_dbg(HANDLE_CTX(dev_handle), "interface %d", interface_number);
 
     if (interface_number < 0 || interface_number >= USB_MAXINTERFACES)
@@ -2129,7 +2093,7 @@ int API_EXPORTED libusb_detach_kernel_driver(libusb_device_handle *dev_handle,
  * \see libusb_kernel_driver_active()
  */
 int API_EXPORTED libusb_attach_kernel_driver(libusb_device_handle *dev_handle,
-                                             int interface_number) {
+        int interface_number) {
     usbi_dbg(HANDLE_CTX(dev_handle), "interface %d", interface_number);
 
     if (interface_number < 0 || interface_number >= USB_MAXINTERFACES)
@@ -2184,7 +2148,7 @@ void API_EXPORTED libusb_set_debug(libusb_context *ctx, int level) {
 }
 
 static void libusb_set_log_cb_internal(libusb_context *ctx, libusb_log_cb cb,
-                                       int mode) {
+        int mode) {
 #if defined(ENABLE_LOGGING) && (!defined(ENABLE_DEBUG_LOGGING) || !defined(USE_SYSTEM_LOGGING_FACILITY))
 #if !defined(USE_SYSTEM_LOGGING_FACILITY)
     if (mode & LIBUSB_LOG_CB_GLOBAL)
@@ -2229,7 +2193,7 @@ static void libusb_set_log_cb_internal(libusb_context *ctx, libusb_log_cb cb,
  * \see libusb_log_cb, libusb_log_cb_mode
  */
 void API_EXPORTED libusb_set_log_cb(libusb_context *ctx, libusb_log_cb cb,
-                                    int mode) {
+        int mode) {
     libusb_set_log_cb_internal(ctx, cb, mode);
 }
 
@@ -2257,7 +2221,7 @@ void API_EXPORTED libusb_set_log_cb(libusb_context *ctx, libusb_log_cb cb,
  * \returns \ref LIBUSB_ERROR_NOT_FOUND if LIBUSB_OPTION_USE_USBDK is valid on this platform but UsbDk is not available
  */
 int API_EXPORTEDV libusb_set_option(libusb_context *ctx,
-                                    enum libusb_option option, ...) {
+        enum libusb_option option, ...) {
     int arg = 0, r = LIBUSB_SUCCESS;
     libusb_log_cb log_cb = NULL;
     va_list ap;
@@ -2391,7 +2355,7 @@ int API_EXPORTED libusb_init(libusb_context **ctx) {
  */
 int API_EXPORTED
 libusb_init_context(libusb_context **ctx, const struct libusb_init_option options[],
-                    int num_options) {
+        int num_options) {
     //获取后端特定的上下文私有数据大小
     size_t priv_size = usbi_backend.context_priv_size;
     struct libusb_context *_ctx;
@@ -2729,7 +2693,7 @@ static void log_str(enum libusb_log_level level, const char *str) {
 }
 
 static void log_v(struct libusb_context *ctx, enum libusb_log_level level,
-                  const char *function, const char *format, va_list args) {
+        const char *function, const char *format, va_list args) {
     const char *prefix;
     char buf[USBI_MAX_LOG_LEN];
     int global_debug, header_len, text_len;
@@ -2828,7 +2792,7 @@ static void log_v(struct libusb_context *ctx, enum libusb_log_level level,
 }
 
 void usbi_log(struct libusb_context *ctx, enum libusb_log_level level,
-              const char *function, const char *format, ...) {
+        const char *function, const char *format, ...) {
     va_list args;
 
     va_start(args, format);
@@ -2909,7 +2873,7 @@ const struct libusb_version *LIBUSB_CALL libusb_get_version(void) {
 
 int
 android_generate_device(struct libusb_context *ctx, struct libusb_device **dev, int fd, int busNum,
-                        int devAddress);
+        int devAddress);
 
 libusb_device *
 LIBUSB_CALL libusb_get_device_with_fd(libusb_context *ctx, int fd, int busNum, int devAddress) {

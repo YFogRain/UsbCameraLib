@@ -130,7 +130,6 @@ struct linux_device_priv {
     size_t descriptors_len;
     struct config_descriptor *config_descriptors;
     int active_config; /* cache val for !sysfs_available  */
-    int fd;
 };
 
 struct linux_device_handle_priv {
@@ -185,14 +184,9 @@ static int dev_has_config0(struct libusb_device *dev) {
 }
 
 static int get_usbfs_fd(struct libusb_device *dev, mode_t mode, int silent) {
-    struct linux_device_priv *priv = usbi_get_device_priv(dev);
-    if (priv->fd > 0) {
-        return priv->fd;
-    }
     struct libusb_context *ctx = DEVICE_CTX(dev);
     char path[24];
     int fd;
-
     if (usbdev_names)
         snprintf(path,
                  sizeof(path),
@@ -952,7 +946,7 @@ static int usbfs_get_active_config(struct libusb_device *dev, int fd) {
     return LIBUSB_SUCCESS;
 }
 
-static enum libusb_speed usbfs_get_speed(struct libusb_context *ctx, int fd) {
+static enum libusb_speed usbfs_get_speed(int fd) {
     int r;
     r = ioctl(fd, IOCTL_USBFS_GET_SPEED, NULL);
     switch (r) {
@@ -977,7 +971,66 @@ static enum libusb_speed usbfs_get_speed(struct libusb_context *ctx, int fd) {
     return LIBUSB_SPEED_UNKNOWN;
 }
 
-static int initialize_device(struct libusb_device *dev, uint8_t busnum, uint8_t devaddr,
+static int initialize_device(struct libusb_device *dev, uint8_t busnum, uint8_t devaddr, int wrapped_fd) {
+    struct linux_device_priv *priv = usbi_get_device_priv(dev);
+    struct libusb_context *ctx = DEVICE_CTX(dev);
+
+    //设置为设备的总线号和设备地址
+    dev->bus_number = busnum;
+    dev->device_address = devaddr;
+    dev->speed = usbfs_get_speed(wrapped_fd);
+    int r = lseek(wrapped_fd, 0, SEEK_SET);//移动到描述符文件的开头
+    if (r < 0) {
+        LOG_E("移动描述符文件位置指针失败,errno=%d", errno);
+        return LIBUSB_ERROR_IO;
+    }
+    int alloc_len = 0;//读取和缓存描述符
+    ssize_t nb; // 用于存储读取操作的返回值
+    //读取和缓存描述符
+    //当前已经读取的描述符长度 priv->descriptors_len 等于当前分配的缓冲区长度 alloc_len。
+    //如果读取的数据长度刚好填满了缓冲区，就扩大缓冲区并尝试读取更多数据。
+    //如果读取到的数据长度小于缓冲区长度，则说明文件中的描述符数据已经全部读取完毕，退出循环。
+    do {
+        //每次尝试读取的字节数为 256
+        const size_t desc_read_length = 256;
+        uint8_t *read_ptr;//指向要写入数据的内存地址的指针
+        alloc_len += desc_read_length;// 每次循环增加缓冲区的大小
+        //动态调整缓冲区大小。
+        priv->descriptors = usbi_reallocf(priv->descriptors, alloc_len);
+        //如果内存分配失败
+        if (!priv->descriptors) { //返回内存分配错误
+            LOG_E("内存分配失败");
+            return LIBUSB_ERROR_NO_MEM;
+        }
+        //将读取指针定位到当前缓冲区中已有数据的末尾。
+        read_ptr = (uint8_t *) priv->descriptors + priv->descriptors_len;
+        memset(read_ptr, 0, desc_read_length);// 将新分配的缓冲区初始化为 0，以处理可能的空洞。
+        //文件描述符读取 `desc_read_length` 字节的数据到 `read_ptr`
+        nb = read(wrapped_fd, read_ptr, desc_read_length);
+        // 如果读取失败
+        if (nb < 0) {
+            LOG_E("读取文件描述符失败，errno=%d", errno);
+            return LIBUSB_ERROR_IO;
+        }
+        //更新描述符已读取的总长度
+        priv->descriptors_len += (size_t) nb;
+    } while (priv->descriptors_len == alloc_len);//如果已经读取的长度等于缓冲区的大小，说明可能还有数据需要读取，继续循环
+
+    if (priv->descriptors_len < LIBUSB_DT_DEVICE_SIZE) { // 读取到的描述符长度小于设备描述符的长度
+        LOG_E("读取到的描述符长度小于设备描述符的长度");
+        return LIBUSB_ERROR_IO;
+    }
+
+    r = parse_config_descriptors(dev); // 解析配置描述符
+    if (r < 0)
+        return r;
+    //复制设备描述符数据到设备结构体
+    memcpy(&dev->device_descriptor, priv->descriptors, LIBUSB_DT_DEVICE_SIZE);
+    r = usbfs_get_active_config(dev, wrapped_fd); // 获取活动配置，包含分辨率等信息
+    return r;
+}
+
+static int initialize_device1(struct libusb_device *dev, uint8_t busnum, uint8_t devaddr,
         const char *sysfs_dir, int wrapped_fd) {
     struct linux_device_priv *priv = usbi_get_device_priv(dev);
     struct libusb_context *ctx = DEVICE_CTX(dev);
@@ -988,7 +1041,6 @@ static int initialize_device(struct libusb_device *dev, uint8_t busnum, uint8_t 
     dev->bus_number = busnum;
     dev->device_address = devaddr;
     //将私有数据中的 fd 初始化为 0
-    priv->fd = 0;
     //如果传递了sysfs的地址，则使用 sysfs 读取速度
     if (sysfs_dir) {
         //复制路径到设备私有属性
@@ -1020,7 +1072,7 @@ static int initialize_device(struct libusb_device *dev, uint8_t busnum, uint8_t 
         }
     } else if (wrapped_fd >= 0) {
         //使用 wrapped_fd 读取速度
-        dev->speed = usbfs_get_speed(ctx, wrapped_fd);
+        dev->speed = usbfs_get_speed(wrapped_fd);
     }
     //缓存设备描述符
     if (sysfs_dir) {
@@ -1086,7 +1138,6 @@ static int initialize_device(struct libusb_device *dev, uint8_t busnum, uint8_t 
         usbi_err(ctx, "short descriptor read (%zu)", priv->descriptors_len);
         return LIBUSB_ERROR_IO;
     }
-    priv->fd = fd;
     //解析配置描述符
     r = parse_config_descriptors(dev);
     if (r < 0)
@@ -1215,7 +1266,7 @@ int linux_enumerate_device(struct libusb_context *ctx, uint8_t busnum, uint8_t d
     if (!dev)
         return LIBUSB_ERROR_NO_MEM;
 
-    r = initialize_device(dev, busnum, devaddr, sysfs_dir, -1);
+    r = initialize_device1(dev, busnum, devaddr, NULL, -1);
     if (r < 0)
         goto out;
     r = usbi_sanitize_device(dev);
@@ -1418,7 +1469,6 @@ static int initialize_handle(struct libusb_device_handle *handle, int fd) {
     //获取设备句柄的私有数据
     struct linux_device_handle_priv *hpriv = usbi_get_device_handle_priv(handle);
     int r;
-
     hpriv->fd = fd;//设置文件描述符
     // 获取设备的能力
     r = ioctl(fd, IOCTL_USBFS_GET_CAPABILITIES, &hpriv->caps);
@@ -1462,7 +1512,7 @@ static int op_wrap_sys_device(struct libusb_context *ctx, struct libusb_device_h
     if (!dev)
         return LIBUSB_ERROR_NO_MEM;
 
-    r = initialize_device(dev, busnum, devaddr, NULL, fd);
+    r = initialize_device1(dev, busnum, devaddr, NULL, fd);
     if (r < 0)
         goto out;
     r = usbi_sanitize_device(dev);
@@ -1482,10 +1532,12 @@ static int op_wrap_sys_device(struct libusb_context *ctx, struct libusb_device_h
     return r;
 }
 
-static int op_open(struct libusb_device_handle *handle) {
-    int fd, r;
+static int op_open(struct libusb_device_handle *handle, int fd) {
+    int r;
+    if (fd == -1) {
+        fd = get_usbfs_fd(handle->dev, O_RDWR, 1);
+    }
     //获取文件描述符（O_RDWR 是以读写模式打开设备文件）
-    fd = get_usbfs_fd(handle->dev, O_RDWR, 0);
     if (fd < 0) {//文件描述符获取失败
         if (fd == LIBUSB_ERROR_NO_DEVICE) {//则表示设备不可用（可能已拔出或未连接）
             usbi_mutex_static_lock(&linux_hotplug_lock);
@@ -1908,9 +1960,6 @@ static int op_release_interface(struct libusb_device_handle *handle, uint8_t int
 
 static void op_destroy_device(struct libusb_device *dev) {
     struct linux_device_priv *priv = usbi_get_device_priv(dev);
-    if (priv->fd > 0) {
-        close(priv->fd);
-    }
     free(priv->config_descriptors);
     free(priv->descriptors);
     free(priv->sysfs_dir);
@@ -2805,7 +2854,7 @@ int android_generate_device(struct libusb_context *ctx, struct libusb_device **d
     if (!dev)
         return LIBUSB_ERROR_NO_MEM;
     //初始化设备
-    r = initialize_device(*dev, busNum, devAddress, NULL, fd);
+    r = initialize_device(*dev, busNum, devAddress, fd);
     LOG_D("设备初始化结果:%d", r);
     if (r < 0)
         goto out;

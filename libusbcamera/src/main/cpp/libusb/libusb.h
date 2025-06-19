@@ -1560,7 +1560,7 @@ enum libusb_option {
  * \see libusb_set_log_cb()
  */
 typedef void (LIBUSB_CALL *libusb_log_cb)(libusb_context *ctx,
-                                          enum libusb_log_level level, const char *str);
+        enum libusb_log_level level, const char *str);
 
 /** \ingroup libusb_lib
  * Structure used for setting options through \ref libusb_init_context.
@@ -1578,7 +1578,7 @@ struct libusb_init_option {
 
 int LIBUSB_CALL libusb_init(libusb_context **ctx);
 int LIBUSB_CALL libusb_init_context(libusb_context **ctx, const struct libusb_init_option options[],
-                                    int num_options);
+        int num_options);
 void LIBUSB_CALL libusb_exit(libusb_context *ctx);
 void LIBUSB_CALL libusb_set_debug(libusb_context *ctx, int level);
 /* may be deprecated in the future in favor of lubusb_init_context()+libusb_set_option() */
@@ -1590,24 +1590,24 @@ int LIBUSB_CALL libusb_setlocale(const char *locale);
 const char *LIBUSB_CALL libusb_strerror(int errcode);
 
 ssize_t LIBUSB_CALL libusb_get_device_list(libusb_context *ctx,
-                                           libusb_device ***list);
+        libusb_device ***list);
 void LIBUSB_CALL libusb_free_device_list(libusb_device **list,
-                                         int unref_devices);
+        int unref_devices);
 libusb_device *LIBUSB_CALL libusb_ref_device(libusb_device *dev);
 void LIBUSB_CALL libusb_unref_device(libusb_device *dev);
 
 int LIBUSB_CALL libusb_get_configuration(libusb_device_handle *dev,
-                                         int *config);
+        int *config);
 int LIBUSB_CALL libusb_get_device_descriptor(libusb_device *dev,
-                                             struct libusb_device_descriptor *desc);
+        struct libusb_device_descriptor *desc);
 int LIBUSB_CALL libusb_get_active_config_descriptor(libusb_device *dev,
-                                                    struct libusb_config_descriptor **config);
+        struct libusb_config_descriptor **config);
 int LIBUSB_CALL libusb_get_config_descriptor(libusb_device *dev,
-                                             uint8_t config_index,
-                                             struct libusb_config_descriptor **config);
+        uint8_t config_index,
+        struct libusb_config_descriptor **config);
 int LIBUSB_CALL libusb_get_config_descriptor_by_value(libusb_device *dev,
-                                                      uint8_t bConfigurationValue,
-                                                      struct libusb_config_descriptor **config);
+        uint8_t bConfigurationValue,
+        struct libusb_config_descriptor **config);
 void LIBUSB_CALL libusb_free_config_descriptor(
         struct libusb_config_descriptor *config);
 int LIBUSB_CALL libusb_get_ss_endpoint_companion_descriptor(
@@ -1617,7 +1617,7 @@ int LIBUSB_CALL libusb_get_ss_endpoint_companion_descriptor(
 void LIBUSB_CALL libusb_free_ss_endpoint_companion_descriptor(
         struct libusb_ss_endpoint_companion_descriptor *ep_comp);
 int LIBUSB_CALL libusb_get_bos_descriptor(libusb_device_handle *dev_handle,
-                                          struct libusb_bos_descriptor **bos);
+        struct libusb_bos_descriptor **bos);
 void LIBUSB_CALL libusb_free_bos_descriptor(struct libusb_bos_descriptor *bos);
 int LIBUSB_CALL libusb_get_usb_2_0_extension_descriptor(
         libusb_context *ctx,
@@ -1632,13 +1632,13 @@ int LIBUSB_CALL libusb_get_ss_usb_device_capability_descriptor(
 void LIBUSB_CALL libusb_free_ss_usb_device_capability_descriptor(
         struct libusb_ss_usb_device_capability_descriptor *ss_usb_device_cap);
 int LIBUSB_CALL libusb_get_container_id_descriptor(libusb_context *ctx,
-                                                   struct libusb_bos_dev_capability_descriptor *dev_cap,
-                                                   struct libusb_container_id_descriptor **container_id);
+        struct libusb_bos_dev_capability_descriptor *dev_cap,
+        struct libusb_container_id_descriptor **container_id);
 void LIBUSB_CALL libusb_free_container_id_descriptor(
         struct libusb_container_id_descriptor *container_id);
 int LIBUSB_CALL libusb_get_platform_descriptor(libusb_context *ctx,
-                                               struct libusb_bos_dev_capability_descriptor *dev_cap,
-                                               struct libusb_platform_descriptor **platform_descriptor);
+        struct libusb_bos_dev_capability_descriptor *dev_cap,
+        struct libusb_platform_descriptor **platform_descriptor);
 void LIBUSB_CALL libusb_free_platform_descriptor(
         struct libusb_platform_descriptor *platform_descriptor);
 uint8_t LIBUSB_CALL libusb_get_bus_number(libusb_device *dev);
@@ -1652,60 +1652,57 @@ libusb_device *LIBUSB_CALL libusb_get_parent(libusb_device *dev);
 uint8_t LIBUSB_CALL libusb_get_device_address(libusb_device *dev);
 int LIBUSB_CALL libusb_get_device_speed(libusb_device *dev);
 int LIBUSB_CALL libusb_get_max_packet_size(libusb_device *dev,
-                                           unsigned char endpoint);
+        unsigned char endpoint);
 int LIBUSB_CALL libusb_get_max_iso_packet_size(libusb_device *dev,
-                                               unsigned char endpoint);
+        unsigned char endpoint);
 int LIBUSB_CALL libusb_get_max_alt_packet_size(libusb_device *dev,
-                                               int interface_number, int alternate_setting,
-                                               unsigned char endpoint);
+        int interface_number, int alternate_setting,
+        unsigned char endpoint);
 
 int LIBUSB_CALL libusb_get_interface_association_descriptors(libusb_device *dev,
-                                                             uint8_t config_index,
-                                                             struct libusb_interface_association_descriptor_array **iad_array);
+        uint8_t config_index,
+        struct libusb_interface_association_descriptor_array **iad_array);
 int LIBUSB_CALL libusb_get_active_interface_association_descriptors(libusb_device *dev,
-                                                                    struct libusb_interface_association_descriptor_array **iad_array);
+        struct libusb_interface_association_descriptor_array **iad_array);
 void LIBUSB_CALL libusb_free_interface_association_descriptors(
         struct libusb_interface_association_descriptor_array *iad_array);
 
 int LIBUSB_CALL
 libusb_wrap_sys_device(libusb_context *ctx, intptr_t sys_dev, libusb_device_handle **dev_handle);
-int LIBUSB_CALL libusb_open(libusb_device *dev, libusb_device_handle **dev_handle);
+int LIBUSB_CALL libusb_open(libusb_device *dev, libusb_device_handle **dev_handle, int fd);
 void LIBUSB_CALL libusb_close(libusb_device_handle *dev_handle);
 libusb_device *LIBUSB_CALL libusb_get_device(libusb_device_handle *dev_handle);
 
 int LIBUSB_CALL libusb_set_configuration(libusb_device_handle *dev_handle,
-                                         int configuration);
+        int configuration);
 int LIBUSB_CALL libusb_claim_interface(libusb_device_handle *dev_handle,
-                                       int interface_number);
+        int interface_number);
 int LIBUSB_CALL libusb_release_interface(libusb_device_handle *dev_handle,
-                                         int interface_number);
-
-libusb_device_handle *LIBUSB_CALL libusb_open_device_with_vid_pid(
-        libusb_context *ctx, uint16_t vendor_id, uint16_t product_id);
+        int interface_number);
 
 int LIBUSB_CALL libusb_set_interface_alt_setting(libusb_device_handle *dev_handle,
-                                                 int interface_number, int alternate_setting);
+        int interface_number, int alternate_setting);
 int LIBUSB_CALL libusb_clear_halt(libusb_device_handle *dev_handle,
-                                  unsigned char endpoint);
+        unsigned char endpoint);
 int LIBUSB_CALL libusb_reset_device(libusb_device_handle *dev_handle);
 
 int LIBUSB_CALL libusb_alloc_streams(libusb_device_handle *dev_handle,
-                                     uint32_t num_streams, unsigned char *endpoints,
-                                     int num_endpoints);
+        uint32_t num_streams, unsigned char *endpoints,
+        int num_endpoints);
 int LIBUSB_CALL libusb_free_streams(libusb_device_handle *dev_handle,
-                                    unsigned char *endpoints, int num_endpoints);
+        unsigned char *endpoints, int num_endpoints);
 
 unsigned char *LIBUSB_CALL libusb_dev_mem_alloc(libusb_device_handle *dev_handle,
-                                                size_t length);
+        size_t length);
 int LIBUSB_CALL libusb_dev_mem_free(libusb_device_handle *dev_handle,
-                                    unsigned char *buffer, size_t length);
+        unsigned char *buffer, size_t length);
 
 int LIBUSB_CALL libusb_kernel_driver_active(libusb_device_handle *dev_handle,
-                                            int interface_number);
+        int interface_number);
 int LIBUSB_CALL libusb_detach_kernel_driver(libusb_device_handle *dev_handle,
-                                            int interface_number);
+        int interface_number);
 int LIBUSB_CALL libusb_attach_kernel_driver(libusb_device_handle *dev_handle,
-                                            int interface_number);
+        int interface_number);
 int LIBUSB_CALL libusb_set_auto_detach_kernel_driver(
         libusb_device_handle *dev_handle, int enable);
 
@@ -1769,9 +1766,9 @@ static inline struct libusb_control_setup *libusb_control_transfer_get_setup(
  * \ref libusb_control_setup
  */
 static inline void libusb_fill_control_setup(unsigned char *buffer,
-                                             uint8_t bmRequestType, uint8_t bRequest,
-                                             uint16_t wValue, uint16_t wIndex,
-                                             uint16_t wLength) {
+        uint8_t bmRequestType, uint8_t bRequest,
+        uint16_t wValue, uint16_t wIndex,
+        uint16_t wLength) {
     struct libusb_control_setup *setup = (struct libusb_control_setup *) (void *) buffer;
     setup->bmRequestType = bmRequestType;
     setup->bRequest = bRequest;
@@ -1848,11 +1845,11 @@ static inline void libusb_fill_control_transfer(
  * \param timeout timeout for the transfer in milliseconds
  */
 static inline void libusb_fill_bulk_transfer(struct libusb_transfer *transfer,
-                                             libusb_device_handle *dev_handle,
-                                             unsigned char endpoint,
-                                             unsigned char *buffer, int length,
-                                             libusb_transfer_cb_fn callback,
-                                             void *user_data, unsigned int timeout) {
+        libusb_device_handle *dev_handle,
+        unsigned char endpoint,
+        unsigned char *buffer, int length,
+        libusb_transfer_cb_fn callback,
+        void *user_data, unsigned int timeout) {
     transfer->dev_handle = dev_handle;
     transfer->endpoint = endpoint;
     transfer->type = LIBUSB_TRANSFER_TYPE_BULK;
@@ -1932,11 +1929,11 @@ static inline void libusb_fill_interrupt_transfer(
  * \param timeout timeout for the transfer in milliseconds
  */
 static inline void libusb_fill_iso_transfer(struct libusb_transfer *transfer,
-                                            libusb_device_handle *dev_handle,
-                                            unsigned char endpoint,
-                                            unsigned char *buffer, int length, int num_iso_packets,
-                                            libusb_transfer_cb_fn callback, void *user_data,
-                                            unsigned int timeout) {
+        libusb_device_handle *dev_handle,
+        unsigned char endpoint,
+        unsigned char *buffer, int length, int num_iso_packets,
+        libusb_transfer_cb_fn callback, void *user_data,
+        unsigned int timeout) {
     transfer->dev_handle = dev_handle;
     transfer->endpoint = endpoint;
     transfer->type = LIBUSB_TRANSFER_TYPE_ISOCHRONOUS;
@@ -2041,18 +2038,18 @@ static inline unsigned char *libusb_get_iso_packet_buffer_simple(
 /* sync I/O */
 
 int LIBUSB_CALL libusb_control_transfer(libusb_device_handle *dev_handle,
-                                        uint8_t request_type, uint8_t bRequest, uint16_t wValue,
-                                        uint16_t wIndex,
-                                        unsigned char *data, uint16_t wLength,
-                                        unsigned int timeout);
+        uint8_t request_type, uint8_t bRequest, uint16_t wValue,
+        uint16_t wIndex,
+        unsigned char *data, uint16_t wLength,
+        unsigned int timeout);
 
 int LIBUSB_CALL libusb_bulk_transfer(libusb_device_handle *dev_handle,
-                                     unsigned char endpoint, unsigned char *data, int length,
-                                     int *actual_length, unsigned int timeout);
+        unsigned char endpoint, unsigned char *data, int length,
+        int *actual_length, unsigned int timeout);
 
 int LIBUSB_CALL libusb_interrupt_transfer(libusb_device_handle *dev_handle,
-                                          unsigned char endpoint, unsigned char *data, int length,
-                                          int *actual_length, unsigned int timeout);
+        unsigned char endpoint, unsigned char *data, int length,
+        int *actual_length, unsigned int timeout);
 
 /** \ingroup libusb_desc
  * Retrieve a descriptor from the default control pipe.
@@ -2067,8 +2064,8 @@ int LIBUSB_CALL libusb_interrupt_transfer(libusb_device_handle *dev_handle,
  * \returns number of bytes returned in data, or LIBUSB_ERROR code on failure
  */
 static inline int libusb_get_descriptor(libusb_device_handle *dev_handle,
-                                        uint8_t desc_type, uint8_t desc_index, unsigned char *data,
-                                        int length) {
+        uint8_t desc_type, uint8_t desc_index, unsigned char *data,
+        int length) {
     return libusb_control_transfer(dev_handle, LIBUSB_ENDPOINT_IN,
                                    LIBUSB_REQUEST_GET_DESCRIPTOR,
                                    (uint16_t) ((desc_type << 8) | desc_index),
@@ -2090,8 +2087,8 @@ static inline int libusb_get_descriptor(libusb_device_handle *dev_handle,
  * \see libusb_get_string_descriptor_ascii()
  */
 static inline int libusb_get_string_descriptor(libusb_device_handle *dev_handle,
-                                               uint8_t desc_index, uint16_t langid,
-                                               unsigned char *data, int length) {
+        uint8_t desc_index, uint16_t langid,
+        unsigned char *data, int length) {
     return libusb_control_transfer(dev_handle, LIBUSB_ENDPOINT_IN,
                                    LIBUSB_REQUEST_GET_DESCRIPTOR,
                                    (uint16_t) ((LIBUSB_DT_STRING << 8) | desc_index),
@@ -2099,8 +2096,8 @@ static inline int libusb_get_string_descriptor(libusb_device_handle *dev_handle,
 }
 
 int LIBUSB_CALL libusb_get_string_descriptor_ascii(libusb_device_handle *dev_handle,
-                                                   uint8_t desc_index, unsigned char *data,
-                                                   int length);
+        uint8_t desc_index, unsigned char *data,
+        int length);
 
 /* polling and timeouts */
 
@@ -2115,16 +2112,16 @@ void LIBUSB_CALL libusb_unlock_event_waiters(libusb_context *ctx);
 int LIBUSB_CALL libusb_wait_for_event(libusb_context *ctx, struct timeval *tv);
 
 int LIBUSB_CALL libusb_handle_events_timeout(libusb_context *ctx,
-                                             struct timeval *tv);
+        struct timeval *tv);
 int LIBUSB_CALL libusb_handle_events_timeout_completed(libusb_context *ctx,
-                                                       struct timeval *tv, int *completed);
+        struct timeval *tv, int *completed);
 int LIBUSB_CALL libusb_handle_events(libusb_context *ctx);
 int LIBUSB_CALL libusb_handle_events_completed(libusb_context *ctx, int *completed);
 int LIBUSB_CALL libusb_handle_events_locked(libusb_context *ctx,
-                                            struct timeval *tv);
+        struct timeval *tv);
 int LIBUSB_CALL libusb_pollfds_handle_timeouts(libusb_context *ctx);
 int LIBUSB_CALL libusb_get_next_timeout(libusb_context *ctx,
-                                        struct timeval *tv);
+        struct timeval *tv);
 
 /** \ingroup libusb_poll
  * File descriptor for polling
@@ -2151,7 +2148,7 @@ struct libusb_pollfd {
  * \see libusb_set_pollfd_notifiers()
  */
 typedef void (LIBUSB_CALL *libusb_pollfd_added_cb)(int fd, short events,
-                                                   void *user_data);
+        void *user_data);
 
 /** \ingroup libusb_poll
  * Callback function, invoked when a file descriptor should be removed from
@@ -2168,9 +2165,9 @@ const struct libusb_pollfd **LIBUSB_CALL libusb_get_pollfds(
         libusb_context *ctx);
 void LIBUSB_CALL libusb_free_pollfds(const struct libusb_pollfd **pollfds);
 void LIBUSB_CALL libusb_set_pollfd_notifiers(libusb_context *ctx,
-                                             libusb_pollfd_added_cb added_cb,
-                                             libusb_pollfd_removed_cb removed_cb,
-                                             void *user_data);
+        libusb_pollfd_added_cb added_cb,
+        libusb_pollfd_removed_cb removed_cb,
+        void *user_data);
 
 /** \ingroup libusb_hotplug
  * Callback handle.
@@ -2242,8 +2239,8 @@ typedef enum {
  *                       returning 1 will cause this callback to be deregistered
  */
 typedef int (LIBUSB_CALL *libusb_hotplug_callback_fn)(libusb_context *ctx,
-                                                      libusb_device *device,
-                                                      libusb_hotplug_event event, void *user_data);
+        libusb_device *device,
+        libusb_hotplug_event event, void *user_data);
 
 /** \ingroup libusb_hotplug
  * Register a hotplug callback function
@@ -2281,10 +2278,10 @@ typedef int (LIBUSB_CALL *libusb_hotplug_callback_fn)(libusb_context *ctx,
  * \returns \ref LIBUSB_SUCCESS on success LIBUSB_ERROR code on failure
  */
 int LIBUSB_CALL libusb_hotplug_register_callback(libusb_context *ctx,
-                                                 int events, int flags,
-                                                 int vendor_id, int product_id, int dev_class,
-                                                 libusb_hotplug_callback_fn cb_fn, void *user_data,
-                                                 libusb_hotplug_callback_handle *callback_handle);
+        int events, int flags,
+        int vendor_id, int product_id, int dev_class,
+        libusb_hotplug_callback_fn cb_fn, void *user_data,
+        libusb_hotplug_callback_handle *callback_handle);
 
 /** \ingroup libusb_hotplug
  * Deregisters a hotplug callback.
@@ -2298,7 +2295,7 @@ int LIBUSB_CALL libusb_hotplug_register_callback(libusb_context *ctx,
  * \param[in] callback_handle the handle of the callback to deregister
  */
 void LIBUSB_CALL libusb_hotplug_deregister_callback(libusb_context *ctx,
-                                                    libusb_hotplug_callback_handle callback_handle);
+        libusb_hotplug_callback_handle callback_handle);
 
 /** \ingroup libusb_hotplug
  * Gets the user_data associated with a hotplug callback.
@@ -2309,7 +2306,7 @@ void LIBUSB_CALL libusb_hotplug_deregister_callback(libusb_context *ctx,
  * \param[in] callback_handle the handle of the callback to get the user_data of
  */
 void *LIBUSB_CALL libusb_hotplug_get_user_data(libusb_context *ctx,
-                                               libusb_hotplug_callback_handle callback_handle);
+        libusb_hotplug_callback_handle callback_handle);
 
 int LIBUSB_CALLV libusb_set_option(libusb_context *ctx, enum libusb_option option, ...);
 

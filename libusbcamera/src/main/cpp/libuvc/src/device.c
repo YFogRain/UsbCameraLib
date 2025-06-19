@@ -333,12 +333,10 @@ uvc_error_t uvc_wrap(
  * @param[out] devh Handle on opened device
  * @return Error opening device or SUCCESS
  */
-uvc_error_t uvc_open(
-        uvc_device_t *dev,
-        uvc_device_handle_t **devh) {
+uvc_error_t uvc_open(uvc_device_t *dev, uvc_device_handle_t **devh, int fd) {
     uvc_error_t ret;
     struct libusb_device_handle *usb_devh;
-    ret = libusb_open(dev->usb_dev, &usb_devh);
+    ret = libusb_open(dev->usb_dev, &usb_devh, fd);
     LOG_E("libusb_open:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
@@ -610,7 +608,7 @@ uvc_error_t uvc_get_device_descriptor(
     desc_internal->idVendor = usb_desc.idVendor;
     desc_internal->idProduct = usb_desc.idProduct;
 
-    if (libusb_open(dev->usb_dev, &usb_devh) == 0) {
+    if (libusb_open(dev->usb_dev, &usb_devh, -1) == 0) {
         unsigned char buf[64];
 
         int bytes = libusb_get_string_descriptor_ascii(
@@ -1547,7 +1545,7 @@ uvc_error_t uvc_parse_vs_frame_uncompressed(uvc_streaming_interface_t *stream_if
         }
         frame->intervals[n] = 0;
 
-        frame->dwDefaultFrameInterval = MIN(frame->intervals[n-1], MAX(frame->intervals[0], frame->dwDefaultFrameInterval));
+        frame->dwDefaultFrameInterval = MIN(frame->intervals[n - 1], MAX(frame->intervals[0], frame->dwDefaultFrameInterval));
     }
 
     if (frame_type == UVC_VS_FRAME_UNCOMPRESSED) {
@@ -1720,8 +1718,8 @@ void uvc_close(uvc_device_handle_t *devh) {
      * which the handler thread will check the flag we set and then exit. */
     if (ctx->own_usb_ctx && ctx->open_devices == devh && devh->next == NULL) {
         ctx->kill_handler_thread = 1;
-        libusb_close(devh->usb_devh);
         pthread_join(ctx->handler_thread, NULL);
+        libusb_close(devh->usb_devh);
     } else {
         libusb_close(devh->usb_devh);
     }
