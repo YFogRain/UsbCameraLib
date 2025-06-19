@@ -1021,20 +1021,20 @@ uvc_error_t uvc_release_if(uvc_device_handle_t *devh, int idx) {
     libusb_set_interface_alt_setting(devh->usb_devh, idx, 0);
     ret = libusb_release_interface(devh->usb_devh, idx);
 
-    if (UVC_SUCCESS == ret) {
-        devh->claimed &= ~(1 << idx);
-        /* Reattach any kernel drivers that were disabled when we claimed this interface */
-        ret = libusb_attach_kernel_driver(devh->usb_devh, idx);
-
-        if (ret == UVC_SUCCESS) {
-            UVC_DEBUG("reattached kernel driver to interface %d", idx);
-        } else if (ret == LIBUSB_ERROR_NOT_FOUND || ret == LIBUSB_ERROR_NOT_SUPPORTED) {
-            ret = UVC_SUCCESS;  /* NOT_FOUND and NOT_SUPPORTED are OK: nothing to do */
-        } else {
-            UVC_DEBUG("error reattaching kernel driver to interface %d: %s",
-                      idx, uvc_strerror(ret));
-        }
-    }
+//    if (UVC_SUCCESS == ret) {
+//        devh->claimed &= ~(1 << idx);
+//        /* Reattach any kernel drivers that were disabled when we claimed this interface */
+//        ret = libusb_attach_kernel_driver(devh->usb_devh, idx);
+//
+//        if (ret == UVC_SUCCESS) {
+//            UVC_DEBUG("reattached kernel driver to interface %d", idx);
+//        } else if (ret == LIBUSB_ERROR_NOT_FOUND || ret == LIBUSB_ERROR_NOT_SUPPORTED) {
+//            ret = UVC_SUCCESS;  /* NOT_FOUND and NOT_SUPPORTED are OK: nothing to do */
+//        } else {
+//            UVC_DEBUG("error reattaching kernel driver to interface %d: %s",
+//                      idx, uvc_strerror(ret));
+//        }
+//    }
 
     UVC_EXIT(ret);
     return ret;
@@ -1711,15 +1711,16 @@ void uvc_close(uvc_device_handle_t *devh) {
         uvc_stop_streaming(devh);
 
     uvc_release_if(devh, devh->info->ctrl_if.bInterfaceNumber);
-
+    //设置自定释放
+    libusb_set_auto_detach_kernel_driver(devh->usb_devh, 0);
     /* If we are managing the libusb context and this is the last open device,
      * then we need to cancel the handler thread. When we call libusb_close,
      * it'll cause a return from the thread's libusb_handle_events call, after
      * which the handler thread will check the flag we set and then exit. */
     if (ctx->own_usb_ctx && ctx->open_devices == devh && devh->next == NULL) {
         ctx->kill_handler_thread = 1;
-        pthread_join(ctx->handler_thread, NULL);
         libusb_close(devh->usb_devh);
+        pthread_join(ctx->handler_thread, NULL);
     } else {
         libusb_close(devh->usb_devh);
     }
