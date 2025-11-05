@@ -1,11 +1,18 @@
 package com.rain.uvc.demo.record;
 
+import android.annotation.SuppressLint;
+import android.content.ContentValues;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
+import android.net.Uri;
+import android.os.ParcelFileDescriptor;
+import android.provider.MediaStore;
 import android.util.Log;
 
-import java.io.File;
+
+import com.rain.uvc.provider.OverallContext;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Queue;
@@ -19,31 +26,32 @@ public class MediaMuxerThread extends Thread implements Runnable {
     private boolean isRecording;
     private AudioRecordThread mAudioThread;
     private VideoRecordThread mVideoThread;
-    private final String path;
+    private final Uri path;
     private MediaMuxer mMediaMuxer;
     private int mAudioTrack;
     private int mVideoTrack;
     private boolean isMediaMuxerStart;
-    private MediaMuxerCallback mMediaMuxerCallback;
     private static final String TAG = "MediaMuxerThread";
-    private static final long MAX_RECORD_SIZE = 1024 * 1024 * 1024; //1G限制
     private boolean isOpenVoice = true; //是否打开录音
+    private ParcelFileDescriptor mFd;
 
-    public MediaMuxerThread(String path, boolean isOpenVoice) {
+    public MediaMuxerThread(Uri path, boolean isOpenVoice) {
         Log.d("Camera1Manager", "MediaMuxerThread-isOpenVoice:" + isOpenVoice);
         this.isRecording = false;
         this.isMediaMuxerStart = false;
         this.isOpenVoice = isOpenVoice;
         this.path = path;
         this.mMutexBeanQueue = new ArrayBlockingQueue(100);
-        this.mMediaMuxerCallback = null;
     }
 
+    @SuppressLint("NewApi")
     public boolean prepareMediaMuxer(int width, int height) {
         try {
+            mFd = OverallContext.baseContext.getContentResolver().openFileDescriptor(path, "w");
+            if (mFd == null) return false;
             mAudioTrack = -1;
             mVideoTrack = -1;
-            mMediaMuxer = new MediaMuxer(path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+            mMediaMuxer = new MediaMuxer(mFd.getFileDescriptor(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
             mVideoThread = new VideoRecordThread(this, width, height);
             Log.d(TAG, "isOpenVoice:" + isOpenVoice);
             if (isOpenVoice && AudioRecordThread.isHaveMicrophone()) {
@@ -117,7 +125,6 @@ public class MediaMuxerThread extends Thread implements Runnable {
     }
 
     public boolean begin(int width, int height) {
-        checkFile();
         boolean prepareResult = prepareMediaMuxer(width, height);
         Log.d("Camera1Manager", "prepareResult:" + prepareResult);
         if (!prepareResult) {
@@ -131,13 +138,6 @@ public class MediaMuxerThread extends Thread implements Runnable {
         return true;
     }
 
-    private void checkFile() {
-        File file = new File(path);
-        if (file.exists() && file.isFile()) {
-            file.delete();
-        }
-    }
-
     public void frame(byte[] data) {
         Log.d("Camera1Manager", "isRecording:" + isRecording);
         if (isRecording) {
@@ -145,16 +145,7 @@ public class MediaMuxerThread extends Thread implements Runnable {
         }
     }
 
-    public boolean isFileFull() {
-        File file = new File(path);
-        if (file.exists() && file.isFile()) {
-            // 文件存在且为文件类型
-            return file.length() >= MAX_RECORD_SIZE;
-        }
-        return false;
-    }
-
-    public String end() {
+    public Uri end() {
         try {
             Log.i(TAG, "end: stop recode");
             isRecording = false;
@@ -171,6 +162,17 @@ public class MediaMuxerThread extends Thread implements Runnable {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+        try {
+            if (mFd != null) {
+                mFd.close();
+            }
+            ContentValues contentValues = new ContentValues();
+            contentValues.put(MediaStore.Video.Media.IS_PENDING, 0);
+            OverallContext.baseContext.getContentResolver().update(path, contentValues, null, null);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         return path;
     }
 
@@ -182,23 +184,16 @@ public class MediaMuxerThread extends Thread implements Runnable {
     public void run() {
         while (true) {
             if (!mMutexBeanQueue.isEmpty()) {
-                if (!isFileFull()) {
-                    MutexBean data = mMutexBeanQueue.poll();
-                    if (data != null) {
-                        MediaCodec.BufferInfo bufferInfo = data.getBufferInfo();
-                        ByteBuffer byteBuf = data.getByteBuffer();
-                        if (bufferInfo != null && byteBuf != null) {
-                            if (bufferInfo.size >= 0 && bufferInfo.offset >= 0 && (bufferInfo.offset + bufferInfo.size) <= byteBuf.capacity()) {
-                                mMediaMuxer.writeSampleData(data.isVideo() ? mVideoTrack : mAudioTrack, byteBuf, bufferInfo);
-                            }
+                MutexBean data = mMutexBeanQueue.poll();
+                if (data != null) {
+                    MediaCodec.BufferInfo bufferInfo = data.getBufferInfo();
+                    ByteBuffer byteBuf = data.getByteBuffer();
+                    if (bufferInfo != null && byteBuf != null) {
+                        if (bufferInfo.size >= 0 && bufferInfo.offset >= 0 && (bufferInfo.offset + bufferInfo.size) <= byteBuf.capacity()) {
+                            mMediaMuxer.writeSampleData(data.isVideo() ? mVideoTrack : mAudioTrack, byteBuf, bufferInfo);
                         }
                     }
-                } else {
-                    end();
-                    Log.i(TAG, "run: file full");
-                    break;
                 }
-
             } else {
                 try {
                     Thread.sleep(300);
@@ -211,9 +206,6 @@ public class MediaMuxerThread extends Thread implements Runnable {
             }
         }
         release();
-        if (mMediaMuxerCallback != null) {
-            mMediaMuxerCallback.onFinishMediaMutex(path);
-        }
     }
 
     private void release() {
@@ -224,15 +216,4 @@ public class MediaMuxerThread extends Thread implements Runnable {
         }
     }
 
-    public boolean isMediaMuxerStart() {
-        return isMediaMuxerStart;
-    }
-
-    public void setMediaMuxerCallback(MediaMuxerCallback callback) {
-        this.mMediaMuxerCallback = callback;
-    }
-
-    public interface MediaMuxerCallback {
-        void onFinishMediaMutex(String path);
-    }
 }

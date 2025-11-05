@@ -13,7 +13,6 @@ import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.record.MediaMuxerThread
 import com.rain.uvc.demo.utils.GsonHelper
 import com.rain.uvc.demo.utils.PictureUtils
-import com.rain.uvc.listener.IFrameListener
 import com.rain.uvc.provider.OverallContext
 import com.rain.uvc.state.CameraDataFormat
 import com.rain.uvc.state.CameraParameter
@@ -23,7 +22,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import java.io.File
-import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -78,7 +76,11 @@ class CameraCppViewModel : BaseViewModel() {
 			} ?: previewSizes?.getOrNull(0)
 			
 			if (previewSize != null) {
-				cameraDevice.setPreviewSize(previewSize.width, previewSize.height, previewSize.format)
+				cameraDevice.setPreviewSize(
+					previewSize.width,
+					previewSize.height,
+					previewSize.format
+				)
 			}
 			cameraDevice.setParentPath("${Environment.getExternalStorageDirectory().absolutePath}${File.separator}camera_video")
 			mCameraDevice.set(cameraDevice)
@@ -92,7 +94,7 @@ class CameraCppViewModel : BaseViewModel() {
 	
 	fun startPreview() {
 		val device = mCameraDevice.get() ?: return
-		device.setPreviewListener({ width, height, frame ->
+		device.setPreviewListener({ _, _, frame ->
 			val data = ByteArray(frame.capacity())
 			frame.get(data)
 			frame.clear()
@@ -102,7 +104,7 @@ class CameraCppViewModel : BaseViewModel() {
 			Log.d("CameraCppViewModel", "打开预览结果:$it")
 		}
 	}
-
+	
 	fun stopPreview() {
 		mMediaMuxer?.end()
 		mMediaMuxer = null
@@ -123,7 +125,10 @@ class CameraCppViewModel : BaseViewModel() {
 	
 	private fun initCameraParameters(cameraDevice: ICameraDevice) {
 		val supportPreviewSize = cameraDevice.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
-		Log.d("CameraCppViewModel", "分辨率列表:${GsonHelper.getHelper().modeToJson(supportPreviewSize)}")
+		Log.d(
+			"CameraCppViewModel",
+			"分辨率列表:${GsonHelper.getHelper().modeToJson(supportPreviewSize)}"
+		)
 //		Log.d("CameraCppViewModel", "自动曝光支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.AUTO_EXPOSURE)}")
 //		Log.d("CameraCppViewModel", "曝光度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.EXPOSURE).let { "${it?.min}-${it?.max}" }}")
 //		Log.d("CameraCppViewModel", "人脸检测支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.FACE_DETECT)}")
@@ -155,16 +160,42 @@ class CameraCppViewModel : BaseViewModel() {
 			val path = mMediaMuxer?.end()
 			mMediaMuxer = null
 			recordState.value = false
-			val saveUri = PictureUtils.saveSandboxVideoToGallery(File(path))
-			Toast.makeText(OverallContext.baseContext, "视频保存地址 = $saveUri", Toast.LENGTH_SHORT).show()
+//			viewModelScope.launch {
+//				showLoadDialog()
+//				val saveUri = PictureUtils.saveToMediaDir(path)
+//				dismissDialog()
+//				Toast.makeText(
+//					OverallContext.baseContext,
+//					"视频保存地址 = $saveUri",
+//					Toast.LENGTH_SHORT
+//				).show()
+//			}
+			Toast.makeText(
+				OverallContext.baseContext,
+				"视频保存地址 = $path",
+				Toast.LENGTH_SHORT
+			).show()
 			return
 		}
 		val previewSize = cameraDevice.getParameter(CameraParameter.PREVIEW_SIZE)
 		if (previewSize == null) {
-			Toast.makeText(OverallContext.baseContext, "获取视频分辨率失败", Toast.LENGTH_SHORT).show()
+			Toast.makeText(
+				OverallContext.baseContext,
+				"获取视频分辨率失败",
+				Toast.LENGTH_SHORT
+			).show()
 			return
 		}
-		mMediaMuxer = MediaMuxerThread(loadRecordPath(), false)
+		val loadSaveUri = PictureUtils.loadSaveUri()
+		if (loadSaveUri == null) {
+			Toast.makeText(
+				OverallContext.baseContext,
+				"获取保存地址失败",
+				Toast.LENGTH_SHORT
+			).show()
+			return
+		}
+		mMediaMuxer = MediaMuxerThread(loadSaveUri, false)
 		val begin = mMediaMuxer?.begin(previewSize.width, previewSize.height) ?: false
 		if (!begin) {
 			mMediaMuxer?.end()
@@ -172,15 +203,4 @@ class CameraCppViewModel : BaseViewModel() {
 		}
 		recordState.value = begin
 	}
-	
-	private fun loadRecordPath(): String {
-		
-		val recordFile = File("${OverallContext.baseContext.getExternalFilesDir(null)}${File.separator}camera_video${File.separator}capture_${System.currentTimeMillis()}.mp4")
-		recordFile.parentFile?.also {
-			if (!it.exists()) it.mkdirs()
-		}
-		return recordFile.absolutePath
-	}
-	
-
 }
