@@ -1,17 +1,11 @@
 package com.rain.uvc.demo.record;
 
 import android.annotation.SuppressLint;
-import android.content.ContentValues;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
-import android.net.Uri;
-import android.os.ParcelFileDescriptor;
-import android.provider.MediaStore;
 import android.util.Log;
 
-
-import com.rain.uvc.provider.OverallContext;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,16 +20,15 @@ public class MediaMuxerThread extends Thread implements Runnable {
     private boolean isRecording;
     private AudioRecordThread mAudioThread;
     private VideoRecordThread mVideoThread;
-    private final Uri path;
+    private final String path;
     private MediaMuxer mMediaMuxer;
     private int mAudioTrack;
     private int mVideoTrack;
     private boolean isMediaMuxerStart;
     private static final String TAG = "MediaMuxerThread";
     private boolean isOpenVoice = true; //是否打开录音
-    private ParcelFileDescriptor mFd;
 
-    public MediaMuxerThread(Uri path, boolean isOpenVoice) {
+    public MediaMuxerThread(String path, boolean isOpenVoice) {
         Log.d("Camera1Manager", "MediaMuxerThread-isOpenVoice:" + isOpenVoice);
         this.isRecording = false;
         this.isMediaMuxerStart = false;
@@ -47,11 +40,9 @@ public class MediaMuxerThread extends Thread implements Runnable {
     @SuppressLint("NewApi")
     public boolean prepareMediaMuxer(int width, int height) {
         try {
-            mFd = OverallContext.baseContext.getContentResolver().openFileDescriptor(path, "w");
-            if (mFd == null) return false;
             mAudioTrack = -1;
             mVideoTrack = -1;
-            mMediaMuxer = new MediaMuxer(mFd.getFileDescriptor(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+            mMediaMuxer = new MediaMuxer(path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
             mVideoThread = new VideoRecordThread(this, width, height);
             Log.d(TAG, "isOpenVoice:" + isOpenVoice);
             if (isOpenVoice && AudioRecordThread.isHaveMicrophone()) {
@@ -145,7 +136,7 @@ public class MediaMuxerThread extends Thread implements Runnable {
         }
     }
 
-    public Uri end() {
+    public String end() {
         try {
             Log.i(TAG, "end: stop recode");
             isRecording = false;
@@ -160,16 +151,6 @@ public class MediaMuxerThread extends Thread implements Runnable {
             }
             mAudioThread = null;
         } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        try {
-            if (mFd != null) {
-                mFd.close();
-            }
-            ContentValues contentValues = new ContentValues();
-            contentValues.put(MediaStore.Video.Media.IS_PENDING, 0);
-            OverallContext.baseContext.getContentResolver().update(path, contentValues, null, null);
-        } catch (Exception e) {
             e.printStackTrace();
         }
 
