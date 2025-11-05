@@ -1,5 +1,7 @@
 package com.rain.uvc.utils;
 
+import static android.content.Context.RECEIVER_EXPORTED;
+
 import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -8,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -64,10 +67,22 @@ public class UsbPermissionHelper {
 
             }
         };
+        IntentFilter intentFilter = new IntentFilter(ACTION_USB_PERMISSION);
         //注册广播，接受对应的结果
-        OverallContext.baseContext.registerReceiver(usbReceiver, new IntentFilter(ACTION_USB_PERMISSION));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            OverallContext.baseContext.registerReceiver(usbReceiver,intentFilter ,RECEIVER_EXPORTED );
+        }else {
+            OverallContext.baseContext.registerReceiver(usbReceiver, intentFilter);
+        }
+
         //触发权限申请
-        manager.requestPermission(usbDevice, PendingIntent.getBroadcast(OverallContext.baseContext, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_UPDATE_CURRENT));
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            flags = PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT;
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            flags = PendingIntent.FLAG_MUTABLE;
+        }
+        manager.requestPermission(usbDevice, PendingIntent.getBroadcast(OverallContext.baseContext, 0, new Intent(ACTION_USB_PERMISSION),flags));
         try {
             // 设置超时等待权限（阻塞，等待或超时）
             boolean success = latch.await(timeoutMs, TimeUnit.MILLISECONDS);

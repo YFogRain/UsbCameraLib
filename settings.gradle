@@ -26,3 +26,4 @@ dependencyResolutionManagement {
 rootProject.name = "UsbCameraLib"
 include(":app")
 include(":libusbcamera")
+include ':camera'

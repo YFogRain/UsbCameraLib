@@ -106,6 +106,7 @@ uvc_error_t uvc_init(uvc_context_t **pctx, struct libusb_context *usb_ctx) {
     uvc_context_t *ctx = calloc(1, sizeof(*ctx));
 
     if (usb_ctx == NULL) {
+        libusb_set_option(NULL, LIBUSB_OPTION_NO_DEVICE_DISCOVERY, NULL);
         ret = libusb_init(&ctx->usb_ctx);
         ctx->own_usb_ctx = 1;
         if (ret != UVC_SUCCESS) {

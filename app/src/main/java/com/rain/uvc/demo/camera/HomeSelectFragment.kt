@@ -1,8 +1,12 @@
 package com.rain.uvc.demo.camera
 
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Path
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,8 +19,7 @@ import com.rain.uvc.demo.databinding.FgCameraSelectBinding
 import com.rain.uvc.demo.utils.LanguageHelper
 import com.rain.uvc.demo.utils.jumpNav
 import com.rain.uvc.demo.utils.singleClick
-import com.rain.uvc.utils.CameraNativeUtils
-import java.io.File
+import com.rain.uvc.provider.OverallContext
 
 /**
  * @author yuan
@@ -30,6 +33,20 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 			Toast.makeText(requireContext(), "请检查摄像头权限", Toast.LENGTH_SHORT).show()
 			return@registerForActivityResult
 		}
+//		if (!checkManageExternal()) {
+//			externalPerResult.launch(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).also {
+//				it.data = Uri.fromParts("package", OverallContext.baseContext.packageName, null)
+//			})
+//			return@registerForActivityResult
+//		}
+		viewModel.loadDevice()
+	}
+	private val externalPerResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
+		if (!checkManageExternal()) {
+			Toast.makeText(requireContext(), "请检查文件权限", Toast.LENGTH_SHORT).show()
+			return@registerForActivityResult
+		}
+		// 悬浮窗权限检查
 		viewModel.loadDevice()
 	}
 	
@@ -47,6 +64,12 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 			permissionCall.launch(android.Manifest.permission.CAMERA)
 			return
 		}
+//		if (!checkManageExternal()) {
+//			 externalPerResult.launch(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).also {
+//				 it.data = Uri.fromParts("package", OverallContext.baseContext.packageName, null)
+//			 })
+//			return
+//		}
 		//在系统重建时
 		viewModel.loadDevice()
 	}
@@ -69,9 +92,9 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 		when (val device = item.deviceType) {
 			is CameraDeviceMode.Native1 -> jumpNav(R.id.camera_to_native1, "cameraId" to device.cameraId)
 			is CameraDeviceMode.Native2 -> jumpNav(R.id.camera_to_native2, "cameraId" to device.cameraId)
-			is CameraDeviceMode.OTHER -> jumpNav(R.id.camera_usb)
-			is CameraDeviceMode.USB -> jumpNav(R.id.camera_cpp, "usb_device" to device.device)
-			is CameraDeviceMode.V4L2 -> jumpNav(R.id.camera_cpp, "video_path" to device.videoPath)
+			is CameraDeviceMode.OTHER -> jumpNav(R.id.camera_to_usb)
+			is CameraDeviceMode.USB -> jumpNav(R.id.camera_to_cpp, "usb_device" to device.device)
+			is CameraDeviceMode.V4L2 -> jumpNav(R.id.camera_to_cpp, "video_path" to device.videoPath)
 			is CameraDeviceMode.LOCALE -> {
 				Log.d("HomeSelectFragment", "当前语言类型:${device.locale.toLanguageTag()}")
 				LanguageHelper.updateLocale(requireContext(), device.locale)
@@ -87,5 +110,12 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 //				requireActivity().overridePendingTransition(0, 0)
 			}
 		}
+	}
+	
+	fun checkManageExternal(): Boolean {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+			return true
+		}
+		return Environment.isExternalStorageManager()
 	}
 }

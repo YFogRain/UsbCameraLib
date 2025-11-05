@@ -29,9 +29,6 @@ class HomeSelectViewModel : BaseViewModel() {
 			val deviceList = mutableListOf<HomeSelectMode>()
 			deviceList.add(loadCamera1())
 			deviceList.add(loadCamera2())
-			deviceList.add(HomeSelectMode("双目相机", mutableListOf()).also {
-				it.devices.add(HomeDeviceMode("双目相机", CameraDeviceMode.OTHER))
-			})
 			deviceList.add(loadCameraUsb())
 			deviceList.add(loadLocale())
 			deviceList.add(loadCameraV4L2())
@@ -75,7 +72,7 @@ class HomeSelectViewModel : BaseViewModel() {
 		if (cameraDevices.isNullOrEmpty()) return homeSelectMode
 		
 		cameraDevices.forEach {
-			homeSelectMode.devices.add(HomeDeviceMode(it.productName ?: "UVC相机:${it.vendorId}-${it.productId}", CameraDeviceMode.USB(it)))
+			homeSelectMode.devices.add(HomeDeviceMode("UVC相机:${it.vendorId}-${it.productId}", CameraDeviceMode.USB(it)))
 		}
 		return homeSelectMode
 	}

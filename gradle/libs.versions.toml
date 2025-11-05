@@ -1,7 +1,7 @@
 [versions]
 activityKtx = "1.10.1"
 annotation = "1.9.1"
-minSdk = "21"
+minSdk = "23"
 compileSdk = "35"
 targetSdk = "35"
 rxjava = "2.2.19"

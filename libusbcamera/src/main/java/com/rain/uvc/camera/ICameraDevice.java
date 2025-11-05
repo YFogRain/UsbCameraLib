@@ -1,5 +1,7 @@
 package com.rain.uvc.camera;
 
+import static android.content.Context.RECEIVER_EXPORTED;
+
 import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -8,6 +10,7 @@ import android.content.IntentFilter;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
@@ -277,7 +280,13 @@ public class ICameraDevice {
     private synchronized void initReceiver() {
         if (isReceiverSuccess) return;
         try {
-            OverallContext.baseContext.registerReceiver(usbDetachedReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED));
+            IntentFilter intentFilter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
+            //注册广播，接受对应的结果
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                OverallContext.baseContext.registerReceiver(usbDetachedReceiver, intentFilter,RECEIVER_EXPORTED );
+            }else {
+                OverallContext.baseContext.registerReceiver(usbDetachedReceiver, intentFilter);
+            }
         } catch (Exception ignored) {
         }
         isReceiverSuccess = true;

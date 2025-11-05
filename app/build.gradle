@@ -78,4 +78,6 @@ dependencies {
     implementation libs.navigation.ui.ktx
     implementation libs.datastore.preferences
     implementation libs.work.runtime.ktx
+
+    implementation project(":camera")
 }

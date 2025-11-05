@@ -7,7 +7,8 @@ project(uvcCamera)
 
 # 开启simd支持
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcpu=cortex-a53 -mfpu=neon -mfloat-abi=softfp")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp")
 endif ()
 
 # libusb库导入
@@ -64,13 +65,13 @@ target_include_directories(uvcCamera PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/camera/headers"
         "${CMAKE_CURRENT_SOURCE_DIR}/log"
         "${CMAKE_CURRENT_SOURCE_DIR}/opencv/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/include"
+#        "${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/include"
 )
 
 file(GLOB 3RDPARTY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/opencv/3rdparty/libs/${ANDROID_ABI}/*.a)
 
-file(GLOB FFMPEG_LIBS ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/staticlibs/${ANDROID_ABI}/*.a)
-file(GLOB FFMPEG_LIBS_3r ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/3rdparty/libs/${ANDROID_ABI}/*.a)
+#file(GLOB FFMPEG_LIBS ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/staticlibs/${ANDROID_ABI}/*.a)
+#file(GLOB FFMPEG_LIBS_3r ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/3rdparty/libs/${ANDROID_ABI}/*.a)
 
 target_link_libraries(uvcCamera
         android
@@ -83,6 +84,6 @@ target_link_libraries(uvcCamera
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_imgcodecs.a
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_videoio.a
         ${3RDPARTY_LIB}
-        ${FFMPEG_LIBS_3r}
-        ${FFMPEG_LIBS}
+#        ${FFMPEG_LIBS_3r}
+#        ${FFMPEG_LIBS}
 )

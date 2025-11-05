@@ -13,6 +13,7 @@ import android.os.HandlerThread
 import android.util.Log
 import android.view.Surface
 import android.view.TextureView
+import com.once.camera.CameraControlHelper
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.provider.OverallContext
 import kotlinx.coroutines.runBlocking
@@ -65,70 +66,6 @@ class CameraViewModel : BaseViewModel() {
 		}
 	}
 	
-	@SuppressLint("MissingPermission")
-	fun openCamera(cameraId: String, block: () -> Unit) {
-		//初始化可使用的handler
-		this.resultBlock = block
-		initHandler(cameraId)
-		Log.d("Camera2ViewModel", "cameraId:$cameraId")
-		val cameraManager = OverallContext.baseContext.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return
-		//执行打开摄像头
-		initImageReader()
-		try {
-			cameraManager.openCamera(cameraId, openStateCallBack, mCameraHandler)
-		} catch (e: Exception) {
-			e.printStackTrace()
-		}
-	}
-	
-	private suspend fun createSession(device: CameraDevice, surface: Surface?, imageReader: ImageReader?, handler: Handler?): Result<CameraCaptureSession> {
-		return runCatching<Result<CameraCaptureSession>> {
-			withTimeout(3000) {
-				suspendCancellableCoroutine { continuation ->
-				
-				}
-			}
-		}.getOrNull() ?: Result.failure(IllegalStateException("创建session错误"))
-	}
-	
-	fun startPreview(view: TextureView) {
-		val cameraDevice = mCameraAtomic.get()
-		Log.d("Camera2ViewModel", "cameraDevice:$cameraDevice,isPreviewIng:$isPreviewIng")
-		if (cameraDevice == null || isPreviewIng) return
-		val captureBuilder = captureRequestBuilder ?: return
-		val surface = Surface(view.surfaceTexture)
-		captureBuilder.addTarget(surface)
-		Log.d("Camera2ViewModel", "mCameraSession:$mCameraSession")
-		mImageReader?.setOnImageAvailableListener({ }, mCameraHandler)
-		if (mCameraSession == null) {
-			cameraDevice.createCaptureSession(ArrayList<Surface>().also {
-				it.add(surface)
-				mImageReader?.surface?.apply { it.add(this) }
-			}, object : CameraCaptureSession.StateCallback() {
-				override fun onConfigured(session: CameraCaptureSession) {
-					Log.d("Camera2ViewModel", "onConfigured:$session")
-					val repeatingRequest = session.setRepeatingRequest(
-						captureBuilder.build(), null, mCameraHandler
-					)
-					Log.d("Camera2ViewModel", "repeatingRequest:$repeatingRequest")
-					mCameraSession = session
-					isPreviewIng = true
-					
-				}
-				
-				override fun onConfigureFailed(session: CameraCaptureSession) {
-					Log.d("Camera2ViewModel", "onConfigureFailed:$session")
-					mCameraSession = null
-				}
-			}, mCameraHandler)
-			return
-		}
-		val repeatingRequest = mCameraSession?.setRepeatingRequest(
-			captureBuilder.build(), null, mCameraHandler
-		)
-		Log.d("Camera2ViewModel", "repeatingRequest:$repeatingRequest")
-		isPreviewIng = true
-	}
 	
 	private fun stopPreview() {
 		isPreviewIng = false

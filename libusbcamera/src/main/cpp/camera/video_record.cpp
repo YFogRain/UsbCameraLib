@@ -26,14 +26,16 @@ VideoRecord::VideoRecord()
 VideoRecord::~VideoRecord() {}
 
 long VideoRecord::getCurrentTime() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
             .count();
 }
 
 std::string VideoRecord::formatTime(const std::string &pattern, long timeMillis) {
     // 转换为秒和毫秒
     std::chrono::milliseconds ms_since_epoch(timeMillis);
-    std::chrono::seconds sec_since_epoch = std::chrono::duration_cast<std::chrono::seconds>(ms_since_epoch);
+    std::chrono::seconds sec_since_epoch = std::chrono::duration_cast<std::chrono::seconds>(
+            ms_since_epoch);
     int millis = static_cast<int>(ms_since_epoch.count() % 1000);
 
     std::time_t time_sec = sec_since_epoch.count();
@@ -52,7 +54,8 @@ void VideoRecord::setParentPath(const std::string &path) { this->parentPath = pa
 
 void VideoRecord::setRecordFormat(const record_format &format) { this->format = format; }
 
-bool VideoRecord::prepare(uint32_t w, uint32_t h, int rotation, int fps, const std::string &filename) {
+bool
+VideoRecord::prepare(uint32_t w, uint32_t h, int rotation, int fps, const std::string &filename) {
     std::lock_guard<std::mutex> lock(recordMutex);
     if (w == 0 || h == 0 || parentPath.empty()) {
         return false;
@@ -136,12 +139,14 @@ void VideoRecord::thread_func_record() {
         if (!frame) {
             continue;
         }
-        if (!checkFrames(frame->width, frame->height) || this->mRotation != frame->rotation) { // 如果宽高和定义的不相同
+        if (!checkFrames(frame->width, frame->height) ||
+            this->mRotation != frame->rotation) { // 如果宽高和定义的不相同
             free_record_frame(frame);
             continue;
         }
         // 将数据转为bgr格式。
-        cv::Mat bgrImg = ImgUtils::any2Bgr(frame->data, frame->data_size, frame->width, frame->height, frame->format);
+        cv::Mat bgrImg = ImgUtils::any2Bgr(frame->data, frame->data_size, frame->width,
+                                           frame->height, frame->format);
         if (bgrImg.empty()) {
             free_record_frame(frame);
             continue;
@@ -190,12 +195,14 @@ int VideoRecord::initRecordFourcc() {
 }
 
 bool VideoRecord::initRecordPath(const std::string &filename) {
+    LOG_D("当前父文件路径 = %s", parentPath.c_str());
     if (parentPath.empty()) {
         return false; // 未设置保存的路径
     }
     try {
         std::filesystem::create_directories(parentPath);
     } catch (const std::exception &e) {
+        LOG_E("创建文件夹报错 = %s", e.what());
         return false;
     }
     // 设置文件名
@@ -213,5 +220,6 @@ bool VideoRecord::initRecordPath(const std::string &filename) {
     } else {
         this->recordFilePath = parentPath + "/" + saveFileName;
     }
+    LOG_E("当前录制的文件 = %s", this->recordFilePath.c_str());
     return true;
 }
