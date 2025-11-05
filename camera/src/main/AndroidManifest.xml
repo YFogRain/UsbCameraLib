@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 相机权限 -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- usb权限 -->
+    <uses-feature android:name="android.hardware.usb.host" />
+    <uses-feature android:name="android.hardware.camera" />
+    <uses-feature android:name="android.hardware.camera.autofocus" />
+
+    <application>
+
+        <provider
+            android:name=".provider.OverallContextProvider"
+            android:authorities="${applicationId}.camera.overallContextProvider"
+            android:exported="false"
+            android:multiprocess="true" />
+    </application>
+</manifest>
