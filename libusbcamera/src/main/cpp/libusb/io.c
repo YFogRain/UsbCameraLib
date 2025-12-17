@@ -2431,8 +2431,8 @@ int API_EXPORTED libusb_handle_events_completed(libusb_context *ctx,
 	int *completed)
 {
 	struct timeval tv;
-	tv.tv_sec = 60;
-	tv.tv_usec = 0;
+	tv.tv_sec = 0;
+	tv.tv_usec = 500000;
 	return libusb_handle_events_timeout_completed(ctx, &tv, completed);
 }
 
