@@ -65,7 +65,7 @@ public class UsbPermissionHelper {
         //注册广播，接受对应的结果
         OverallContext.baseContext.registerReceiver(usbReceiver, new IntentFilter(ACTION_USB_PERMISSION));
         //触发权限申请
-        manager.requestPermission(usbDevice, PendingIntent.getBroadcast(OverallContext.baseContext, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_UPDATE_CURRENT));
+        manager.requestPermission(usbDevice, PendingIntent.getBroadcast(OverallContext.baseContext, usbDevice.getDeviceId(), new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_UPDATE_CURRENT));
         try {
             // 设置超时等待权限（阻塞，等待或超时）
             boolean success = latch.await(timeoutMs, TimeUnit.MILLISECONDS);
