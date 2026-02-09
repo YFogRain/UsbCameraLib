@@ -3,17 +3,15 @@ package com.rain.uvc.demo.camera.cpp
 import android.content.pm.PackageManager
 import android.hardware.usb.UsbDevice
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.rain.uvc.demo.R
 import com.rain.uvc.demo.base.fragment.BaseDataBindFragment
 import com.rain.uvc.demo.databinding.FgCameraBinding
-import com.rain.uvc.demo.utils.loadCreatedState
+import com.rain.uvc.demo.provider.OverallContext
 import com.rain.uvc.demo.utils.popStack
 import com.rain.uvc.demo.utils.singleClick
 import com.rain.uvc.demo.utils.viewLifeScope
-import com.rain.uvc.provider.OverallContext
 import kotlinx.coroutines.launch
 
 /**
@@ -23,7 +21,6 @@ import kotlinx.coroutines.launch
  */
 class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewModel>() {
 	override fun loadLayoutResId(): Int = R.layout.fg_camera
-	
 	override fun initializeCreated(savedInstanceState: Bundle?) {
 		setStatusBarColor(ContextCompat.getColor(requireContext(), R.color.black))
 		setStatusBarTextColor(false)
@@ -31,7 +28,7 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 			popStack()
 		}
 		if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-			Toast.makeText(OverallContext.baseContext, "请检查摄像头权限", Toast.LENGTH_SHORT).show()
+			Toast.makeText(requireContext(), "请检查摄像头权限", Toast.LENGTH_SHORT).show()
 			return
 		}
 		mBinding.cardCapture.singleClick {
@@ -46,7 +43,7 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 	private fun open() {
 		val usbDevice = arguments?.getParcelable<UsbDevice>("usb_device")
 		if (usbDevice != null) {
-			viewModel.openCamera(usbDevice)
+			 viewModel.openCamera(usbDevice)
 			return
 		}
 		val videoPath = arguments?.getString("video_path")
@@ -54,7 +51,7 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 			viewModel.openCamera(videoPath)
 			return
 		}
-		Toast.makeText(requireContext(), "请传入正确的摄像头id", Toast.LENGTH_SHORT).show()
+		Toast.makeText(OverallContext.baseContext, "请传入正确的摄像头id", Toast.LENGTH_SHORT).show()
 	}
 	
 	override fun initModelObserve() {
@@ -91,4 +88,5 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 		viewModel.closeCamera()
 		super.onDestroyView()
 	}
+	
 }

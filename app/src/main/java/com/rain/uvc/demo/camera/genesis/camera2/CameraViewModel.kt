@@ -1,26 +1,27 @@
 package com.rain.uvc.demo.camera.genesis.camera2
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.ImageFormat
-import android.hardware.camera2.CameraCaptureSession
-import android.hardware.camera2.CameraDevice
-import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CaptureRequest
-import android.media.ImageReader
-import android.os.Handler
-import android.os.HandlerThread
 import android.util.Log
-import android.view.Surface
 import android.view.TextureView
-import com.once.camera.CameraControlHelper
+import android.widget.Toast
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
+import com.rain.uvc.CameraControlHelper
+import com.rain.uvc.camera.ICameraDevice
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
-import com.rain.uvc.provider.OverallContext
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeout
+import com.rain.uvc.demo.provider.OverallContext
+import com.rain.uvc.demo.record.MediaMuxerThread
+import com.rain.uvc.demo.utils.GsonHelper
+import com.rain.uvc.demo.utils.PictureUtils
+import com.rain.uvc.demo.utils.loadRotation
+import com.rain.uvc.parameters.CameraPreviewFormat
+import com.rain.uvc.parameters.Parameters
+import com.rain.uvc.parameters.SupportParameters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
+import java.io.File
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.coroutines.resume
 
 /**
  * @author yuan
@@ -28,131 +29,116 @@ import kotlin.coroutines.resume
  * @des
  */
 class CameraViewModel : BaseViewModel() {
+	//相机实例
+	private val mCameraDevice = AtomicReference<ICameraDevice>()
 	
-	private val mCameraAtomic = AtomicReference<CameraDevice>()
-	private var mCameraHandler: Handler? = null
-	private var mHandlerThread: HandlerThread? = null
-	private var captureRequestBuilder: CaptureRequest.Builder? = null
+	//录制线程
+	private var mMediaMuxer: MediaMuxerThread? = null
 	
-	//预览操作实例
-	private var mCameraSession: CameraCaptureSession? = null
+	//打开结果,成功返回null，失败返回错误原因
+	val openResultFlow = MutableSharedFlow<String?>()
 	
-	//预览流回调的实例
-	private var mImageReader: ImageReader? = null
-	
-	@Volatile
-	private var isPreviewIng: Boolean = false
-	
-	private var resultBlock: (() -> Unit)? = null
-	//回调
-	/**
-	 * 打开结果回调
-	 */
-	private val openStateCallBack = object : CameraDevice.StateCallback() {
-		override fun onOpened(camera: CameraDevice) {
-			Log.d("Camera2ViewModel", "onOpened:$camera")
-			initPreviewCapture(camera)
-			this@CameraViewModel.mCameraAtomic.set(camera)
-			resultBlock?.invoke()
-		}
-		
-		override fun onDisconnected(camera: CameraDevice) {
-			Log.d("Camera2ViewModel", "onDisconnected:$camera")
-		}
-		
-		override fun onError(camera: CameraDevice, error: Int) {
-			Log.d("Camera2ViewModel", "onError:$error")
-			this@CameraViewModel.mCameraAtomic.set(null)
+	val recordState = MutableLiveData(false)
+	fun openCamera(context: Context, cameraId: String) {
+		open {
+			CameraControlHelper.openCamera(context, cameraId, context.loadRotation())
 		}
 	}
 	
-	
-	private fun stopPreview() {
-		isPreviewIng = false
-		mImageReader?.setOnImageAvailableListener(null, null)
-		mCameraSession?.stopRepeating()
-	}
-	
-	private fun initImageReader() {
-		//重置session
-		mCameraSession?.stopRepeating()
-		mCameraSession?.close()
-		mCameraSession = null
-		
-		//关闭旧的imageReader
-		mImageReader?.also {
-			captureRequestBuilder?.removeTarget(it.surface)
-			it.close()
-		}
-		mImageReader = ImageReader.newInstance(640, 480, ImageFormat.JPEG, 1).also {
-			captureRequestBuilder?.addTarget(it.surface)
-		}
-	}
-	
-	private fun closeCamera() {
-		mCameraSession?.close()
-		mCameraSession = null
-		
-		mImageReader?.close()
-		mImageReader = null
-		
-		mCameraAtomic.get()?.close()
-		mCameraAtomic.set(null)
-		
-		captureRequestBuilder = null
-		stopHandlerThread()
-	}
-	
-	override fun onCleared() {
-		super.onCleared()
-		Log.d("CameraViewModel", "onCleared")
-		stopPreview()
-		closeCamera()
-	}
-	
-	/**
-	 * 初始化摄像头handler
-	 */
-	private fun initHandler(cameraId: String) {
-		//创建handler线程
-		if (mCameraHandler != null) return
-		mCameraHandler = Handler(loadHandlerThread(cameraId).looper)
-	}
-	
-	private fun loadHandlerThread(cameraId: String): HandlerThread {
-		return mHandlerThread ?: HandlerThread("camera2Factory_${cameraId}").apply {
-			mHandlerThread = this
-			this.start()
+	private fun open(openInvoke: suspend () -> Result<ICameraDevice>) {
+		viewModelScope.launch(Dispatchers.IO) {
+			val result = openInvoke.invoke()
+			val cameraDevice = result.getOrNull()
+			if (result.isFailure || cameraDevice == null) {
+				val message = result.exceptionOrNull()?.message.let {
+					if (it.isNullOrEmpty()) "打开失败" else it
+				}
+				Log.d("CameraCppUtils", "message = $message")
+				openResultFlow.emit(message)
+				return@launch
+			}
+			
+			val previewSizes = cameraDevice.getSupportParameters(SupportParameters.PREVIEW_SIZE)?.find { it.format == CameraPreviewFormat.MJPEG || it.format == CameraPreviewFormat.JPEG }?.sizes
+			Log.d("CameraCppViewModel", "分辨率列表:${GsonHelper.getHelper().modeToJson(previewSizes)}")
+			if (previewSizes.isNullOrEmpty()) {
+				cameraDevice.close()
+				openResultFlow.emit("未获取到分辨率信息")
+				return@launch
+			}
+			val previewSize = previewSizes.find {
+				((it.width == 1920 && it.height == 1080) || (it.width == 1080 && it.height == 1920))
+			} ?: previewSizes.find {
+				((it.width == 640 && it.height == 480) || (it.width == 480 && it.height == 640))
+			} ?: previewSizes[0]
+			cameraDevice.setParameter(Parameters.PREVIEW_ORIENTATION, 0)
+			cameraDevice.setPreviewSize(previewSize.width, previewSize.height, CameraPreviewFormat.MJPEG)
+			mCameraDevice.set(cameraDevice)
+			openResultFlow.emit(null)
 		}
 	}
 	
-	private fun stopHandlerThread() {
-		mHandlerThread?.quitSafely()
-		try {
-			mHandlerThread?.join()
-			mCameraHandler?.removeCallbacksAndMessages(null)
-		} catch (e: Exception) {
-			e.printStackTrace()
-		}
-		mHandlerThread = null
-		mCameraHandler = null
+	fun initPreview(surfaceView: TextureView) {
+		mCameraDevice.get()?.setDisplaySurface(surfaceView)
 	}
 	
-	/**
-	 * 初始化预览参数
-	 */
-	private fun initPreviewCapture(cameraDevice: CameraDevice) {
-		//创建预览的数据
-		val captureRequest = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-		//设置为自动模式，单个控制生效
-		captureRequest.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-		captureRequest.set(CaptureRequest.CONTROL_AE_LOCK, false)
-		//设置自动测光
-		//自动对焦
-		captureRequest.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
-		//设置闪光灯模式为持续照亮
-		captureRequest.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH)
-		//设置人脸检测模式
-		this.captureRequestBuilder = captureRequest
+	fun startPreview() {
+		val device = mCameraDevice.get() ?: return
+		device.setPreviewListener { data, width, height ->
+			mMediaMuxer?.frame(data)
+		}
+		mCameraDevice.get()?.startPreview().also {
+			Log.d("CameraCppViewModel", "打开预览结果:$it")
+		}
 	}
+	
+	fun stopPreview() {
+		mMediaMuxer?.end()
+		mMediaMuxer = null
+		mCameraDevice.get()?.stopPreview()
+	}
+	
+	fun closeCamera() {
+		mCameraDevice.get()?.close()
+		mCameraDevice.set(null)
+	}
+	
+	fun takePicture() {
+		viewModelScope.launch(Dispatchers.IO) {
+			val picture = mCameraDevice.get()?.takeSyncPicture()
+			if (picture != null) PictureUtils.saveBitmap(OverallContext.baseContext, picture)
+			Log.d("CameraCppViewModel", "拍照结果:$picture")
+		}
+	}
+	
+	fun recorder() {
+		val cameraDevice = mCameraDevice.get() ?: return
+		if (recordState.value == true) {
+			val path = mMediaMuxer?.end()
+			mMediaMuxer = null
+			recordState.value = false
+			Toast.makeText(OverallContext.baseContext, "视频保存地址 = $path", Toast.LENGTH_SHORT).show()
+			return
+		}
+		val previewSize = cameraDevice.getParameter(Parameters.PREVIEW_SIZE)
+		if (previewSize == null) {
+			Toast.makeText(OverallContext.baseContext, "获取视频分辨率失败", Toast.LENGTH_SHORT).show()
+			return
+		}
+		mMediaMuxer = MediaMuxerThread(loadRecordPath(), false)
+		val begin = mMediaMuxer?.begin(previewSize.width, previewSize.height) ?: false
+		if (!begin) {
+			mMediaMuxer?.end()
+			mMediaMuxer = null
+		}
+		recordState.value = begin
+	}
+	
+	private fun loadRecordPath(): String {
+		val recordFile = File("${OverallContext.baseContext.getExternalFilesDir(null)}${File.separator}camera_video${File.separator}capture_${System.currentTimeMillis()}.mp4")
+		recordFile.parentFile?.also {
+			if (!it.exists()) it.mkdirs()
+		}
+		return recordFile.absolutePath
+	}
+	
 }

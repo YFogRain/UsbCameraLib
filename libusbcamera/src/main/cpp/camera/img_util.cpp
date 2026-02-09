@@ -97,110 +97,49 @@ std::vector<uint8_t> ImgUtils::format(uint8_t *inFrame, uint32_t width, uint32_t
 }
 
 
-bool ImgUtils::setDisplayTransformState(ANativeWindow *window, int orientation) {
+bool ImgUtils::setDisplayOrientation(ANativeWindow *window, int orientation) {
     LOG_D("当前的预览方向为:%d", orientation);
     if (!window) {
         return false;
     }
     int rotationType;
-    switch (orientation) {
-        case TRANSFORM_MIRROR_HORIZONTAL: //水平镜像
-            rotationType = ANATIVEWINDOW_TRANSFORM_MIRROR_HORIZONTAL;
-            break;
-        case TRANSFORM_MIRROR_VERTICAL://垂直镜像
-            rotationType = ANATIVEWINDOW_TRANSFORM_MIRROR_VERTICAL;
-            break;
-        case TRANSFORM_ROTATE_90://旋转90度
-            rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_90;
-            break;
-        case TRANSFORM_ROTATE_180://旋转180度 = 水平镜像+垂直镜像
-            rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_180;
-            break;
-        case TRANSFORM_ROTATE_270://旋转270度 = 水平镜像 + 垂直镜像 + 旋转90度
-            rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_270;
-            break;
-        case TRANSFORM_FLIP_H_ROTATE_90: //水平镜像 + 旋转90度;
-            rotationType =
-                    ANATIVEWINDOW_TRANSFORM_MIRROR_HORIZONTAL | ANATIVEWINDOW_TRANSFORM_ROTATE_90;
-            break;
-        case TRANSFORM_FLIP_H_ROTATE_180://水平镜像 + 旋转180度 = 垂直镜像
-            rotationType = ANATIVEWINDOW_TRANSFORM_MIRROR_VERTICAL;
-            break;
-        case TRANSFORM_FLIP_H_ROTATE_270://水平镜像 + 旋转270度 = 垂直镜像 + 旋转90度
-            rotationType =
-                    ANATIVEWINDOW_TRANSFORM_MIRROR_VERTICAL | ANATIVEWINDOW_TRANSFORM_ROTATE_90;
-            break;
-        case TRANSFORM_FLIP_V_ROTATE_90://垂直镜像 + 旋转90度
-            rotationType =
-                    ANATIVEWINDOW_TRANSFORM_MIRROR_VERTICAL | ANATIVEWINDOW_TRANSFORM_ROTATE_90;
-            break;
-        case TRANSFORM_FLIP_V_ROTATE_180://垂直镜像 + 旋转180度 = 水平镜像
-            rotationType = ANATIVEWINDOW_TRANSFORM_MIRROR_HORIZONTAL;
-            break;
-        case TRANSFORM_FLIP_V_ROTATE_270://垂直镜像 + 旋转270度 = 水平镜像 + 旋转90度
-            rotationType =
-                    ANATIVEWINDOW_TRANSFORM_MIRROR_HORIZONTAL | ANATIVEWINDOW_TRANSFORM_ROTATE_90;
-            break;
-        default:
-            rotationType = ANATIVEWINDOW_TRANSFORM_IDENTITY; //默认不使用图像变换
-            break;
+    if (orientation == 90) {
+        rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_90;
+    } else if (orientation == 180) {
+        rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_180;
+    } else if (orientation == 270) {
+        rotationType = ANATIVEWINDOW_TRANSFORM_ROTATE_270;
+    } else {
+        return false;
     }
     int32_t ret = native_window_set_buffers_sticky_transform(window, rotationType);
     LOG_D("设置window窗口方向-结果:%d", ret);
     return ret == 0;
 }
 
-cv::Mat ImgUtils::rotation(uint8_t *inFrame, int width, int height, int rotation) {
+cv::Mat ImgUtils::transform(uint8_t *inFrame, int width, int height, int rotation,bool isMirror) {
     if (!inFrame || width == 0 || height == 0) {
         LOG_E("当前数据不对劲啊～");
-        return cv::Mat();
+        return {};
     }
     cv::Mat dst = cv::Mat(height, width, CV_8UC3, inFrame);
-    // 旋转
-    switch (rotation) {
-        case TRANSFORM_ROTATE_90:        // 旋转90度
-        case TRANSFORM_FLIP_H_ROTATE_90: // 旋转90度+水平镜像
-        case TRANSFORM_FLIP_V_ROTATE_90: // 旋转90度+垂直镜像
-            cv::rotate(dst, dst, cv::ROTATE_90_CLOCKWISE);
-            break;
-        case TRANSFORM_ROTATE_180:        // 旋转180度
-        case TRANSFORM_FLIP_H_ROTATE_180: // 旋转180度+水平镜像
-        case TRANSFORM_FLIP_V_ROTATE_180: // 旋转180度+垂直镜像
-            cv::rotate(dst, dst, cv::ROTATE_180);
-            break;
-        case TRANSFORM_ROTATE_270:        // 旋转270度
-        case TRANSFORM_FLIP_H_ROTATE_270: // 旋转270度+水平镜像
-        case TRANSFORM_FLIP_V_ROTATE_270: // 旋转270度+垂直镜像
-            cv::rotate(dst, dst, cv::ROTATE_90_COUNTERCLOCKWISE);
-            break;
-        default:
-            break; // 不旋转
+    if (rotation == 90) {
+        cv::rotate(dst, dst, cv::ROTATE_90_CLOCKWISE);
+    } else if (rotation == 180) {
+        cv::rotate(dst, dst, cv::ROTATE_180);
+    } else if (rotation == 270) {
+        cv::rotate(dst, dst, cv::ROTATE_90_COUNTERCLOCKWISE);
     }
-
-    // 镜像翻转
-    switch (rotation) {
-        case TRANSFORM_MIRROR_HORIZONTAL: // 水平镜像
-        case TRANSFORM_FLIP_H_ROTATE_90:  // 旋转90度+水平镜像
-        case TRANSFORM_FLIP_H_ROTATE_180: // 旋转180度+水平镜像
-        case TRANSFORM_FLIP_H_ROTATE_270: // 旋转270度+水平镜像
-            cv::flip(dst, dst, 1);
-            break;
-        case TRANSFORM_MIRROR_VERTICAL:   // 垂直镜像
-        case TRANSFORM_FLIP_V_ROTATE_90:  // 旋转90度+垂直镜像
-        case TRANSFORM_FLIP_V_ROTATE_180: // 旋转180度+垂直镜像
-        case TRANSFORM_FLIP_V_ROTATE_270: // 旋转270度+垂直镜像
-            cv::flip(dst, dst, 0);
-            break;
-        default:
-            break; // 不镜像
+    if (isMirror) {
+        cv::flip(dst, dst, 1);
     }
-
     return dst;
 }
 
-std::vector<uint8_t> ImgUtils::bgr2Mjpeg(uint8_t *inFrame, int width, int height, int rotation) {
+std::vector<uint8_t>
+ImgUtils::bgr2Mjpeg(uint8_t *inFrame, int width, int height, int rotation, bool isMirror){
     // 先旋转数据
-    cv::Mat img = ImgUtils::rotation(inFrame, width, height, rotation);
+    cv::Mat img = ImgUtils::transform(inFrame, width, height, rotation, isMirror);
     if (img.empty()) {
         return {};
     }
@@ -212,47 +151,4 @@ std::vector<uint8_t> ImgUtils::bgr2Mjpeg(uint8_t *inFrame, int width, int height
         return {};
     }
     return mjpegData;
-}
-
-bool ImgUtils::writeMjpeg(uint8_t *inFrame, int width, int height, int rotation, const std::string &savePath) {
-    std::vector<uint8_t> img = bgr2Mjpeg(inFrame, width, height, rotation);
-    if (img.empty()) {
-        return false;
-    }
-    // 创建并打开输出文件流，默认会创建文件（如果不存在）并清空文件内容
-    std::ofstream ofs(savePath, std::ios::binary);
-    if (!ofs.is_open()) {
-        return false;
-    }
-    bool isSuccess;
-    try {
-        size_t totalSize = img.size();
-        const size_t blockSize = 1024 * 64; // 50KB 分块写入
-        size_t written = 0;
-        while (written < totalSize) {
-            size_t sizeToWrite = std::min(blockSize, totalSize - written);
-            ofs.write(reinterpret_cast<const char *>(img.data() + written), sizeToWrite);
-            if (!ofs) {
-                // 写入失败，直接返回 false
-                return false;
-            }
-            written += sizeToWrite;
-        }
-        ofs.flush();
-        isSuccess = true;
-    } catch (const std::exception &e) {
-        isSuccess = false;
-        LOG_E("写入文件失败: %s", e.what());
-    }
-    ofs.close();
-    if (!isSuccess) {
-        // 写入失败，尝试删除目标文件
-        try {
-            std::filesystem::remove(savePath);
-        } catch (const std::exception &e) {
-            // 删除失败可选择记录日志，但通常不影响流程
-            LOG_E("删除文件失败: %s", e.what());
-        }
-    }
-    return isSuccess;
 }

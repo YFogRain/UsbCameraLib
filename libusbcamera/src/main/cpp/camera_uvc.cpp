@@ -172,108 +172,18 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeLoadV4L2Devices(JNIEnv *env, jcl
 }
 
 extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeStartRecord(JNIEnv *env, jclass clazz, jlong native_id, jstring file_name) {
-    ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
-    if (!camera)return false;
-    std::string path_str{};
-    if (file_name) {
-        const char *path = env->GetStringUTFChars(file_name, nullptr);
-        if (path) {
-            path_str = std::string(path);
-        }
-        env->ReleaseStringUTFChars(file_name, path);
-    }
-    return camera->getUserStream()->startRecord(path_str);
-}
-
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeStopRecord(JNIEnv *env, jclass clazz, jlong native_id) {
-    ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
-    if (!camera)return false;
-    camera->getUserStream()->stopRecord();
-    return true;
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetRecordFormat(JNIEnv *env, jclass clazz, jlong native_id, jint format) {
-    ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
-    if (!camera)return;
-    camera->getUserStream()->setRecordFormat(format);
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetParentPath(JNIEnv *env, jclass clazz, jlong native_id, jstring parent_path) {
-    ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
-    if (!camera)return;
-    std::string path_str;
-    if (parent_path) {
-        const char *path = env->GetStringUTFChars(parent_path, nullptr);
-        if (path) {
-            path_str = std::string(path);
-            env->ReleaseStringUTFChars(parent_path, path);
-        }
-    }
-    camera->getUserStream()->setRecordParentPath(path_str);
-}
-
-extern "C"
-JNIEXPORT jstring JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeGetRecordPath(JNIEnv *env, jclass clazz, jlong native_id) {
+JNIEXPORT jbyteArray JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_nativeTakePicture(JNIEnv *env, jclass clazz,
+                                                            jlong native_id) {
     ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
     if (!camera)return nullptr;
-    const std::string &path = camera->getUserStream()->getRecordPath();
-    if (path.empty())return nullptr;
-    return env->NewStringUTF(path.c_str());
-}
-
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeSetDefaultParentPath(JNIEnv *env, jclass clazz, jstring parent_path) {
-
-    if (!parent_path) {
-        return false;
-    }
-    const char *path = env->GetStringUTFChars(parent_path, nullptr);
-    if (!path) {
-        return false;
-    }
-    std::string path_str(path);
-    env->ReleaseStringUTFChars(parent_path, path);
-    setDefaultParent(path_str);
-    return true;
-}
-
-extern "C"
-JNIEXPORT jstring JNICALL
-Java_com_rain_uvc_utils_CameraNativeUtils_nativeTakePicture(JNIEnv *env, jclass clazz, jlong native_id, jstring parent_path, jstring file_name) {
-    if (!parent_path) {
-        LOG_E("未获取到父文件路径");
+    auto pictureBytes = camera->getUserStream()->takePicture();
+    if (pictureBytes.empty())return nullptr;
+    auto size = pictureBytes.size();
+    jbyteArray byteArray = env->NewByteArray(size);
+    if (!byteArray) {
         return nullptr;
     }
-    const char *parentPath = env->GetStringUTFChars(parent_path, nullptr);
-    if (!parentPath) {
-        LOG_E("未获取到父文件路径");
-        return nullptr;
-    }
-    std::string path_str(parentPath);
-    env->ReleaseStringUTFChars(parent_path, parentPath);
-
-    ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(native_id);
-    if (!camera)return nullptr;
-    std::string fileNameStr;
-    if (file_name) {
-        const char *fileName = env->GetStringUTFChars(file_name, nullptr);
-        if (fileName) {
-            fileNameStr = std::string(fileName);
-            env->ReleaseStringUTFChars(file_name, fileName);
-        }
-    }
-    auto picturePath = camera->getUserStream()->takePicture(parentPath, fileNameStr);
-    LOG_E("拍照完成后的路径:%s", picturePath.c_str());
-    if (picturePath.empty())return nullptr;
-    return env->NewStringUTF(picturePath.c_str());
+    env->SetByteArrayRegion(byteArray, 0, size, reinterpret_cast<jbyte *>(pictureBytes.data()));
+    return byteArray;
 }

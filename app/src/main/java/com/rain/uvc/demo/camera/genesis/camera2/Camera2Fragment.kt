@@ -1,14 +1,17 @@
 package com.rain.uvc.demo.camera.genesis.camera2
 
+import android.content.pm.PackageManager
+import android.hardware.usb.UsbDevice
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import com.rain.uvc.demo.R
 import com.rain.uvc.demo.base.fragment.BaseDataBindFragment
 import com.rain.uvc.demo.databinding.FgCamera2Binding
+import com.rain.uvc.demo.provider.OverallContext
 import com.rain.uvc.demo.utils.popStack
+import com.rain.uvc.demo.utils.singleClick
+import com.rain.uvc.demo.utils.viewLifeScope
 import kotlinx.coroutines.launch
 
 /**
@@ -23,35 +26,68 @@ class Camera2Fragment : BaseDataBindFragment<FgCamera2Binding, CameraViewModel>(
 	override fun initializeCreated(savedInstanceState: Bundle?) {
 		setStatusBarColor(ContextCompat.getColor(requireContext(), R.color.black))
 		setStatusBarTextColor(false)
-		val cameraId = arguments?.getString("cameraId")
-		if (cameraId.isNullOrEmpty()) {
-			Toast.makeText(requireContext(), "未输入id", Toast.LENGTH_SHORT).show()
+		mBinding.toolbar.setNavigationOnClickListener {
 			popStack()
+		}
+		if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+			Toast.makeText(requireContext(), "请检查摄像头权限", Toast.LENGTH_SHORT).show()
 			return
 		}
-		CameraBusHelper.helper.open(requireContext()) { isSuccess, message ->
-			Log.d("cameraPreviewTag", "打开结果 = $isSuccess : $message")
-			if (!isSuccess) return@open
-			startPreview()
+		mBinding.cardCapture.singleClick {
+			viewModel.takePicture()
+		}
+		mBinding.cardRecorder.singleClick {
+			viewModel.recorder()
+		}
+		mBinding.surfaceView.post { open() }
+	}
+	
+	
+	private fun open() {
+		val cameraId = arguments?.getString("cameraId")
+		if (!cameraId.isNullOrEmpty()) {
+			viewModel.openCamera(requireContext(),cameraId)
+			return
+		}
+		Toast.makeText(OverallContext.baseContext, "请传入正确的摄像头id", Toast.LENGTH_SHORT).show()
+	}
+	
+	override fun initModelObserve() {
+		viewLifeScope.launch {
+			viewModel.openResultFlow.collect {
+				resultOpen(message = it)
+			}
+		}
+		viewModel.recordState.observe(viewLifecycleOwner) {
+			mBinding.tvRecorder.text = if (it) "停止录制" else "开始录制"
 		}
 	}
 	
-	private fun startPreview() {
-		CameraBusHelper.helper.setPreviewListener { bytes, width, height ->
-			Log.d("cameraPreviewTag", "预览结果 - bytes = ${bytes.size} = ${width}*${height}")
+	private fun resultOpen(message: String?) {
+		if (!message.isNullOrEmpty()) {
+			Toast.makeText(requireContext(), "打开摄像头失败，原因:$message", Toast.LENGTH_SHORT).show()
+			return
 		}
-		lifecycleScope.launch {
-			val startPreview = CameraBusHelper.helper.startPreview()
-			Log.d("cameraPreviewTag", "预览开启结果 = $startPreview")
-			if (!startPreview) {
-				CameraBusHelper.helper.close()
-			}
-		}
+		viewModel.initPreview(mBinding.surfaceView)
+		viewModel.startPreview()
+	}
+	
+	override fun onStart() {
+		super.onStart()
+		viewModel.startPreview()
+	}
+	
+	override fun onStop() {
+		super.onStop()
+		viewModel.stopPreview()
 	}
 	
 	override fun onDestroyView() {
+		viewModel.closeCamera()
 		super.onDestroyView()
-		CameraBusHelper.helper.stopPreview()
-		CameraBusHelper.helper.close()
+	}
+	override fun onKeyDown(): Boolean {
+		popStack()
+		return true
 	}
 }

@@ -62,8 +62,10 @@ bool CameraDeviceV4L2Impl::setParameter(int type, int value) {
         return false;
     }
     // 如果是int类型，则可以设置下面的所有参数
-    if (type == CAMERA_PARAMETER_DISPLAY_TRANSFORM) {
-        return mCameraStream->setDisplayTransform(value);
+    if (type == CAMERA_PARAMETER_ORIENTATION) {
+        return mCameraStream->setDisplayOrientation(value);
+    } else if (type == CAMERA_PARAMETER_MIRROR) {
+        return mCameraStream->setJpegMirrorState(value);
     }
     int id = loadTypeToId(type);
     if (id == -1) {
@@ -96,8 +98,11 @@ std::variant<std::monostate, int, std::string> CameraDeviceV4L2Impl::getParamete
     if (type == CAMERA_PARAMETER_PREVIEW_SIZE) {
         return mCameraStream->getCurrentPreviewSize();
     }
-    if (type == CAMERA_PARAMETER_DISPLAY_TRANSFORM) {
-        return mCameraStream->getDisplayTransformState();
+    // 如果是int类型，则可以设置下面的所有参数
+    if (type == CAMERA_PARAMETER_ORIENTATION) {
+        return mCameraStream->getDisplayOrientation();
+    } else if (type == CAMERA_PARAMETER_MIRROR) {
+        return mCameraStream->getJpegMirrorState();
     }
     int id = loadTypeToId(type);
     if (id == -1) {

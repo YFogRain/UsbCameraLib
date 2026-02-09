@@ -1,12 +1,14 @@
 package com.rain.uvc.demo.utils
 
 import android.content.ContentValues
+import android.content.Context
+import android.graphics.Bitmap
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import com.rain.uvc.provider.OverallContext
+import com.rain.uvc.demo.provider.OverallContext
 import okio.buffer
 import okio.sink
 import okio.source
@@ -102,6 +104,45 @@ object PictureUtils {
 			put(MediaStore.MediaColumns.DATE_MODIFIED, timeLong / 1000)
 			put(MediaStore.MediaColumns.DATE_ADDED, timeLong / 1000)
 			put(MediaStore.MediaColumns.SIZE, outputFile.length())
+		}
+	}
+	
+	/**
+	 * 保存bytes
+	 */
+	@JvmStatic
+	fun saveJpegBytes(context: Context,bytes: ByteArray): String {
+		return try {
+			val fileName = "IMG_${System.currentTimeMillis()}.jpg"
+			val file = File(context.filesDir , fileName)
+			FileOutputStream(file).use { fos ->
+				fos.write(bytes)
+				fos.flush()
+			}
+			file.absolutePath
+		} catch (e: Exception) {
+			e.printStackTrace()
+			""
+		}
+	}
+	
+	/**
+	 * 保存bitmap
+	 */
+	@JvmStatic
+	fun saveBitmap(context: Context, bitmap: Bitmap, fileName: String = "IMG_${System.currentTimeMillis()}.jpg"): String? {
+		return try {
+			val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "images")
+			if (!dir.exists()) dir.mkdirs()
+			val file = File(dir, fileName)
+			FileOutputStream(file).use { fos ->
+				bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos)
+				fos.flush()
+			}
+			file.absolutePath
+		} catch (e: Exception) {
+			e.printStackTrace()
+			null
 		}
 	}
 }

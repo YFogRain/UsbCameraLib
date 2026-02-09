@@ -1,22 +1,22 @@
 package com.rain.uvc.demo.camera.cpp
 
 import android.hardware.usb.UsbDevice
-import android.os.Environment
 import android.util.Log
-import android.view.SurfaceView
+import android.view.TextureView
 import android.widget.Toast
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.rain.uvc.CameraUvcManager
-import com.rain.uvc.camera.ICameraDevice
+import com.rain.uvc.camera.NCameraDevice
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
+import com.rain.uvc.demo.provider.OverallContext
 import com.rain.uvc.demo.record.MediaMuxerThread
 import com.rain.uvc.demo.utils.GsonHelper
-import com.rain.uvc.provider.OverallContext
-import com.rain.uvc.state.CameraDataFormat
-import com.rain.uvc.state.CameraParameter
-import com.rain.uvc.state.CameraPreviewFormat
-import com.rain.uvc.state.CameraSupportParameters
+import com.rain.uvc.demo.utils.PictureUtils
+import com.rain.uvc.parameters.CameraDataFormat
+import com.rain.uvc.parameters.CameraPreviewFormat
+import com.rain.uvc.parameters.Parameters
+import com.rain.uvc.parameters.SupportParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class CameraCppViewModel : BaseViewModel() {
 	//相机实例
-	private val mCameraDevice = AtomicReference<ICameraDevice>()
+	private val mCameraDevice = AtomicReference<NCameraDevice>()
 	
 	//录制线程
 	private var mMediaMuxer: MediaMuxerThread? = null
@@ -41,19 +41,19 @@ class CameraCppViewModel : BaseViewModel() {
 	val recordState = MutableLiveData(false)
 	fun openCamera(usbDevice: UsbDevice) {
 		open {
-			CameraUvcManager.openCamera(usbDevice)
+			CameraUvcManager.openCamera(OverallContext.baseContext, usbDevice)
 		}
 	}
 	
 	fun openCamera(videoPath: String) {
 		open {
-			CameraUvcManager.openCamera(videoPath)
+			CameraUvcManager.openCamera(OverallContext.baseContext, videoPath)
 		}
 	}
 	
-	private fun open(openInvoke: () -> ICameraDevice) {
+	private fun open(openInvoke: suspend () -> Result<NCameraDevice>) {
 		viewModelScope.launch(Dispatchers.IO) {
-			val result = runCatching { openInvoke.invoke() }
+			val result = openInvoke.invoke()
 			val cameraDevice = result.getOrNull()
 			if (result.isFailure || cameraDevice == null) {
 				val message = result.exceptionOrNull()?.message.let {
@@ -65,25 +65,26 @@ class CameraCppViewModel : BaseViewModel() {
 			}
 			initCameraParameters(cameraDevice)
 			
-			val previewSizes = cameraDevice.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
-			val previewSize = previewSizes?.find {
-				((it.width == 1280 && it.height == 720) || (it.width == 720 && it.height == 1280)) && it.format == CameraPreviewFormat.MJPEG
-			} ?: previewSizes?.find {
-				((it.width == 1920 && it.height == 1080) || (it.width == 1080 && it.height == 1920))
-			} ?: previewSizes?.find {
-				((it.width == 640 && it.height == 480) || (it.width == 480 && it.height == 640))
-			} ?: previewSizes?.getOrNull(0)
-			
-			if (previewSize != null) {
-				cameraDevice.setPreviewSize(previewSize.width, previewSize.height, previewSize.format)
+			val previewSizes = cameraDevice.getSupportedParameter(SupportParameters.PREVIEW_SIZE)?.find { it.format == CameraPreviewFormat.MJPEG || it.format == CameraPreviewFormat.JPEG }?.sizes
+			Log.d("CameraCppViewModel", "分辨率列表:${GsonHelper.getHelper().modeToJson(previewSizes)}")
+			if (previewSizes.isNullOrEmpty()) {
+				cameraDevice.close()
+				openResultFlow.emit("未获取到分辨率信息")
+				return@launch
 			}
-			cameraDevice.setParentPath("${Environment.getExternalStorageDirectory().absolutePath}${File.separator}camera_video")
+			val previewSize = previewSizes.find {
+				((it.width == 1920 && it.height == 1080) || (it.width == 1080 && it.height == 1920))
+			} ?: previewSizes.find {
+				((it.width == 640 && it.height == 480) || (it.width == 480 && it.height == 640))
+			} ?: previewSizes[0]
+			
+			cameraDevice.setPreviewSize(previewSize.width, previewSize.height, CameraPreviewFormat.MJPEG)
 			mCameraDevice.set(cameraDevice)
 			openResultFlow.emit(null)
 		}
 	}
 	
-	fun initPreview(surfaceView: SurfaceView) {
+	fun initPreview(surfaceView: TextureView) {
 		mCameraDevice.get()?.setDisplaySurface(surfaceView)
 	}
 	
@@ -99,7 +100,7 @@ class CameraCppViewModel : BaseViewModel() {
 			Log.d("CameraCppViewModel", "打开预览结果:$it")
 		}
 	}
-
+	
 	fun stopPreview() {
 		mMediaMuxer?.end()
 		mMediaMuxer = null
@@ -113,37 +114,15 @@ class CameraCppViewModel : BaseViewModel() {
 	
 	fun takePicture() {
 		viewModelScope.launch(Dispatchers.IO) {
-			val picture = mCameraDevice.get()?.takePicture(OverallContext.baseContext.filesDir.path)
+			val picture = mCameraDevice.get()?.takePicture()
+			if (picture != null) PictureUtils.saveJpegBytes(OverallContext.baseContext, picture)
 			Log.d("CameraCppViewModel", "拍照结果:$picture")
 		}
 	}
 	
-	private fun initCameraParameters(cameraDevice: ICameraDevice) {
-		val supportPreviewSize = cameraDevice.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE)
-		Log.d("CameraCppViewModel", "分辨率列表:${GsonHelper.getHelper().modeToJson(supportPreviewSize)}")
-//		Log.d("CameraCppViewModel", "自动曝光支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.AUTO_EXPOSURE)}")
-//		Log.d("CameraCppViewModel", "曝光度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.EXPOSURE).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "人脸检测支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.FACE_DETECT)}")
-//		Log.d("CameraCppViewModel", "亮度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.BRIGHTNESS).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "对比度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.CONTRAST).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "增益值范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.GAIN).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "饱和度范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.SATURATION).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "缩放范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.ZOOM).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "焦距范围:${cameraDevice.getSupportedParameter(CameraSupportParameters.FOCUS).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "白平衡支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.WHITE_BALANCE).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "场景模式支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.SCENE_MODE).let { "${it?.min}-${it?.max}" }}")
-//		Log.d("CameraCppViewModel", "隐私模式支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.PRIVACY)}")
-//		Log.d("CameraCppViewModel", "自动白平衡支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.AUTO_WHITE_BALANCE)}")
-//		Log.d("CameraCppViewModel", "hue支持:${cameraDevice.getSupportedParameter(CameraSupportParameters.HUE).let { "${it?.min}-${it?.max}" }}")
-//
-//		Log.d("CameraCppViewModel", "当前分辨率:${cameraDevice.getParameter(CameraParameter.PREVIEW_SIZE).let { "${it?.width}*${it?.height}" }}")
-//		Log.d("CameraCppViewModel", "自动曝光模式:${cameraDevice.getParameter(CameraParameter.AUTO_EXPOSURE)}")
-//		Log.d("CameraCppViewModel", "曝光度:${cameraDevice.getParameter(CameraParameter.EXPOSURE)}")
-//		Log.d("CameraCppViewModel", "亮度:${cameraDevice.getParameter(CameraParameter.BRIGHTNESS)}")
-//		Log.d("CameraCppViewModel", "对比度:${cameraDevice.getParameter(CameraParameter.CONTRAST)}")
-//		Log.d("CameraCppViewModel", "增益值:${cameraDevice.getParameter(CameraParameter.GAIN)}")
-//		Log.d("CameraCppViewModel", "饱和度:${cameraDevice.getParameter(CameraParameter.SATURATION)}")
-//		Log.d("CameraCppViewModel", "缩放:${cameraDevice.getParameter(CameraParameter.ZOOM)}")
+	private fun initCameraParameters(cameraDevice: NCameraDevice) {
+		val supportPreviewSize = cameraDevice.getSupportedParameter(SupportParameters.PREVIEW_SIZE)
+		
 	}
 	
 	fun recorder() {
@@ -155,7 +134,7 @@ class CameraCppViewModel : BaseViewModel() {
 			Toast.makeText(OverallContext.baseContext, "视频保存地址 = $path", Toast.LENGTH_SHORT).show()
 			return
 		}
-		val previewSize = cameraDevice.getParameter(CameraParameter.PREVIEW_SIZE)
+		val previewSize = cameraDevice.getParameter(Parameters.PREVIEW_SIZE)
 		if (previewSize == null) {
 			Toast.makeText(OverallContext.baseContext, "获取视频分辨率失败", Toast.LENGTH_SHORT).show()
 			return
@@ -177,5 +156,5 @@ class CameraCppViewModel : BaseViewModel() {
 		return recordFile.absolutePath
 	}
 	
-
+	
 }

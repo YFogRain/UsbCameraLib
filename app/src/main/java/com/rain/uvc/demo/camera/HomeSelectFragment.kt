@@ -1,12 +1,9 @@
 package com.rain.uvc.demo.camera
 
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,7 +16,6 @@ import com.rain.uvc.demo.databinding.FgCameraSelectBinding
 import com.rain.uvc.demo.utils.LanguageHelper
 import com.rain.uvc.demo.utils.jumpNav
 import com.rain.uvc.demo.utils.singleClick
-import com.rain.uvc.provider.OverallContext
 
 /**
  * @author yuan
@@ -101,13 +97,6 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 				val navController = findNavController()
 				navController.popBackStack(navController.currentDestination?.id ?: 0, true)
 				navController.navigate(navController.graph.startDestinationId)
-//				val intent = requireActivity().intent
-//
-//				// 结束当前 Activity，并重新启动
-//				requireActivity().finish()
-//				requireContext().startActivity(intent)
-				// 使用动画淡入淡出（可选）
-//				requireActivity().overridePendingTransition(0, 0)
 			}
 		}
 	}

@@ -94,9 +94,12 @@ bool CameraDeviceUsbImpl::setParameter(int type, int value) {
         case CAMERA_PARAMETER_PRIVACY:
             ret = uvc_set_privacy(mDeviceHandle, value == 1 ? 1 : 0);
             break;
-        case CAMERA_PARAMETER_DISPLAY_TRANSFORM:
+        case CAMERA_PARAMETER_ORIENTATION:
             LOG_D("-设置预览方向参数");
-            return mCameraStream->setDisplayTransform(value);
+            return mCameraStream->setDisplayOrientation(value);
+        case CAMERA_PARAMETER_MIRROR:
+            LOG_D("-设置预览方向参数");
+            return mCameraStream->setJpegMirrorState(value == 1 ? 1 : 0);
     }
     return ret == UVC_SUCCESS;
 }
@@ -147,9 +150,6 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
                 return zoom;
             }
             break;
-        case CAMERA_PARAMETER_DISPLAY_TRANSFORM:
-            return mCameraStream->getDisplayTransformState();
-
         case CAMERA_PARAMETER_AUTO_FOCUS:
             uint8_t autoFocus;
             if (uvc_get_focus_auto(mDeviceHandle, &autoFocus, UVC_GET_CUR) == UVC_SUCCESS) {
@@ -199,6 +199,11 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
                 return privacy == 1 ? 1 : 0;
             }
             break;
+        case CAMERA_PARAMETER_ORIENTATION:
+            return mCameraStream->getDisplayOrientation();
+
+        case CAMERA_PARAMETER_MIRROR:
+            return mCameraStream->getJpegMirrorState();
     }
     return std::monostate{};
 }
@@ -359,6 +364,13 @@ std::string CameraDeviceUsbImpl::getSupportedPreviewSizes() {
             // 检查格式，如果不支持则直接跳过
             if (formatType == -1)
                 continue;
+            // 当前类型
+            writer.StartObject();
+            writer.String("format");
+            writer.Uint64(formatType);
+
+            writer.String("sizes");
+            writer.StartArray();
             DL_FOREACH(fmt_desc->frame_descs, frame_desc) {
                 writer.StartObject();
                 // width
@@ -368,16 +380,17 @@ std::string CameraDeviceUsbImpl::getSupportedPreviewSizes() {
                 // height
                 writer.String("height");
                 writer.Uint64(frame_desc->wHeight);
-                // 当前类型
-                writer.String("format");
-                writer.Uint64(formatType);
+
 
                 writer.EndObject();
             }
+
+            writer.EndArray();
+            writer.EndObject();
         }
     }
     writer.EndArray();
-    return std::string(buffer.GetString());
+    return {buffer.GetString()};
 }
 
 // 根据格式描述符的子类型返回格式类型

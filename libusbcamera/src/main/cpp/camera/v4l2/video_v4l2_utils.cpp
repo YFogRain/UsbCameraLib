@@ -78,7 +78,8 @@ int VideoV4L2Utils::intToV4l2Format(int formatType) {
     return V4L2_PIX_FMT_YUYV;
 }
 
-void VideoV4L2Utils::getFormatPreviewSize(int fd, int format, rapidjson::Writer<rapidjson::StringBuffer> &writer) {
+void VideoV4L2Utils::getFormatPreviewSize(int fd, int format,
+                                          rapidjson::Writer<rapidjson::StringBuffer> &writer) {
     auto detailFormat = v4l2FormatToInt(format);
     if (detailFormat == -1) { // 如果是-1，则不执行
         return;
@@ -89,6 +90,14 @@ void VideoV4L2Utils::getFormatPreviewSize(int fd, int format, rapidjson::Writer<
     frmSize.pixel_format = format; // 赋值类型
     frmSize.index = 0;             // 初始化index状态，确保从0开始
     // 开始读取分辨率
+    // 当前类型
+    writer.StartObject();
+    writer.String("format");
+    writer.Uint64(detailFormat);
+
+    writer.String("sizes");
+    writer.StartArray();
+
     while (ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmSize) == 0) {
         if (frmSize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
             LOG_D("当前支持的分辨率为:%d*%d", frmSize.discrete.width, frmSize.discrete.height);
@@ -102,15 +111,12 @@ void VideoV4L2Utils::getFormatPreviewSize(int fd, int format, rapidjson::Writer<
             // height
             writer.String("height");
             writer.Uint64(frmSize.discrete.height);
-
-            // 当前类型
-            writer.String("format");
-            writer.Uint64(detailFormat);
-
             writer.EndObject();
         }
         frmSize.index++;
     }
+    writer.EndArray();
+    writer.EndObject();
 }
 
 std::vector<int> VideoV4L2Utils::getPreviewSizeFps(int fd, int format, int width, int height) {
@@ -181,7 +187,8 @@ bool VideoV4L2Utils::setStreamPreviewSize(int fd, int format, int width, int hei
     return true;
 }
 
-std::variant<std::monostate, std::pair<int, int>> VideoV4L2Utils::getSupportParameter(int fd, int id) {
+std::variant<std::monostate, std::pair<int, int>>
+VideoV4L2Utils::getSupportParameter(int fd, int id) {
     struct v4l2_queryctrl qctrl;
     memset(&qctrl, 0, sizeof(qctrl));
     qctrl.id = id;

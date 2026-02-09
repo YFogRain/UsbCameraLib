@@ -9,7 +9,7 @@ import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.util.Log;
 
-import com.rain.uvc.provider.OverallContext;
+import com.rain.uvc.demo.provider.OverallContext;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;

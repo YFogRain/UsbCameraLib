@@ -9,15 +9,9 @@
 CameraStreamUsbImpl::CameraStreamUsbImpl(uvc_device_handle_t *deviceHandle)
         : mDeviceHandle(deviceHandle), frameWidth(640), frameHeight(480),
           frameFormat(PREVIEW_FORMAT_BGR) {
-    // 初始化互斥锁
-    mVideoRecord = new VideoRecord();
 }
 
 CameraStreamUsbImpl::~CameraStreamUsbImpl() {
-    if (mVideoRecord) {
-        delete mVideoRecord;
-    }
-    mVideoRecord = nullptr;
     mDeviceHandle = nullptr;
 }
 
@@ -32,9 +26,6 @@ bool CameraStreamUsbImpl::startPreview() {
 }
 
 bool CameraStreamUsbImpl::stopPreview() {
-    if (mVideoRecord) {
-        mVideoRecord->stopRecord();
-    }
     LOG_D("停止预览开始");
     LOG_D("mIsRunning:%d", mIsCaptureRunning.load());
     if (mIsCaptureRunning.load()) {
@@ -137,7 +128,7 @@ stream_frame_t *CameraStreamUsbImpl::allocate_stream_frame(uvc_frame_t *inFrame)
         }
         memcpy(outFrame->data, inFrame->data, inFrame->data_bytes);
     }
-    outFrame->rotation = mDisplayTransformState;
+    outFrame->rotation = mOrientation;
     return outFrame;
 }
 
@@ -273,9 +264,7 @@ void CameraStreamUsbImpl::thread_func_preview_call() {
         }
         uint32_t width = pFrame->width;   // 数据宽度
         uint32_t height = pFrame->height;
-
         // 发送到录制的线程去进行录制，（路线线程会重新复制一次数据，不需担心后续内存释放问题）
-        putRecordFrames(pFrame);
         {
             std::lock_guard<std::mutex> lock(previewMutex);
             if (!previewListener) {

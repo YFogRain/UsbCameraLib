@@ -6,7 +6,7 @@ import android.hardware.camera2.CameraManager
 import androidx.lifecycle.viewModelScope
 import com.rain.uvc.CameraUvcManager
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
-import com.rain.uvc.provider.OverallContext
+import com.rain.uvc.demo.provider.OverallContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -68,7 +68,7 @@ class HomeSelectViewModel : BaseViewModel() {
 	
 	private fun loadCameraUsb(): HomeSelectMode {
 		val homeSelectMode = HomeSelectMode("USB相机", mutableListOf())
-		val cameraDevices = CameraUvcManager.getCameraDevices()
+		val cameraDevices = CameraUvcManager.getCameraDevices(OverallContext.baseContext)
 		if (cameraDevices.isNullOrEmpty()) return homeSelectMode
 		
 		cameraDevices.forEach {

@@ -18,7 +18,6 @@
 #include <thread>
 #include <atomic>
 #include <android/native_window.h>
-#include "video_record.h"
 #include <filesystem>
 
 #define MAX_FRAME 2
@@ -113,110 +112,58 @@ public:
             if (LIKELY(mPreviewWindow)) {
                 ANativeWindow_setBuffersGeometry(mPreviewWindow, previewWidth, previewHeight, UVC_FORMAT_FRAME_WINDOW);
             }
-            ImgUtils::setDisplayTransformState(mPreviewWindow, mDisplayTransformState);
+            ImgUtils::setDisplayOrientation(mPreviewWindow, mOrientation);
         }
         return true;
     };
 
-    bool setDisplayTransform(int state) {
+    bool setDisplayOrientation(int orientation) {
         LOG_D("当前的设备方向:触发设置方向");
         std::lock_guard<std::mutex> lock(surfaceMutex);
-        mDisplayTransformState = state;
-        return ImgUtils::setDisplayTransformState(mPreviewWindow, mDisplayTransformState);;
+        mOrientation = orientation;
+        return ImgUtils::setDisplayOrientation(mPreviewWindow, mOrientation);
     }
 
-    int getDisplayTransformState() { return mDisplayTransformState; }
+    // 设置拍照镜像
+    bool setJpegMirrorState(bool isMirror) {
+        isJpegMirror = isMirror;
+        return true;
+    }
+
+    int getDisplayOrientation() const { return mOrientation; }
+
+    int getJpegMirrorState() const { return isJpegMirror; }
 
     std::string getCurrentPreviewSize() {
-        return std::to_string(previewWidth) + ":" + std::to_string(previewHeight) + ":" + std::to_string(previewFormat);
+        return std::to_string(previewWidth) + ":" + std::to_string(previewHeight);
     }
 
     virtual bool isRunningPreview() = 0;
 
-    bool startRecord(const std::string &fileName) {
-        bool isPrepare =
-                mVideoRecord->prepare(previewWidth, previewHeight, mDisplayTransformState, previewFps, fileName);
-        LOG_D("准备录制结果:%s", isPrepare ? "成功" : "失败");
-        if (!isPrepare) {
-            return false;
-        }
-        return mVideoRecord->startRecord();
-    };
-
-    void stopRecord() { mVideoRecord->stopRecord(); };
-
-    void setRecordParentPath(const std::string &parentPath) { mVideoRecord->setParentPath(parentPath); };
-
-    std::string getRecordPath() { return mVideoRecord->getRecordPath(); };
-
-    void setRecordFormat(int format) {
-        record_format videoFormat;
-        switch (format) {
-            case RECORD_FORMAT_MP4V:
-                videoFormat = mp4v;
-                break;
-            case RECORD_FORMAT_AVC:
-                videoFormat = avc;
-                break;
-            case RECORD_FORMAT_VID:
-                videoFormat = vid;
-                break;
-            case RECORD_FORMAT_DIVX:
-                videoFormat = divx;
-                break;
-            default:
-                videoFormat = mjpeg;
-                break;
-        }
-        mVideoRecord->setRecordFormat(videoFormat);
-    };
-
-    std::string takePicture(const std::string &parentPath, const std::string &fileName) {
-        if (parentPath.empty() || !isRunningPreview()) { // 如果没有父文件夹，且没有开始预览，则返回空
+    std::vector<uint8_t> takePicture() {
+        if (!isRunningPreview()) { // 如果没有父文件夹，且没有开始预览，则返回空
             LOG_E("没有打开预览");
-            return std::string{};
+            return {};
         }
-        try { // 创建父类文件夹
-            std::filesystem::create_directories(parentPath);
-        } catch (const std::exception &e) {
-            LOG_E("创建父文件夹失败:%s", e.what());
-            return std::string{};
-        }
-        std::string saveFileName = fileName;
-        if (saveFileName.empty()) {
-            saveFileName = "img_" + VideoRecord::formatTime("%Y%m%d_%H_%M%S%f", VideoRecord::getCurrentTime());
-        };
-        saveFileName = saveFileName + ".jpeg";
-
-        std::string fullPath;
-        if (parentPath.back() == '/') {
-            fullPath = parentPath + saveFileName;
-        } else {
-            fullPath = parentPath + "/" + saveFileName;
-        }
-        LOG_D("图像保存地址:%s", fullPath.c_str());
         // 1. 读取流
         stream_frame_t *frame = waitPictureFrame();
         if (!frame) {
             LOG_E("未获取到图片帧");
-            return nullptr;
+            return {};
         }
-        bool isSaveSuccess = ImgUtils::writeMjpeg(frame->data, frame->width, frame->height, frame->rotation, fullPath);
-        LOG_D("保存图像结果:%s", isSaveSuccess ? "成功" : "失败");
+        auto result = ImgUtils::bgr2Mjpeg(frame->data, frame->width, frame->height, frame->rotation,
+                                          isJpegMirror);
+        // 2. 释放资源
         // 2. 释放资源
         free_stream(frame);
-        if (isSaveSuccess) {
-            return fullPath;
-        }
-        return nullptr;
+        return result;
     };
 protected:
     JavaVM *theVM = nullptr; //回调对应全局应该保存的东西
     jobject previewListener = nullptr; //回调的对象
     jmethodID onFrameMethod = nullptr; //回调的方法
-    VideoRecord *mVideoRecord = nullptr;       // 录制的对象
-    int mDisplayTransformState;                // 预览方向
-
+    int mOrientation;                // 预览方向
+    bool isJpegMirror = false; // 是否预览镜像
     std::mutex surfaceMutex;     // 窗口操作锁，单线程操作当前指定窗口
     std::mutex previewFuncMutex; // 预览回调锁
 
@@ -258,32 +205,6 @@ protected:
             ANativeWindow_setBuffersGeometry(mPreviewWindow, width, height, UVC_FORMAT_FRAME_WINDOW);
         }
     };
-
-    void putRecordFrames(stream_frame_t *inFrame) {
-        if (!mVideoRecord || !mVideoRecord->isRecording()) {
-            return;
-        }
-        if (!inFrame || !mVideoRecord->checkFrames(inFrame->width, inFrame->height)) {
-            return;
-        }
-        record_frame_t *outFrame = (record_frame_t *) malloc(sizeof(*outFrame));
-        if (!outFrame) {
-            return;
-        }
-        outFrame->width = inFrame->width;
-        outFrame->height = inFrame->height;
-        outFrame->rotation = inFrame->rotation;
-        outFrame->format = inFrame->format;
-        outFrame->data_size = inFrame->data_size;
-        outFrame->data = (uint8_t *) malloc(inFrame->data_size);
-        if (!outFrame->data) {
-            free_record_frame(outFrame);
-            return;
-        }
-        //  复制数据
-        memcpy(outFrame->data, inFrame->data, inFrame->data_size);
-        mVideoRecord->putFrame(outFrame);
-    }
 
     // 复制一份frame
     static stream_frame_t *allocate_stream_frame(stream_frame_t *inFrame) {

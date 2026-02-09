@@ -1,6 +1,6 @@
 @file:Suppress("DEPRECATION")
 
-package com.once.camera
+package com.rain.uvc
 
 import android.Manifest
 import android.content.Context
@@ -10,10 +10,15 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
-import com.once.camera.factory.ICameraDevice
-import com.once.camera.factory.protogenesis.camera1.Camera1Device
-import com.once.camera.factory.protogenesis.camera2.Camera2Device
-import com.once.camera.factory.usb.uvc.CameraUvcDevice
+import com.rain.uvc.camera.ICameraDevice
+import com.rain.uvc.camera.protogenesis.camera1.Camera1Device
+import com.rain.uvc.camera.protogenesis.camera2.Camera2Device
+import com.rain.uvc.camera.uvc.CameraUvcDevice
+import com.rain.uvc.utils.CameraNativeUtils
+import com.rain.uvc.utils.UsbPermissionHelper
+import com.rain.uvc.utils.getBusNum
+import com.rain.uvc.utils.getDevAddress
+import com.rain.uvc.utils.loadSplit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -125,7 +130,7 @@ object CameraControlHelper {
 			return Result.failure(CameraStateException("请检查权限"))
 		}
 		val manager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-		if (!UsbPermissionUtils.requestPermission(context, usbDevice, manager, timeout)) {
+		if (!UsbPermissionHelper.requestPermission(context, usbDevice, manager, timeout)) {
 			return Result.failure(CameraStateException("申请usb临时权限失败"))
 		}
 		return withContext(Dispatchers.IO) {
@@ -139,9 +144,7 @@ object CameraControlHelper {
 				CameraStateException("打开usb设备驱动失败")
 			)
 			val nativeId = CameraNativeUtils.nativeOpen(
-				usbDeviceConnection.fileDescriptor,
-				deviceNames.getBusNum(),
-				deviceNames.getDevAddress()
+				usbDeviceConnection.fileDescriptor, deviceNames.getBusNum(), deviceNames.getDevAddress()
 			)
 			if (nativeId == 0L) {
 				return@withContext Result.failure(
@@ -159,7 +162,7 @@ object CameraControlHelper {
 	/**
 	 * 打开camera1
 	 */
-	suspend fun openCamera(context: Context, cameraId: Int, acRotation: Int): Result<ICameraDevice> {
+	suspend fun openCamera(context: Context, cameraId: Int, acRotation: Int = 0): Result<ICameraDevice> {
 		if (!checkPermission(context)) {
 			return Result.failure(CameraStateException("请检查权限"))
 		}
@@ -178,7 +181,7 @@ object CameraControlHelper {
 	/**
 	 * 打开camera2
 	 */
-	suspend fun openCamera(context: Context, cameraId: String, acRotation: Int, timeout: Long = 5 * 1000): Result<ICameraDevice> {
+	suspend fun openCamera(context: Context, cameraId: String, acRotation: Int = 0, timeout: Long = 5 * 1000): Result<ICameraDevice> {
 		if (!checkPermission(context)) {
 			return Result.failure(CameraStateException("请检查权限"))
 		}

@@ -12,14 +12,9 @@
 
 CameraStreamV4l2Impl::CameraStreamV4l2Impl(int fd)
         : videoFd(fd), frameWidth(640), frameHeight(480), frameFormat(PREVIEW_FORMAT_BGR) {
-    mVideoRecord = new VideoRecord();
 }
 
 CameraStreamV4l2Impl::~CameraStreamV4l2Impl() {
-    if (mVideoRecord) {
-        delete mVideoRecord;
-    }
-    mVideoRecord = nullptr;
     videoFd = -1;
 }
 
@@ -89,9 +84,6 @@ bool CameraStreamV4l2Impl::startPreview() {
 }
 
 bool CameraStreamV4l2Impl::stopPreview() {
-    if (mVideoRecord) {
-        mVideoRecord->stopRecord();
-    }
     previewFps = 30;
     LOG_D("停止预览开始");
     LOG_D("mIsRunning:%d", mIsCaptureRunning.load());
@@ -193,7 +185,7 @@ stream_frame_t *CameraStreamV4l2Impl::allocate_stream_frame(uint8_t *data, int l
     outFrame->width = frameWidth;
     outFrame->height = frameHeight;
     outFrame->format = frameFormat;
-    outFrame->rotation = mDisplayTransformState;
+    outFrame->rotation = mOrientation;
     outFrame->data_size = length;
     outFrame->data = static_cast<uint8_t *>(malloc(length));
     if (!outFrame->data) {
@@ -357,12 +349,10 @@ void CameraStreamV4l2Impl::thread_func_preview_call() {
         if (!pFrame) {
             continue;
         }
-        putRecordFrames(pFrame);
         // 格式化数据格式
         std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, pFrame->width, pFrame->height, previewFormat);
         // 释放源数据
         free_stream(pFrame);
-
         if (outFrame.empty()) {
             return;
         }
@@ -386,6 +376,5 @@ void CameraStreamV4l2Impl::thread_func_preview_call() {
     }
     if (theVM && env) {
         theVM->DetachCurrentThread();
-
     }
 }

@@ -11,9 +11,5 @@
 
     <application
         android:hardwareAccelerated="true">
-        <provider
-            android:name=".provider.OverallContextProvider"
-            android:authorities="${applicationId}.uvc.camera.overallContextProvider"
-            android:exported="false"/>
     </application>
 </manifest>

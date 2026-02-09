@@ -1,324 +1,172 @@
-package com.rain.uvc.camera;
+package com.rain.uvc.camera
 
-import static android.content.Context.RECEIVER_EXPORTED;
-
-import android.annotation.SuppressLint;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.hardware.usb.UsbDevice;
-import android.hardware.usb.UsbDeviceConnection;
-import android.hardware.usb.UsbManager;
-import android.os.Build;
-import android.text.TextUtils;
-import android.util.Log;
-import android.view.Surface;
-import android.view.SurfaceView;
-import android.view.TextureView;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import com.rain.uvc.listener.IDetachedCloseListener;
-import com.rain.uvc.listener.IFrameListener;
-import com.rain.uvc.provider.OverallContext;
-import com.rain.uvc.state.CameraDataFormat;
-import com.rain.uvc.state.CameraParameter;
-import com.rain.uvc.state.CameraPreviewFormat;
-import com.rain.uvc.state.CameraSupportParameters;
-import com.rain.uvc.state.RecordFormat;
-import com.rain.uvc.utils.CameraNativeUtils;
-
-import java.util.concurrent.atomic.AtomicLong;
+import android.graphics.Bitmap
+import android.view.Surface
+import android.view.SurfaceView
+import android.view.TextureView
+import android.view.View
+import com.rain.uvc.mode.FaceDetectMode
+import com.rain.uvc.parameters.Parameters
+import com.rain.uvc.parameters.SupportParameters
+import com.rain.uvc.parameters.CameraPreviewFormat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * @author yuan
- * @createTime: 2025/2/20
+ * @createTime: 2025/9/18
  * @des
  */
-public class ICameraDevice {
-    //设备名称，如果为video时为设备路径，usb时通过name检查当前是否是同一个值的回调
-    protected final AtomicLong mNativeAtomic = new AtomicLong(0L);
-    private IDetachedCloseListener iDetachedCloseListener;
-    //当前是否正在运行预览
-    protected boolean isPreviewRunning;
-    //打开结果回调
-    private UsbDeviceConnection iUsbDeviceConnect;
-    //当前是否注册广播成功
-    private volatile boolean isReceiverSuccess;
-
-    private final String mDeviceName;
-
-    //usb移除回调监听
-    private final BroadcastReceiver usbDetachedReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (TextUtils.isEmpty(action) || !action.equals(UsbManager.ACTION_USB_DEVICE_DETACHED)) {
-                //当前的action不是我们需要的action
-                return;
-            }
-            //获取传递进来的usb设备
-            UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-            if (usbDevice == null || !mDeviceName.equals(usbDevice.getDeviceName())) {
-                return;
-            }
-            //说明当前是需要的类型，直接回调结果
-            if (iDetachedCloseListener != null) {
-                close();
-                iDetachedCloseListener.onDetach();
-            }
-        }
-    };
-
-    public ICameraDevice(long nativeId, String deviceName, UsbDeviceConnection connection) {
-        mNativeAtomic.set(nativeId);
-        this.mDeviceName = deviceName;
-        this.iUsbDeviceConnect = connection;
-        if (connection != null) {
-            initReceiver();
-        }
-    }
-
-    /**
-     * 关闭摄像头
-     */
-    public boolean close() {
-        unReceiver();
-        this.iDetachedCloseListener = null;
-        long nativeId = mNativeAtomic.get();
-        Log.d("ICameraDevice", "关闭时对应的nativeId:" + nativeId);
-        if (nativeId != 0L) { //释放native层的资源
-            CameraNativeUtils.nativeClose(nativeId);
-        }
-        mNativeAtomic.set(0L);
-        if (iUsbDeviceConnect != null) {
-            iUsbDeviceConnect.close();
-            iUsbDeviceConnect = null;
-        }
-        return true;
-    }
-
-    /**
-     * 开启预览
-     */
-    public boolean startPreview() {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return false;
-        }
-        if (this.isPreviewRunning) {
-            return true;
-        }
-        if (!CameraNativeUtils.nativeStartPreview(nativeId)) {//如果开启失败，则返回false
-            return false;
-        }
-        this.isPreviewRunning = true;
-        return true;
-    }
-
-    /**
-     * 关闭预览
-     */
-    public boolean stopPreview() {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return false;
-        }
-        boolean result = CameraNativeUtils.nativeStopPreview(nativeId);
-        this.isPreviewRunning = false;
-        return result;
-    }
-
-    /**
-     * 当前相机是否已经打开
-     */
-    public boolean cameraIsOpen() {
-        return mNativeAtomic.get() != 0L;
-    }
-
-    /**
-     * 设置预览分辨率
-     *
-     * @param width  宽
-     * @param height 高
-     * @param format 使用的解码类型，当前只支持yuy2/mjpeg
-     */
-    public boolean setPreviewSize(int width, int height, CameraPreviewFormat format) {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return false;
-        }
-        return CameraNativeUtils.nativeSetPreviewSize(nativeId, width, height, format.getValue());
-    }
-
-    /**
-     * 设置对应的预览控件
-     *
-     * @param surface 当前使用的预览控件
-     * @return 是否设置成功
-     */
-    public boolean setDisplaySurface(Surface surface) {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return false;
-        }
-        return CameraNativeUtils.nativeSetDisplaySurface(nativeId, surface);
-    }
-
-    /**
-     * 设置对应的预览控件
-     *
-     * @param view 当前使用的预览控件
-     * @return 是否设置成功
-     */
-    public boolean setDisplaySurface(@NonNull SurfaceView view) {
-        return setDisplaySurface(view.getHolder().getSurface());
-    }
-
-    /**
-     * 设置对应的预览控件
-     *
-     * @param view 当前使用的预览控件
-     * @return 是否设置成功
-     */
-    public boolean setDisplaySurface(@NonNull TextureView view) {
-        return setDisplaySurface(new Surface(view.getSurfaceTexture()));
-    }
-
-    /**
-     * 设置预览监听
-     */
-    public boolean setPreviewListener(IFrameListener listener, CameraDataFormat format) {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return false;
-        }
-        return CameraNativeUtils.setPreviewListener(nativeId, listener, format.getValue());
-    }
-
-
-    /**
-     * 设置usb摄像头断开关闭回调
-     */
-    public boolean setDetachedCloseListener(IDetachedCloseListener listener) {
-        this.iDetachedCloseListener = listener;
-        return true;
-    }
-
-    /**
-     * 设置参数
-     */
-    public <V> Boolean setParameter(@NonNull CameraParameter.Key<V> key,@NonNull V value) {
-        return CameraNativeUtils.setParameter(mNativeAtomic.get(), key, value);
-    }
-
-    /**
-     * 获取参数
-     */
-    @Nullable
-    public <T> T getParameter(@NonNull CameraParameter.Key<T> key) {
-        return CameraNativeUtils.getParameter(mNativeAtomic.get(), key);
-    }
-
-    /**
-     * 获取支持的类型列表
-     */
-    @Nullable
-    public <T> T getSupportedParameter(@NonNull CameraSupportParameters.Key<T> key) {
-        return CameraNativeUtils.getSupportedParameter(mNativeAtomic.get(), key);
-    }
-
-    public boolean startRecord() {
-        return startRecord(null);
-    }
-
-    public boolean startRecord(String fileName) {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return false;
-        }
-        return CameraNativeUtils.nativeStartRecord(nativeId, fileName);
-    }
-
-    public boolean stopRecord() {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return false;
-        }
-        return CameraNativeUtils.nativeStopRecord(nativeId);
-    }
-
-    public void setRecordFormat(RecordFormat format) {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return;
-        }
-        CameraNativeUtils.nativeSetRecordFormat(nativeId, format.getValue());
-    }
-
-    public void setParentPath(String parentPath) {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return;
-        }
-        CameraNativeUtils.nativeSetParentPath(nativeId, parentPath);
-    }
-
-    @Nullable
-    public String getRecordPath() {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return null;
-        }
-        return CameraNativeUtils.nativeGetRecordPath(nativeId);
-    }
-
-
-    @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    private synchronized void initReceiver() {
-        if (isReceiverSuccess) return;
-        try {
-            IntentFilter intentFilter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
-            //注册广播，接受对应的结果
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                OverallContext.baseContext.registerReceiver(usbDetachedReceiver, intentFilter,RECEIVER_EXPORTED );
-            }else {
-                OverallContext.baseContext.registerReceiver(usbDetachedReceiver, intentFilter);
-            }
-        } catch (Exception ignored) {
-        }
-        isReceiverSuccess = true;
-    }
-
-
-    private synchronized void unReceiver() {
-        if (isReceiverSuccess) {
-            try {
-                OverallContext.baseContext.unregisterReceiver(usbDetachedReceiver);
-            } catch (Exception ignored) {
-            }
-        }
-        isReceiverSuccess = false;
-    }
-
-    @Nullable
-    public String takePicture(String parentPath) {
-        return takePicture(parentPath, null);
-    }
-
-    @Nullable
-    public String takePicture(String parentPath, String fileName) {
-        long nativeId = mNativeAtomic.get();
-        if (nativeId == 0L) {
-            return null;
-        }
-        Log.d("takePicture", "当前使用的文件夹路径:" + parentPath);
-        Log.d("takePicture", "当前使用的文件名称:" + fileName);
-        String path = CameraNativeUtils.nativeTakePicture(nativeId, parentPath, fileName);
-        Log.d("takePicture", "照片信息:" + path);
-        return path;
-    }
+abstract class ICameraDevice {
+	// 预览监听
+	protected var iPreviewListener: ((bytes: ByteArray, width: Int, height: Int) -> Unit)? = null
+	
+	// 屏幕方向,默认为0
+	protected var mDisplayOrientation: Int = 0
+	
+	// 拍照方向
+	protected var mPicOrientation: Int = 0
+	
+	// 是否需要镜像处理（仅处理照片时使用）
+	protected var mIsJpegMirror: Boolean = false
+	
+	//摄像头异常关闭监听
+	protected var iDetachedCloseListener: (() -> Unit)? = null
+	
+	//人脸检测数据回调
+	protected var mFaceDetectListener: ((Array<FaceDetectMode>) -> Unit)? = null
+	
+	protected val isPreviewIng = AtomicBoolean(false)
+	
+	/**
+	 * 关闭摄像头
+	 */
+	fun close(): Boolean {
+		this.mFaceDetectListener = null
+		this.iPreviewListener = null
+		this.iDetachedCloseListener = null
+		stopFaceDetection()
+		return closeCamera()
+	}
+	
+	/**
+	 * 设置预览分辨率
+	 */
+	abstract fun setPreviewSize(width: Int, height: Int, format: CameraPreviewFormat): Boolean
+	
+	/**
+	 * 打开预览
+	 */
+	abstract fun startPreview()
+	
+	/**
+	 * 关闭预览
+	 */
+	abstract fun stopPreview()
+	
+	/**
+	 * 设置预览控件
+	 */
+	abstract fun setDisplaySurface(view: SurfaceView): Boolean
+	abstract fun setDisplaySurface(view: TextureView): Boolean
+	abstract fun setDisplaySurface(surface: Surface): Boolean
+	
+	/**
+	 * 设置预览监听
+	 */
+	fun setPreviewListener(listener: ((bytes: ByteArray, width: Int, height: Int) -> Unit)?) {
+		this.iPreviewListener = listener
+	}
+	
+	/**
+	 * 设置usb摄像头断开关闭回调
+	 */
+	fun setDetachedCloseListener(listener: (() -> Unit)? = null) {
+		this.iDetachedCloseListener = listener
+	}
+	
+	/**
+	 * 数据回调
+	 */
+	protected fun pullPreview(data: ByteArray, width: Int, height: Int) {
+		runCatching { iPreviewListener?.invoke(data, width, height) }
+	}
+	
+	/**
+	 * 设置参数
+	 */
+	abstract fun <V> setParameter(key: Parameters.Key<V>, value: V): Boolean
+	
+	/**
+	 * 获取参数
+	 */
+	abstract fun <V> getParameter(key: Parameters.Key<V>): V?
+	
+	/**
+	 * 获取支持的类型列表
+	 */
+	abstract fun <T> getSupportParameters(supportKey: SupportParameters.Key<T>): T?
+	
+	/**
+	 * 关闭摄像头
+	 */
+	protected abstract fun closeCamera(): Boolean
+	
+	/**
+	 * 开启人脸检测-需要在开启预览之后
+	 */
+	abstract fun startFaceDetection(): Boolean
+	
+	/**
+	 * 结束人脸检测
+	 */
+	abstract fun stopFaceDetection(): Boolean
+	
+	/**
+	 * 拍照
+	 * @param cropWidth 裁剪的宽度（-1表示不裁剪）
+	 * @param cropHeight 裁剪的高度（-1表示不裁剪）
+	 */
+	protected abstract suspend fun takePicture(cropWidth: Int = -1, cropHeight: Int = -1): Bitmap?
+	
+	/**
+	 * 获取当前的设备预览方向
+	 */
+	protected fun loadOrientation(sensorOrientation: Int, isFont: Boolean, rotation: Int): Int {
+		// 根据当前的前后置方向，以及感应器方向，window的方向来配置预览旋转角度
+		val degrees = when (rotation) {
+			Surface.ROTATION_0 -> 0
+			Surface.ROTATION_90 -> 90
+			Surface.ROTATION_180 -> 180
+			Surface.ROTATION_270 -> 270
+			else -> 0
+		}
+		return if (isFont) {
+			(360 - ((sensorOrientation + degrees) % 360)) % 360
+		} else (sensorOrientation - degrees + 360) % 360
+	}
+	
+	/**
+	 * 获取当前镜像状态
+	 */
+	fun loadJpegMirrorState() = mIsJpegMirror
+	
+	/**
+	 * 同步请求拍照结果
+	 */
+	suspend fun takeSyncPicture(cropWidth: Int = -1, cropHeight: Int = -1): Bitmap? {
+		return withContext(Dispatchers.IO) {
+			return@withContext takePicture(cropWidth, cropHeight)
+		}
+	}
+	
+	/**
+	 * 裁剪拍照
+	 */
+	suspend fun takeCropPicture(view: View? = null): Bitmap? {
+		return withContext(Dispatchers.IO) {
+			return@withContext takePicture(view?.measuredWidth ?: -1, view?.measuredHeight ?: -1)
+		}
+	}
 }
-
