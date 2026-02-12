@@ -3,16 +3,19 @@ package com.rain.uvc.camera.protogenesis.camera2
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.ImageFormat
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureFailure
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
+import android.util.Log
 import android.view.Surface
 import android.view.SurfaceView
 import android.view.TextureView
@@ -27,11 +30,12 @@ import com.rain.uvc.mode.CameraSupportSize
 import com.rain.uvc.mode.FaceDetectMode
 import com.rain.uvc.parameters.CameraParameterType
 import com.rain.uvc.parameters.CameraPreviewFormat
-import com.rain.uvc.utils.applyCenterCrop
 import com.rain.uvc.utils.cropBitmap
 import com.rain.uvc.utils.toBitmap
 import com.rain.uvc.utils.updateSurfaceTransformWithScale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -104,6 +108,11 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		override fun onError(camera: CameraDevice, error: Int) {
 			this@Camera2Device.mCameraDeviceAtomic.set(null)
 			resultOpen(false, "获取摄像头打开失败,失败code:$error")
+		}
+		
+		override fun onClosed(camera: CameraDevice) {
+			super.onClosed(camera)
+			stopHandlerThread()
 		}
 	}
 	
@@ -220,7 +229,6 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	override fun stopPreview() {
 		isPreviewIng.set(false)
 		mImageReader?.setOnImageAvailableListener(null, null)
-		
 		runCatching {
 			while (true) {
 				val image = mImageReader?.acquireNextImage() ?: break
@@ -506,6 +514,92 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		)
 	}
 	
+	override suspend fun takeCapturePicture(width: Int, height: Int, cropWidth: Int, cropHeight: Int): Bitmap? {
+		val cameraDevice = mCameraDeviceAtomic.get() ?: return null
+		stopPreview()
+		mCameraSession?.close()
+		mCameraSession = null
+		val bytes = withTimeoutOrNull(3000) {
+			return@withTimeoutOrNull suspendCancellableCoroutine<ByteArray?> { continuation ->
+				val useWidth: Int
+				val useHeight: Int
+				if (width <= 0 || height <= 0) {
+					useWidth = mImageReader?.width ?: 640
+					useHeight = mImageReader?.height ?: 480
+				} else {
+					useWidth = width
+					useHeight = height
+				}
+				val mCaptureReader = ImageReader.newInstance(useWidth, useHeight, ImageFormat.JPEG, 1)
+				var mCaptureSession: CameraCaptureSession? = null
+				continuation.invokeOnCancellation {
+					mCaptureReader.close()
+					mCaptureSession?.close()
+				}
+				mCaptureReader.setOnImageAvailableListener({
+					val image = runCatching { it.acquireNextImage() }.getOrNull() ?: return@setOnImageAvailableListener
+					image.use { image ->
+						val buffer = image.planes[0].buffer
+						val data = ByteArray(buffer.remaining())
+						buffer.get(data)
+						if (continuation.isActive) continuation.resume(data)
+					}
+				}, mCameraHandler)
+				try {
+					cameraDevice.createCaptureSession(
+						listOf(mCaptureReader.surface), object : CameraCaptureSession.StateCallback() {
+							override fun onConfigured(session: CameraCaptureSession) {
+								//这里处理拍照
+								mCaptureSession = session
+								session.capture(
+									cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
+									addTarget(mCaptureReader.surface)
+									set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+								}.build(), object : CameraCaptureSession.CaptureCallback() {
+									override fun onCaptureFailed(session: CameraCaptureSession, request: CaptureRequest, failure: CaptureFailure) {
+										super.onCaptureFailed(session, request, failure)
+										//拍照失败
+										Log.d("camera2Tag", "拍照失败")
+										session.close()
+										mCaptureReader.close()
+										mCaptureSession = null
+										if (continuation.isActive) continuation.resume(null)
+									}
+									
+									override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
+										super.onCaptureCompleted(session, request, result)
+										//拍照完成
+										Log.d("camera2Tag", "拍照完成")
+										mCaptureReader.close()
+										session.close()
+										mCaptureSession = null
+									}
+								}, mCameraHandler
+								)
+							}
+							
+							override fun onConfigureFailed(session: CameraCaptureSession) {
+								session.close()
+								mCaptureReader.close()
+								mCaptureSession = null
+								if (continuation.isActive) continuation.resume(null)
+							}
+						}, mCameraHandler
+					)
+				} catch (e: Exception) {
+					e.printStackTrace()
+					mCaptureReader.close()
+					if (continuation.isActive) continuation.resume(null)
+				}
+			}
+		} ?: return null
+		return withContext(Dispatchers.IO) {
+			return@withContext bytes.toBitmap(ImageFormat.JPEG, width, height)?.cropBitmap(
+				mPicOrientation, mIsJpegMirror, cropWidth, cropHeight
+			)
+		}
+	}
+	
 	override suspend fun takePicture(cropWidth: Int, cropHeight: Int): Bitmap? {
 		return withTimeoutOrNull(3000) {
 			suspendCancellableCoroutine { continuation ->
@@ -537,7 +631,7 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		//获取当前输出帧的信息
 		val streamConfigurationMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return null
 		val outputFormats = streamConfigurationMap.outputFormats?.filter { it.isUserFormat() }
-		if (outputFormats == null || outputFormats.isEmpty()) return null
+		if (outputFormats.isNullOrEmpty()) return null
 		val outputSupportSizes = mutableListOf<CameraSupportSize>()
 		outputFormats.forEach {
 			val outputSizes = streamConfigurationMap.getOutputSizes(it)
@@ -627,7 +721,7 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		val reader = mImageReader ?: return
 		mTextureCache.get()?.also { view -> // 设置
 			mTextureCache.get()?.surfaceTexture?.setDefaultBufferSize(reader.width, reader.height)
-			val sensorOrientation = getSupportParameters(SupportParameters.SENSOR_ORIENTATION)?:0
+			val sensorOrientation = getSupportParameters(SupportParameters.SENSOR_ORIENTATION) ?: 0
 			val isSwapped = sensorOrientation == 90 || sensorOrientation == 270
 			val bufferWidth: Int
 			val bufferHeight: Int
@@ -641,4 +735,6 @@ class Camera2Device(context: Context) : ICameraDevice() {
 			view.updateSurfaceTransformWithScale(bufferWidth, bufferHeight, this.mDisplayOrientation)
 		}
 	}
+	
+	
 }

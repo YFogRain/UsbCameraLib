@@ -181,6 +181,14 @@ class CameraUvcDevice(context: Context, nativeId: Long, val deviceName: String, 
 		return nativeTakePicture.toBitmap(mPicOrientation, false, cropWidth, cropHeight)
 	}
 	
+	override suspend fun takeCapturePicture(width: Int, height: Int, cropWidth: Int, cropHeight: Int): Bitmap? {
+		val nativeId = mNativeAtomic.get()
+		if (nativeId == 0L) return null
+		val nativeTakePicture = CameraNativeUtils.nativeTakePicture(nativeId)
+		if (nativeTakePicture == null || nativeTakePicture.isEmpty()) return null
+		return nativeTakePicture.toBitmap(mPicOrientation, false, cropWidth, cropHeight)
+	}
+	
 	private fun setDisplaySurfaceData(surface: Surface): Boolean {
 		val nativeId = mNativeAtomic.get()
 		if (nativeId == 0L) {

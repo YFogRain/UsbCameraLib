@@ -25,10 +25,6 @@
         <action
             android:id="@+id/camera_to_cpp"
             app:destination="@id/camera_cpp" />
-
-        <action
-            android:id="@+id/camera_to_usb"
-            app:destination="@id/camera_usb" />
     </fragment>
 
     <fragment
@@ -69,10 +65,4 @@
             app:argType="android.hardware.usb.UsbDevice"
             app:nullable="true" />
     </fragment>
-
-    <fragment
-        android:id="@+id/camera_usb"
-        android:name="com.rain.uvc.demo.camera.usb.CameraUsbFragment"
-        android:label="native层usb相机"
-        tools:layout="@layout/fg_camera_usb" />
 </navigation>

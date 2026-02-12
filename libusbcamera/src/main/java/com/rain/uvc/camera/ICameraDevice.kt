@@ -131,6 +131,11 @@ abstract class ICameraDevice {
 	protected abstract suspend fun takePicture(cropWidth: Int = -1, cropHeight: Int = -1): Bitmap?
 	
 	/**
+	 * 捕获拍照（camera1/camera2使用）
+	 */
+	abstract suspend fun takeCapturePicture(width: Int = -1, height: Int = -1, cropWidth: Int = -1, cropHeight: Int = -1): Bitmap?
+	
+	/**
 	 * 获取当前的设备预览方向
 	 */
 	protected fun loadOrientation(sensorOrientation: Int, isFont: Boolean, rotation: Int): Int {
@@ -169,4 +174,14 @@ abstract class ICameraDevice {
 			return@withContext takePicture(view?.measuredWidth ?: -1, view?.measuredHeight ?: -1)
 		}
 	}
+	
+	/**
+	 * 裁剪拍照
+	 */
+	suspend fun takeCapturePicture(width: Int, height: Int, view: View? = null): Bitmap? {
+		return withContext(Dispatchers.IO) {
+			return@withContext takeCapturePicture(width, height, view?.measuredWidth ?: -1, view?.measuredHeight ?: -1)
+		}
+	}
+	
 }

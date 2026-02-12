@@ -88,7 +88,6 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 		when (val device = item.deviceType) {
 			is CameraDeviceMode.Native1 -> jumpNav(R.id.camera_to_native1, "cameraId" to device.cameraId)
 			is CameraDeviceMode.Native2 -> jumpNav(R.id.camera_to_native2, "cameraId" to device.cameraId)
-			is CameraDeviceMode.OTHER -> jumpNav(R.id.camera_to_usb)
 			is CameraDeviceMode.USB -> jumpNav(R.id.camera_to_cpp, "usb_device" to device.device)
 			is CameraDeviceMode.V4L2 -> jumpNav(R.id.camera_to_cpp, "video_path" to device.videoPath)
 			is CameraDeviceMode.LOCALE -> {
@@ -98,6 +97,7 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 				navController.popBackStack(navController.currentDestination?.id ?: 0, true)
 				navController.navigate(navController.graph.startDestinationId)
 			}
+			CameraDeviceMode.OTHER -> {}
 		}
 	}
 	

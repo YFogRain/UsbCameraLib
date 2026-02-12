@@ -18,6 +18,7 @@ import com.rain.uvc.parameters.CameraPreviewFormat
 import com.rain.uvc.parameters.Parameters
 import com.rain.uvc.parameters.SupportParameters
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import java.io.File
@@ -103,10 +104,13 @@ class CameraViewModel : BaseViewModel() {
 	}
 	
 	fun takePicture() {
+		Log.d("CameraPicture", "开始执行拍照~~~~:")
 		viewModelScope.launch(Dispatchers.IO) {
-			val picture = mCameraDevice.get()?.takeSyncPicture()
+			val picture = mCameraDevice.get()?.takeCapturePicture(1920, 1080)
+			Log.d("CameraPicture", "拍照结果~~~~:$picture")
 			if (picture != null) PictureUtils.saveBitmap(OverallContext.baseContext, picture)
-			Log.d("CameraCppViewModel", "拍照结果:$picture")
+			delay(2000)
+			mCameraDevice.get()?.startPreview()
 		}
 	}
 	

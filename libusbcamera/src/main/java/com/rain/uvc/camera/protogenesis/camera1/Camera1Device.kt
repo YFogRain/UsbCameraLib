@@ -22,7 +22,9 @@ import com.rain.uvc.parameters.CameraParameterType
 import com.rain.uvc.parameters.CameraPreviewFormat
 import com.rain.uvc.utils.cropBitmap
 import com.rain.uvc.utils.toBitmap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
@@ -304,6 +306,28 @@ class Camera1Device(camera: Camera, cameraId: Int, acRotation: Int) : ICameraDev
 					pictureContinuation.compareAndSet(callback, null)
 				}
 			}
+		}
+	}
+	
+	override suspend fun takeCapturePicture(width: Int, height: Int, cropWidth: Int, cropHeight: Int): Bitmap? {
+		val camera = mCameraAtomic.get() ?: return null
+		val data = withTimeoutOrNull(3000) {
+			suspendCancellableCoroutine<ByteArray?> { continuation ->
+				continuation.invokeOnCancellation {
+					// 取消
+				}
+				camera.takePicture(null, null) { data, _ ->
+					continuation.resume(data)
+				}
+			}
+		} ?: return null
+		return withContext(Dispatchers.IO) {
+			// jpeg转为bitmap
+			return@withContext runCatching {
+				data.toBitmap(ImageFormat.NV21, width, height)?.cropBitmap(
+					mPicOrientation, mIsJpegMirror, cropWidth, cropHeight
+				)
+			}.getOrNull()
 		}
 	}
 	
