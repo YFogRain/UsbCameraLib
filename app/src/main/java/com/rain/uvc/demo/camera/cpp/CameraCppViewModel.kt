@@ -72,7 +72,7 @@ class CameraCppViewModel : BaseViewModel() {
 				openResultFlow.emit("未获取到分辨率信息")
 				return@launch
 			}
-			val previewSize = previewSizes.maxBy { it.width * it.height } ?: previewSizes.find {
+			val previewSize =   previewSizes.find {
 				((it.width == 1920 && it.height == 1080) || (it.width == 1080 && it.height == 1920))
 			} ?: previewSizes.find {
 				((it.width == 640 && it.height == 480) || (it.width == 480 && it.height == 640))
