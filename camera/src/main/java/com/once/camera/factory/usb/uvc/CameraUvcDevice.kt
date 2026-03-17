@@ -19,7 +19,7 @@ class CameraUvcDevice : ICameraDevice() {
 		TODO("Not yet implemented")
 	}
 	
-	override suspend fun startPreview(): Boolean {
+	override  fun startPreview(): Boolean {
 		TODO("Not yet implemented")
 	}
 	

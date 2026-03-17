@@ -3,14 +3,11 @@ package com.once.camera.factory.protogenesis.camera2
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
-import android.graphics.Matrix
+import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CaptureFailure
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
@@ -22,7 +19,6 @@ import android.view.Surface
 import android.view.SurfaceView
 import android.view.TextureView
 import com.once.camera.factory.ICameraDevice
-import com.once.camera.factory.protogenesis.camera1.filterMap
 import com.once.camera.factory.protogenesis.camera1.isUserFormat
 import com.once.camera.factory.protogenesis.camera1.toFormat
 import com.once.camera.factory.protogenesis.camera1.toPreviewFormat
@@ -31,16 +27,16 @@ import com.once.camera.mode.FaceDetectMode
 import com.once.camera.parameters.CameraPreviewFormat
 import com.once.camera.parameters.Parameters
 import com.once.camera.parameters.SupportParameters
-import com.once.camera.provider.OverallContext
 import com.once.camera.type.CameraParameterType
 import com.once.camera.utils.toBitmap
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.ReentrantLock
+import kotlin.collections.set
 import kotlin.coroutines.resume
 
 /**
@@ -48,16 +44,32 @@ import kotlin.coroutines.resume
  * @createTime: 2025/9/18
  * @des camera2操作实例
  */
-class Camera2Device : ICameraDevice() {
+class Camera2Device(context: Context) : ICameraDevice() {
 	//摄像头驱动
 	private val mCameraDeviceAtomic = AtomicReference<CameraDevice?>()
+	
+	// 配置缓存参数
+	private val parameterCache = ConcurrentHashMap<String, Any>()
+	
+	// context对象实例
+	private val mContext = AtomicReference<Context>()
+	
+	// 设置当前的打开状态,如果为false时，则不执行打开直接关闭
+	private val isOpenCancelled = AtomicBoolean(false)
+	
+	// 是否正在打开
+	private val isOpening = AtomicBoolean(false)
+	
+	/**
+	 * 拍照的回调
+	 */
+	private val pictureContinuation = AtomicReference<((ByteArray, Int, Int, Int) -> Unit)?>(null)
 	
 	//预览操作实例
 	private var mCameraSession: CameraCaptureSession? = null
 	
 	//预览流回调的实例
 	private var mImageReader: ImageReader? = null
-	private var captureRequestBuilder: CaptureRequest.Builder? = null
 	
 	//是否正在预览中
 	private val isOpenPreviewIng = AtomicBoolean(false)
@@ -73,26 +85,48 @@ class Camera2Device : ICameraDevice() {
 	//打开回调
 	private var iOpenListener: ((Boolean, String?) -> Unit)? = null
 	
+	// 当前传感器方向
+	private var mSensorOrientation: Int = 0
+	
 	// 缓存控件
 	private val mTextureCache = AtomicReference<TextureView>()
+	
+	init {
+		mContext.set(context.applicationContext)
+	}
 	
 	/**
 	 * 打开结果回调
 	 */
 	private val openStateCallBack = object : CameraDevice.StateCallback() {
 		override fun onOpened(camera: CameraDevice) {
-			initPreviewCapture(camera)
-			this@Camera2Device.mCameraDeviceAtomic.set(camera)
+			Log.d("Camera2Device", "打开成功 - isOpenCancelled :${isOpenCancelled.get()}")
+			if (isOpenCancelled.get()) {
+				camera.close()
+				releaseHandler()
+				return
+			}
+			
+			if (!mCameraDeviceAtomic.compareAndSet(null, camera)) {
+				camera.close()
+				releaseHandler()
+				return
+			}
+			isOpening.set(false)
 			initImageReader(640, 480)
 			resultOpen(true, "打开成功")
 		}
 		
 		override fun onDisconnected(camera: CameraDevice) {
+			Log.d("Camera2Device", "断开连接")
+			closeCamera()
 			iDetachedCloseListener?.invoke()
 		}
 		
 		override fun onError(camera: CameraDevice, error: Int) {
-			this@Camera2Device.mCameraDeviceAtomic.set(null)
+			Log.d("Camera2Device", "打开失败,失败code:$error")
+			isOpening.set(false)
+			closeCamera()
 			resultOpen(false, "获取摄像头打开失败,失败code:$error")
 		}
 	}
@@ -101,21 +135,42 @@ class Camera2Device : ICameraDevice() {
 	private val mRepeatingCallback = object : CameraCaptureSession.CaptureCallback() {
 		override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
 			super.onCaptureCompleted(session, request, result)
-			//获取人脸检测数据
+			// 获取人脸检测数据
 			val faces = result.get(CaptureResult.STATISTICS_FACES)
 			if (!faces.isNullOrEmpty()) {
 				mFaceDetectListener?.invoke(Array(faces.size) {
 					val face = faces[it]
 					FaceDetectMode(
-						face.bounds,
-						face.score,
-						face.leftEyePosition,
-						face.rightEyePosition,
-						face.mouthPosition
+						face.bounds, face.score, face.leftEyePosition, face.rightEyePosition, face.mouthPosition
 					)
 				})
 			}
 		}
+	}
+	
+	/**
+	 * 取消相机打开操作（核心方法）
+	 */
+	fun cancelOpen() {
+		Log.d("Camera2Device", "取消打开~ :${isOpening.get()}")
+		if (!isOpening.get()) return
+		isOpenCancelled.set(true)
+		val device = mCameraDeviceAtomic.get()
+		if (device != null) {
+			mCameraHandler?.post {
+				device.close()
+			}
+		} else {
+			releaseHandler()
+		}
+		isOpening.set(false)
+	}
+	
+	private fun releaseHandler() {
+		mContext.set(null)
+		mHandlerThread?.quitSafely()
+		mHandlerThread = null
+		mCameraHandler = null
 	}
 	
 	/**
@@ -127,9 +182,14 @@ class Camera2Device : ICameraDevice() {
 	}
 	
 	@SuppressLint("MissingPermission")
-	fun open(cameraId: String, acRotation: Int, listener: ((Boolean, String?) -> Unit)) {
+	fun open(context: Context, cameraId: String, acRotation: Int, listener: ((Boolean, String?) -> Unit)) {
+		if (!isOpening.compareAndSet(false, true)) {
+			listener(false, "camera is opening")
+			return
+		}
 		this.iOpenListener = listener
-		val manager = OverallContext.baseContext.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+		isOpenCancelled.set(false)
+		val manager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
 		val cameraList = runCatching {
 			manager?.cameraIdList
 		}.getOrNull()
@@ -143,6 +203,7 @@ class Camera2Device : ICameraDevice() {
 			resultOpen(false, "获取camera2管理类失败")
 			return
 		}
+		
 		//执行打开摄像头
 		initCharacteristics(manager, cameraId, acRotation)
 		try {
@@ -154,23 +215,75 @@ class Camera2Device : ICameraDevice() {
 	}
 	
 	override fun closeCamera(): Boolean {
-		mCameraSession?.close()
-		mCameraSession = null
-		
-		runCatching { previewLock.lock() }
-		mImageReader?.close()
-		mImageReader = null
-		
-		runCatching { previewLock.unlock() }
-		// 清理控件
-		mTextureCache.set(null)
-		
-		mCameraDeviceAtomic.get()?.close()
-		mCameraDeviceAtomic.set(null)
-		captureRequestBuilder = null
-		mSurface = null
-		stopHandlerThread()
+		// 需要获取旧的camera对象，并置为null，保证其他调用无法使用
+		val oldDevice = mCameraDeviceAtomic.getAndSet(null).also {
+			Log.d("Camera2Device", "获取摄像头设备对象:$it")
+		} ?: return true
+		val handler = mCameraHandler ?: run {
+			Log.d("Camera2Device", "未初始化cameraHandler")
+			oldDevice.close()
+			return true
+		}
+		handler.post {
+			try {
+				stopPreviewInternal() // 线程内停止预览
+				runCatching { mCameraSession?.close() }
+				mCameraSession = null
+				runCatching {
+					previewLock.lock()
+					try {
+						val reader = mImageReader
+						if (reader != null) {
+							while (true) {
+								val image = try {
+									reader.acquireLatestImage()
+								} catch (_: Exception) {
+									null
+								} ?: break
+								image.close()
+							}
+							reader.close()
+						}
+					} finally {
+						previewLock.unlock()
+					}
+					
+					mImageReader = null
+				}
+				runCatching { mSurface?.release() }
+				mSurface = null
+				runCatching { oldDevice.close() }
+			} catch (e: Exception) {
+				e.printStackTrace()
+			} finally {
+				Log.d("Camera2Device", "执行关闭完毕，开始执行退出~~~~~~")
+				releaseHandler()
+				Log.d("Camera2Device", "执行退出完成")
+			}
+		}
 		return true
+	}
+	
+	private fun stopPreviewInternal() {
+		if (!isPreviewIng.get()) return
+		isPreviewIng.set(false)
+		mImageReader?.setOnImageAvailableListener(null, null)
+		runCatching {
+			if (previewLock.tryLock(500, TimeUnit.MILLISECONDS)) {
+				try {
+					while (true) {
+						val image = mImageReader?.acquireNextImage() ?: break
+						image.close()
+					}
+				} finally {
+					previewLock.unlock()
+				}
+			}
+		}
+		runCatching {
+			mCameraSession?.stopRepeating()
+		}
+		isOpenPreviewIng.set(false)
 	}
 	
 	override fun setPreviewSize(width: Int, height: Int, format: CameraPreviewFormat): Boolean {
@@ -180,50 +293,62 @@ class Camera2Device : ICameraDevice() {
 		return true
 	}
 	
-	override suspend fun startPreview(): Boolean {
+	override fun startPreview() {
 		val cameraDevice = mCameraDeviceAtomic.get()
-		if (cameraDevice == null || isPreviewIng.get() || isOpenPreviewIng.get()) return false
-		val captureBuilder = captureRequestBuilder ?: return false
-		
-		mTextureCache.get()?.also { view -> // 设置
-			mImageReader?.also { reader ->// 设置控件的大小
-				mTextureCache.get()?.surfaceTexture?.setDefaultBufferSize(
-					reader.width,
-					reader.height
-				)
-			}// 旋转
-			setSurfaceTransformWithScale(view)
-		}
-		isOpenPreviewIng.set(true)
+		if (cameraDevice == null || isPreviewIng.get() || isOpenPreviewIng.get()) return
+		isOpenPreviewIng.compareAndSet(false, true)
 		if (mCameraSession == null) {
-			val resultSession = Camera2CommonExt.createSession(
-				cameraDevice, this@Camera2Device.mSurface, mImageReader, mCameraHandler
-			)
-			val session = resultSession.getOrNull()
-			if (resultSession.isFailure || session == null) {
-				return false
+			try {
+				cameraDevice.createCaptureSession(ArrayList<Surface>().also {
+					this@Camera2Device.mSurface?.let { surface -> it.add(surface) }
+					mImageReader?.surface?.let { surface -> it.add(surface) }
+				}, object : CameraCaptureSession.StateCallback() {
+					override fun onConfigured(session: CameraCaptureSession) {
+						mCameraSession = session
+						startPreviewReader(createCaptureRequest(cameraDevice))
+					}
+					
+					override fun onConfigureFailed(session: CameraCaptureSession) {
+						isOpenPreviewIng.set(false)
+						session.close()
+					}
+				}, mCameraHandler)
+			} catch (e: CameraAccessException) {
+				e.printStackTrace()
+				isOpenPreviewIng.set(false)
+				
 			}
-			mCameraSession = session
-		}
-		startPreviewReader(captureBuilder.build())
-		return true
+		} else startPreviewReader(createCaptureRequest(cameraDevice))
 	}
 	
 	private fun startPreviewReader(captureRequest: CaptureRequest) {
 		mImageReader?.setOnImageAvailableListener({
 			readReaderBytes(it)
 		}, mCameraHandler)
-		mCameraSession?.setRepeatingRequest(captureRequest, mRepeatingCallback, mCameraHandler)
+		try {
+			mCameraSession?.setRepeatingRequest(captureRequest, mRepeatingCallback, mCameraHandler)
+			isPreviewIng.set(true)
+		} catch (e: CameraAccessException) {
+			e.printStackTrace()
+			isPreviewIng.set(false)
+			mImageReader?.setOnImageAvailableListener(null, null)
+		}
 		isOpenPreviewIng.set(false)
-		isPreviewIng.set(true)
 	}
 	
-	override fun stopPreview(): Boolean {
+	override fun stopPreview() {
 		isPreviewIng.set(false)
 		mImageReader?.setOnImageAvailableListener(null, null)
-		runCatching { mCameraSession?.stopRepeating() }
+		runCatching {
+			while (true) {
+				val image = mImageReader?.acquireNextImage() ?: break
+				image.close()
+			}
+		}
+		runCatching {
+			mCameraSession?.stopRepeating()
+		}
 		isOpenPreviewIng.set(false)
-		return true
 	}
 	
 	override fun setDisplaySurface(view: SurfaceView): Boolean {
@@ -243,28 +368,25 @@ class Camera2Device : ICameraDevice() {
 	}
 	
 	private fun setDisplaySurfaceData(surface: Surface): Boolean {
-		captureRequestBuilder ?: return false
-		mSurface?.also { captureRequestBuilder?.removeTarget(it) }
-		captureRequestBuilder?.addTarget(surface)
+		mSurface?.also { it.release() }
 		this.mSurface = surface
 		return true
 	}
 	
 	override fun <V> setParameter(key: Parameters.Key<V>, value: V): Boolean {
+		val context = mContext.get() ?: return false
 		when (key.type) {
 			CameraParameterType.AUTO_EXPOSURE -> {
-				Log.d("Camera2Factory", "曝光模式:${value}")
 				if (value !is Boolean) return false
-				val aeMode = if (value) mCameraDeviceAtomic.get()?.loadAEEnable() else CaptureRequest.CONTROL_AE_MODE_OFF
+				val aeMode = if (value) mCameraDeviceAtomic.get()?.loadAEEnable(context) else CaptureRequest.CONTROL_AE_MODE_OFF
 				if (aeMode == null) return false
-				captureRequestBuilder?.set(CaptureRequest.CONTROL_AE_MODE, aeMode)
+				parameterCache[key.type] = aeMode
 			}
 			CameraParameterType.EXPOSURE -> {
-				Log.d("Camera2Factory", "曝光度:${value}")
 				if (value !is Int) return false
-				captureRequestBuilder?.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, value)
+				parameterCache[key.type] = value
 			}
-			CameraParameterType.ORIENTATION -> {
+			CameraParameterType.PREVIEW_ORIENTATION -> {
 				if (value !is Int) return false
 				this.mDisplayOrientation = value
 			}
@@ -276,60 +398,33 @@ class Camera2Device : ICameraDevice() {
 				if (value !is CameraSize) return false
 				initImageReader(value.width, value.height)
 			}
-			CameraParameterType.PREVIEW_FORMAT -> {
-				if (value !is CameraPreviewFormat) return false
-				mPreviewFormat = value
-				initImageReader(mImageReader?.width ?: 640, mImageReader?.height ?: 480)
-			}
 			CameraParameterType.FLASH -> {
 				if (value !is Boolean) return false
-				captureRequestBuilder?.set(
-					CaptureRequest.FLASH_MODE,
-					if (value) CaptureRequest.FLASH_MODE_TORCH else CaptureRequest.FLASH_MODE_OFF
-				)
+				parameterCache[key.type] = value
 			}
 			CameraParameterType.FOCUS -> {
 				if (value !is String) return false
-				captureRequestBuilder?.set(CaptureRequest.CONTROL_AF_MODE, value.toInt())
+				parameterCache[key.type] = value
 			}
 			CameraParameterType.SCENE_MODE -> {
 				if (value !is String) return false
-				val scene = value.toIntOrNull() ?: return false
-				captureRequestBuilder?.set(CaptureRequest.CONTROL_SCENE_MODE, scene)
-				if (scene == CaptureRequest.CONTROL_SCENE_MODE_DISABLED) {
-					//设置为使用场景模式
-					captureRequestBuilder?.set(
-						CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO
-					)
-				} else {
-					//设置为使用场景模式
-					captureRequestBuilder?.set(
-						CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_USE_SCENE_MODE
-					)
-				}
+				parameterCache[key.type] = value
 			}
 			CameraParameterType.IRIS -> {
 				if (value !is Float) return false
-				captureRequestBuilder?.set(CaptureRequest.LENS_APERTURE, value)
+				parameterCache[key.type] = value
 			}
 			CameraParameterType.WHITE_BALANCE -> {
 				if (value !is String) return false
-				val awbMode = value.toIntOrNull() ?: return false
-				captureRequestBuilder?.set(CaptureRequest.CONTROL_AWB_MODE, awbMode)
+				parameterCache[key.type] = value
 			}
 			CameraParameterType.ISO -> {
 				if (value !is String) return false
-				if (value == "auto") {
-					captureRequestBuilder?.set(
-						CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO
-					)
-					captureRequestBuilder?.set(
-						CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH
-					)
-				} else {
-					val isoValue = value.toIntOrNull() ?: return false
-					captureRequestBuilder?.set(CaptureRequest.SENSOR_SENSITIVITY, isoValue)
-				}
+				parameterCache[key.type] = value
+			}
+			CameraParameterType.PIC_ORIENTATION -> {
+				if (value !is Int) return false
+				this.mPicOrientation = value
 			}
 			else -> return false
 		}
@@ -338,33 +433,33 @@ class Camera2Device : ICameraDevice() {
 	
 	@Suppress("UNCHECKED_CAST")
 	override fun <V> getParameter(key: Parameters.Key<V>): V? {
-		val builder = captureRequestBuilder ?: return null
 		return when (key.type) {
-			CameraParameterType.AUTO_EXPOSURE -> {
-				(builder.get(CaptureRequest.CONTROL_AE_MODE) != CaptureRequest.CONTROL_AE_MODE_OFF)
+			CameraParameterType.AUTO_EXPOSURE -> parameterCache[key.type].let {
+				it != null && it != CaptureRequest.CONTROL_AE_MODE_OFF
 			}
-			CameraParameterType.EXPOSURE -> builder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION)
-			CameraParameterType.FLASH -> builder.get(CaptureRequest.FLASH_MODE) != CaptureRequest.FLASH_MODE_OFF
-			CameraParameterType.FOCUS -> builder.get(CaptureRequest.CONTROL_AF_MODE)?.toString()
-			CameraParameterType.ORIENTATION -> this.mDisplayOrientation // 屏幕方向，即拍照方向
+			CameraParameterType.EXPOSURE -> parameterCache[key.type]
+			CameraParameterType.FLASH -> parameterCache[key.type]
+			CameraParameterType.FOCUS -> parameterCache[key.type]?.toString()
+			CameraParameterType.PREVIEW_ORIENTATION -> this.mDisplayOrientation // 屏幕方向，即拍照方向
+			CameraParameterType.PIC_ORIENTATION -> this.mPicOrientation
 			CameraParameterType.JPEG_MIRROR -> this.mIsJpegMirror
 			CameraParameterType.PREVIEW_SIZE -> mImageReader?.let {
 				CameraSize(it.width, it.height)
 			}
-			CameraParameterType.PREVIEW_FORMAT -> mImageReader?.imageFormat?.toPreviewFormat()
-			CameraParameterType.IRIS -> builder.get(CaptureRequest.LENS_APERTURE)
-			CameraParameterType.SCENE_MODE -> builder.get(CaptureRequest.CONTROL_SCENE_MODE)?.toString()
-			CameraParameterType.WHITE_BALANCE -> builder.get(CaptureRequest.CONTROL_AWB_MODE)?.toString()
-			CameraParameterType.ISO -> builder.get(CaptureRequest.SENSOR_SENSITIVITY)?.toString()
+			CameraParameterType.IRIS -> parameterCache[key.type]
+			CameraParameterType.SCENE_MODE -> parameterCache[key.type]?.toString()
+			CameraParameterType.WHITE_BALANCE -> parameterCache[key.type]?.toString()
+			CameraParameterType.ISO -> parameterCache[key.type]?.toString()
 			else -> null
 		} as? V
 	}
 	
 	@Suppress("UNCHECKED_CAST")
 	override fun <T> getSupportParameters(supportKey: SupportParameters.Key<T>): T? {
+		val context = mContext.get() ?: return null
 		val cameraId = mCameraDeviceAtomic.get()?.id
 		if (cameraId.isNullOrEmpty()) return null
-		val manager = OverallContext.baseContext.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return null
+		val manager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return null
 		val cameraCharacteristics = manager.getCameraCharacteristics(cameraId) //获取对应的参数信息
 		return when (supportKey.type) {
 			CameraParameterType.AUTO_EXPOSURE -> cameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES).let {
@@ -374,21 +469,11 @@ class Camera2Device : ICameraDevice() {
 			CameraParameterType.EXPOSURE -> cameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)?.let {
 				IntRange(it.lower, it.upper)
 			}
-			CameraParameterType.PREVIEW_SIZE -> {
-				//获取当前输出帧的信息
-				val streamConfigurationMap = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-				//获取支持的分辨率集合
-				streamConfigurationMap?.getOutputSizes(mPreviewFormat.toFormat()).filterMap { size ->
-					CameraSize(size.width, size.height)
-				}
-			}
+			CameraParameterType.PREVIEW_SIZE -> getSupportPreviewSizes(cameraCharacteristics)
 			CameraParameterType.FLASH -> cameraCharacteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) ?: false
 			CameraParameterType.FOCUS -> cameraCharacteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES).filterMap {
 				it.toString()
 			}
-			CameraParameterType.PREVIEW_FORMAT -> cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)?.outputFormats?.filter {
-				it.isUserFormat()
-			}?.filterMap { it.toPreviewFormat() }
 			CameraParameterType.SCENE_MODE -> cameraCharacteristics.get(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES).filterMap {
 				it.toString()
 			}
@@ -401,14 +486,16 @@ class Camera2Device : ICameraDevice() {
 				if (it == null || it.isEmpty()) return@let false
 				it.any { mode -> mode != CaptureRequest.STATISTICS_FACE_DETECT_MODE_OFF }
 			}
+			CameraParameterType.SENSOR_ORIENTATION -> cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
 			else -> null
 		} as? T
 	}
 	
 	override fun startFaceDetection(): Boolean {
+		val context = mContext.get() ?: return false
 		val cameraId = mCameraDeviceAtomic.get()?.id
 		if (cameraId.isNullOrEmpty()) return false
-		val manager = OverallContext.baseContext.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return false
+		val manager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return false
 		val cameraCharacteristics = manager.getCameraCharacteristics(cameraId) //获取对应的参数信息
 		val supportFaceDetect = cameraCharacteristics.get(CameraCharacteristics.STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES)
 		if (supportFaceDetect == null || supportFaceDetect.isEmpty()) return false
@@ -417,15 +504,12 @@ class Camera2Device : ICameraDevice() {
 		} else if (supportFaceDetect.contains(CaptureRequest.STATISTICS_FACE_DETECT_MODE_FULL)) {
 			CaptureRequest.STATISTICS_FACE_DETECT_MODE_FULL
 		} else return false
-		captureRequestBuilder?.set(CaptureRequest.STATISTICS_FACE_DETECT_MODE, faceTypeId)
+		parameterCache["android.statistics.faceDetectMode"] = faceTypeId
 		return true
 	}
 	
 	override fun stopFaceDetection(): Boolean {
-		captureRequestBuilder?.set(
-			CaptureRequest.STATISTICS_FACE_DETECT_MODE,
-			CaptureRequest.STATISTICS_FACE_DETECT_MODE_OFF
-		)
+		parameterCache["android.statistics.faceDetectMode"] = CaptureRequest.STATISTICS_FACE_DETECT_MODE_OFF
 		return true
 	}
 	
@@ -433,52 +517,33 @@ class Camera2Device : ICameraDevice() {
 	 * 初始化imageReader捕获
 	 */
 	private fun initImageReader(width: Int, height: Int) {
-		//重置session
-		runCatching { mCameraSession?.stopRepeating() }
-		mCameraSession?.close()
-		mCameraSession = null
-		
 		runCatching { previewLock.lock() }
-		
+		runCatching { // 关闭旧的session
+			mCameraSession?.close()
+			mCameraSession = null
+		}
 		//关闭旧的imageReader
 		mImageReader?.also {
-			captureRequestBuilder?.removeTarget(it.surface)
 			it.close()
 		}
+		mImageReader = ImageReader.newInstance(width, height, mPreviewFormat.toFormat(), 2)
 		runCatching { previewLock.unlock() }
-		mImageReader = ImageReader.newInstance(width, height, mPreviewFormat.toFormat().also {
-			Log.d("camera2Tag", "当前使用的格式为 = $it")
-		}, 2).also {
-			captureRequestBuilder?.addTarget(it.surface)
-		}
 	}
 	
 	/**
 	 * 初始化摄像头handler
 	 */
 	private fun initHandler(cameraId: String) {
-		//创建handler线程
 		if (mCameraHandler != null) return
-		mCameraHandler = Handler(loadHandlerThread(cameraId).looper)
-	}
-	
-	private fun loadHandlerThread(cameraId: String): HandlerThread {
-		return mHandlerThread ?: HandlerThread("camera2Factory_${cameraId}").apply {
-			mHandlerThread = this
-			this.start()
+		
+		val threadName = "camera2Factory_${cameraId}_${System.currentTimeMillis()}"
+		val handlerThread = HandlerThread(threadName).apply {
+			start()
+			// 可选：设置线程优先级（相机线程建议高优先级）
+			android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
 		}
-	}
-	
-	private fun stopHandlerThread() {
-		mHandlerThread?.quitSafely()
-		try {
-			mHandlerThread?.join()
-			mCameraHandler?.removeCallbacksAndMessages(null)
-		} catch (e: Exception) {
-			e.printStackTrace()
-		}
-		mHandlerThread = null
-		mCameraHandler = null
+		mHandlerThread = handlerThread
+		mCameraHandler = Handler(handlerThread.looper)
 	}
 	
 	/**
@@ -486,9 +551,9 @@ class Camera2Device : ICameraDevice() {
 	 */
 	private fun readReaderBytes(imageReader: ImageReader?) {
 		//监听回调
-		val acquireNextImage = runCatching { imageReader?.acquireNextImage() }.getOrNull() ?: return
+		val acquireNextImage = runCatching { imageReader?.acquireLatestImage() }.getOrNull() ?: return
 		//获取每一帧数据
-		if (mImageReader == null || !isPreviewIng.get() || iPreviewListener == null) {
+		if (mImageReader == null || !isPreviewIng.get() || (pictureContinuation.get() == null && iPreviewListener == null)) {
 			acquireNextImage.close()
 			return
 		}
@@ -500,13 +565,13 @@ class Camera2Device : ICameraDevice() {
 		}
 		val width: Int
 		val height: Int
+		val format: Int
 		val imageBytes: ByteArray?
 		try {
 			width = acquireNextImage.width
 			height = acquireNextImage.height
-			imageBytes = Camera2CommonExt.imageDataToBytes(
-				acquireNextImage.format, acquireNextImage.planes, width, height
-			)
+			format = acquireNextImage.format
+			imageBytes = Camera2CommonExt.imageDataToBytes(format, acquireNextImage.planes, width, height)
 		} catch (e: Exception) {
 			e.printStackTrace()
 			return
@@ -515,6 +580,13 @@ class Camera2Device : ICameraDevice() {
 			runCatching { previewLock.unlock() }
 		}
 		if (imageBytes == null || !isPreviewIng.get()) return
+		// 拍照请求触发中
+		pictureContinuation.getAndSet(null)?.let {
+			it.invoke(imageBytes, format, width, height)
+			return
+		}
+		if (iPreviewListener == null) return
+		// 正常预览回调
 		pullPreview(imageBytes, width, height)
 	}
 	
@@ -532,147 +604,124 @@ class Camera2Device : ICameraDevice() {
 			val formatState = Camera2CommonExt.loadFormatState(outputFormats)
 			if (formatState != null) mPreviewFormat = formatState.toPreviewFormat()
 		}
-		//获取支持的分辨率集合
-		//获取最大缩放倍数
-		val maxZoom = cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
-		Log.d("Camera2Factory", "支持的最大缩放:$maxZoom")
-		//获取未缩放的正常预览画面大小
-		val rect = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
-		Log.d("Camera2Factory", "未缩放的正常预览画面大小:${rect}")
-		//获取是否支持自动曝光
 		//获取当前是前置还是后置
 		this.mIsJpegMirror = cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT
-		Log.d("Camera2Factory", "摄像头是否前置:${this.mIsJpegMirror}")
 		// 前置默认需要镜像
-		mDisplayOrientation = loadOrientation(
-			cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0,
-			this.mIsJpegMirror,
-			acRotation
-		)
-		Log.d("cameraDevice", "旋转方向为 = $mDisplayOrientation")
+		mSensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
+		mDisplayOrientation = loadOrientation(mSensorOrientation, this.mIsJpegMirror, acRotation)
 	}
 	
-	/**
-	 * 初始化预览参数
-	 */
-	private fun initPreviewCapture(cameraDevice: CameraDevice) {
-		//创建预览的数据
-		val captureRequest = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-		//设置为自动模式，单个控制生效
-		captureRequest.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-		captureRequest.set(CaptureRequest.CONTROL_AE_LOCK, false)
-		//自动对焦
-		captureRequest.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
-		this@Camera2Device.captureRequestBuilder = captureRequest
-	}
-	
-	override suspend fun takePicture(cropWidth:Int,cropHeight: Int): Bitmap? {
-		val cameraDevice = mCameraDeviceAtomic.get() ?: return null
-		mCameraSession?.close()
-		mCameraSession = null
-		val data = withTimeoutOrNull(3000) {
-			suspendCancellableCoroutine<ByteArray?> { continuation ->
-				val imageReader = ImageReader.newInstance(
-					mImageReader?.width ?: 640, mImageReader?.height ?: 480, ImageFormat.JPEG, 1
-				)
-				var mCaptureSession: CameraCaptureSession? = null
-				continuation.invokeOnCancellation {
-					imageReader.close()
-					mCaptureSession?.close()
+	override suspend fun takePicture(cropWidth: Int, cropHeight: Int): Bitmap? {
+		return withTimeoutOrNull(2000) {
+			suspendCancellableCoroutine { continuation ->
+				// 如果已经有拍照请求，直接失败（避免并发）
+				val callback: (ByteArray, Int, Int, Int) -> Unit = { bytes, format, width, height ->
+					val bmp = runCatching {
+						bytes.toBitmap(format, width, height)?.cropBitmap(// 旋转方向需要根据角度来计算,否则会出现方向不对,或者拉伸的问题
+							mPicOrientation % 360, mIsJpegMirror, cropWidth, cropHeight
+						)
+					}.onFailure { it.printStackTrace() }.getOrNull()
+					continuation.resume(bmp)
 				}
-				imageReader.setOnImageAvailableListener({
-					val image = runCatching { it.acquireNextImage() }.getOrNull() ?: return@setOnImageAvailableListener
-					try {
-						val buffer = image.planes[0].buffer
-						val data = ByteArray(buffer.remaining())
-						buffer.get(data)
-						if (continuation.isActive) continuation.resume(data)
-					} finally {
-						image.close()
-					}
-				}, mCameraHandler)
-				try {
-					cameraDevice.createCaptureSession(
-						listOf(imageReader.surface), object : CameraCaptureSession.StateCallback() {
-							override fun onConfigured(session: CameraCaptureSession) {
-								//这里处理拍照
-								mCaptureSession = session
-								session.capture(
-									createCaptureRequest(
-										cameraDevice, imageReader.surface
-									), object : CameraCaptureSession.CaptureCallback() {
-										override fun onCaptureFailed(session: CameraCaptureSession, request: CaptureRequest, failure: CaptureFailure) {
-											super.onCaptureFailed(session, request, failure)
-											//拍照失败
-											Log.d("camera2Tag", "拍照失败")
-											session.close()
-											imageReader.close()
-											mCaptureSession = null
-											if (continuation.isActive) continuation.resume(null)
-										}
-										
-										override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
-											super.onCaptureCompleted(session, request, result)
-											//拍照完成
-											Log.d("camera2Tag", "拍照完成")
-											imageReader.close()
-											session.close()
-											mCaptureSession = null
-										}
-									}, mCameraHandler
-								)
-							}
-							
-							override fun onConfigureFailed(session: CameraCaptureSession) {
-								session.close()
-								imageReader.close()
-								mCaptureSession = null
-								if (continuation.isActive) continuation.resume(null)
-							}
-						}, mCameraHandler
-					)
-				} catch (e: Exception) {
-					e.printStackTrace()
-					imageReader.close()
-					if (continuation.isActive) continuation.resume(null)
+				
+				if (!pictureContinuation.compareAndSet(null, callback)) {
+					continuation.resume(null)
+					return@suspendCancellableCoroutine
+				}
+				continuation.invokeOnCancellation {
+					pictureContinuation.compareAndSet(callback, null)
 				}
 			}
-		} ?: return null
-		return withContext(Dispatchers.IO) {
-			return@withContext data.toBitmap(this@Camera2Device.mDisplayOrientation,mIsJpegMirror,cropWidth,cropHeight)
 		}
 	}
 	
-	private fun createCaptureRequest(cameraDevice: CameraDevice, surface: Surface): CaptureRequest {
-		val captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-		captureBuilder.addTarget(surface)
-		captureBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-		// 保持方向正确
-		return captureBuilder.build()
+	/**
+	 * 获取支持的分辨率列表
+	 */
+	private fun getSupportPreviewSizes(characteristics: CameraCharacteristics): Array<CameraSupportSize>? {
+		//获取当前输出帧的信息
+		val streamConfigurationMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return null
+		val outputFormats = streamConfigurationMap.outputFormats?.filter { it.isUserFormat() }
+		if (outputFormats == null || outputFormats.isEmpty()) return null
+		val outputSupportSizes = mutableListOf<CameraSupportSize>()
+		outputFormats.forEach {
+			val outputSizes = streamConfigurationMap.getOutputSizes(it)
+			if (outputSizes.isNullOrEmpty()) return@forEach
+			outputSupportSizes.add(
+				CameraSupportSize(
+					it.toPreviewFormat(), outputSizes.map { size -> CameraSize(size.width, size.height) })
+			)
+		}
+		return outputSupportSizes.toTypedArray()
 	}
 	
 	/**
-	 * TextureView 设置图像变换矩阵，仅camera2适用
+	 * 创建预览的captureBuilder
 	 */
-	private fun setSurfaceTransformWithScale(view: TextureView) {
-		val reader = mImageReader ?: return
-		val matrix = Matrix()
-		val width = view.width.toFloat()
-		val height = view.height.toFloat()
-		val cx = width / 2f
-		val cy = height / 2f
-		// 2️⃣ 旋转
-		if (this.mDisplayOrientation != 0) matrix.postRotate(this.mDisplayOrientation.toFloat(), cx, cy)
-
-		// 4️⃣ 缩放，保证填充 TextureView
-		val rotatedWidth = if (this.mDisplayOrientation == 90 || this.mDisplayOrientation == 270) reader.height.toFloat() else reader.width.toFloat()
-		val rotatedHeight = if (this.mDisplayOrientation == 90 || this.mDisplayOrientation == 270) reader.width.toFloat() else reader.height.toFloat()
-
-		// 计算缩放比例相对于 Bitmap 尺寸
-		val scale = (width / rotatedWidth).coerceAtLeast(height / rotatedHeight)
-		val scaleX = scale * rotatedWidth / width
-		val scaleY = scale * rotatedHeight / height
-		matrix.postScale(scaleX, scaleY, cx, cy)
-		view.setTransform(matrix)
+	private fun createCaptureRequest(cameraDevice: CameraDevice): CaptureRequest {
+		val captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+		//设置为自动模式，单个控制生效
+		captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+		captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false)
+		//自动对焦
+		captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO)
+		parameterCache.forEach {
+			val value = it.value
+			when (it.key) {
+				CameraParameterType.AUTO_EXPOSURE -> {
+					captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, (value as Int))
+				}
+				CameraParameterType.EXPOSURE -> {
+					captureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, value as Int)
+				}
+				CameraParameterType.FLASH -> {
+					captureRequestBuilder.set(CaptureRequest.FLASH_MODE, if (value == true) CaptureRequest.FLASH_MODE_TORCH else CaptureRequest.FLASH_MODE_OFF)
+				}
+				CameraParameterType.FOCUS -> {
+					captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, (value as String).toInt())
+				}
+				CameraParameterType.SCENE_MODE -> {
+					val scene = (value as? String)?.toIntOrNull() ?: return@forEach
+					captureRequestBuilder.set(CaptureRequest.CONTROL_SCENE_MODE, scene)
+					if (scene == CaptureRequest.CONTROL_SCENE_MODE_DISABLED) {
+						//设置为使用场景模式
+						captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+					} else {
+						//设置为使用场景模式
+						captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_USE_SCENE_MODE)
+					}
+				}
+				CameraParameterType.IRIS -> {
+					captureRequestBuilder.set(CaptureRequest.LENS_APERTURE, value as Float)
+				}
+				CameraParameterType.WHITE_BALANCE -> {
+					val awbMode = (value as String).toIntOrNull() ?: return@forEach
+					captureRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, awbMode)
+				}
+				CameraParameterType.ISO -> {
+					if (value !is String) return@forEach
+					if (value == "auto") {
+						captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+						captureRequestBuilder.set(
+							CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH
+						)
+					} else {
+						val isoValue = value.toIntOrNull() ?: return@forEach
+						captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, isoValue)
+					}
+				}
+				"android.statistics.faceDetectMode" -> {
+					captureRequestBuilder.set(CaptureRequest.STATISTICS_FACE_DETECT_MODE, value as Int)
+				}
+				else -> return@forEach
+			}
+		}
+		mSurface?.let {
+			captureRequestBuilder.addTarget(it)
+		}
+		mImageReader?.surface?.let {
+			captureRequestBuilder.addTarget(it)
+		}
+		return captureRequestBuilder.build()
 	}
 }

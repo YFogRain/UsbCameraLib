@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
+import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
@@ -15,29 +16,30 @@ import android.hardware.camera2.TotalCaptureResult
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Process
 import android.util.Log
 import android.view.Surface
 import android.view.SurfaceView
 import android.view.TextureView
+import com.rain.uvc.camera.ICameraDevice
 import com.rain.uvc.camera.protogenesis.camera1.isUserFormat
 import com.rain.uvc.camera.protogenesis.camera1.toFormat
 import com.rain.uvc.camera.protogenesis.camera1.toPreviewFormat
-import com.rain.uvc.parameters.Parameters
-import com.rain.uvc.parameters.SupportParameters
-import com.rain.uvc.camera.ICameraDevice
 import com.rain.uvc.mode.CameraSize
 import com.rain.uvc.mode.CameraSupportSize
 import com.rain.uvc.mode.FaceDetectMode
 import com.rain.uvc.parameters.CameraParameterType
 import com.rain.uvc.parameters.CameraPreviewFormat
+import com.rain.uvc.parameters.Parameters
+import com.rain.uvc.parameters.SupportParameters
 import com.rain.uvc.utils.cropBitmap
 import com.rain.uvc.utils.toBitmap
-import com.rain.uvc.utils.updateSurfaceTransformWithScale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.ReentrantLock
@@ -58,6 +60,12 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	
 	// context对象实例
 	private val mContext = AtomicReference<Context>()
+	
+	// 设置当前的打开状态,如果为false时，则不执行打开直接关闭
+	private val isOpenCancelled = AtomicBoolean(false)
+	
+	// 是否正在打开
+	private val isOpening = AtomicBoolean(false)
 	
 	/**
 	 * 拍照的回调
@@ -84,6 +92,9 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	//打开回调
 	private var iOpenListener: ((Boolean, String?) -> Unit)? = null
 	
+	// 当前传感器方向
+	private var mSensorOrientation: Int = 0
+	
 	// 缓存控件
 	private val mTextureCache = AtomicReference<TextureView>()
 	
@@ -96,23 +107,34 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	 */
 	private val openStateCallBack = object : CameraDevice.StateCallback() {
 		override fun onOpened(camera: CameraDevice) {
-			this@Camera2Device.mCameraDeviceAtomic.set(camera)
+			Log.d("Camera2Device", "打开成功 - isOpenCancelled :${isOpenCancelled.get()}")
+			if (isOpenCancelled.get()) {
+				camera.close()
+				releaseHandler()
+				return
+			}
+			
+			if (!mCameraDeviceAtomic.compareAndSet(null, camera)) {
+				camera.close()
+				releaseHandler()
+				return
+			}
+			isOpening.set(false)
 			initImageReader(640, 480)
 			resultOpen(true, "打开成功")
 		}
 		
 		override fun onDisconnected(camera: CameraDevice) {
+			Log.d("Camera2Device", "断开连接")
+			closeCamera()
 			iDetachedCloseListener?.invoke()
 		}
 		
 		override fun onError(camera: CameraDevice, error: Int) {
-			this@Camera2Device.mCameraDeviceAtomic.set(null)
+			Log.d("Camera2Device", "打开失败,失败code:$error")
+			isOpening.set(false)
+			closeCamera()
 			resultOpen(false, "获取摄像头打开失败,失败code:$error")
-		}
-		
-		override fun onClosed(camera: CameraDevice) {
-			super.onClosed(camera)
-			stopHandlerThread()
 		}
 	}
 	
@@ -134,6 +156,31 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	}
 	
 	/**
+	 * 取消相机打开操作（核心方法）
+	 */
+	fun cancelOpen() {
+		Log.d("Camera2Device", "取消打开~ :${isOpening.get()}")
+		if (!isOpening.get()) return
+		isOpenCancelled.set(true)
+		val device = mCameraDeviceAtomic.get()
+		if (device != null) {
+			mCameraHandler?.post {
+				device.close()
+			}
+		} else {
+			releaseHandler()
+		}
+		isOpening.set(false)
+	}
+	
+	private fun releaseHandler() {
+		mContext.set(null)
+		mHandlerThread?.quitSafely()
+		mHandlerThread = null
+		mCameraHandler = null
+	}
+	
+	/**
 	 * 打开结果回调
 	 */
 	private fun resultOpen(isSuccess: Boolean, message: String) {
@@ -143,7 +190,12 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	
 	@SuppressLint("MissingPermission")
 	fun open(context: Context, cameraId: String, acRotation: Int, listener: ((Boolean, String?) -> Unit)) {
+		if (!isOpening.compareAndSet(false, true)) {
+			listener(false, "camera is opening")
+			return
+		}
 		this.iOpenListener = listener
+		isOpenCancelled.set(false)
 		val manager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
 		val cameraList = runCatching {
 			manager?.cameraIdList
@@ -158,6 +210,7 @@ class Camera2Device(context: Context) : ICameraDevice() {
 			resultOpen(false, "获取camera2管理类失败")
 			return
 		}
+		
 		//执行打开摄像头
 		initCharacteristics(manager, cameraId, acRotation)
 		try {
@@ -169,24 +222,75 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	}
 	
 	override fun closeCamera(): Boolean {
-		mCameraSession?.close()
-		mCameraSession = null
-		
-		runCatching { previewLock.lock() }
-		mImageReader?.close()
-		mImageReader = null
-		
-		runCatching { previewLock.unlock() }
-		// 清理控件
-		mTextureCache.set(null)
-		
-		mCameraDeviceAtomic.get()?.close()
-		mCameraDeviceAtomic.set(null)
-		mSurface = null
-		parameterCache.clear()
-		stopHandlerThread()
-		mContext.set(null)
+		// 需要获取旧的camera对象，并置为null，保证其他调用无法使用
+		val oldDevice = mCameraDeviceAtomic.getAndSet(null).also {
+			Log.d("Camera2Device", "获取摄像头设备对象:$it")
+		} ?: return true
+		val handler = mCameraHandler ?: run {
+			Log.d("Camera2Device", "未初始化cameraHandler")
+			oldDevice.close()
+			return true
+		}
+		handler.post {
+			try {
+				stopPreviewInternal() // 线程内停止预览
+				runCatching { mCameraSession?.close() }
+				mCameraSession = null
+				runCatching {
+					previewLock.lock()
+					try {
+						val reader = mImageReader
+						if (reader != null) {
+							while (true) {
+								val image = try {
+									reader.acquireLatestImage()
+								} catch (_: Exception) {
+									null
+								} ?: break
+								image.close()
+							}
+							reader.close()
+						}
+					} finally {
+						previewLock.unlock()
+					}
+					
+					mImageReader = null
+				}
+				runCatching { mSurface?.release() }
+				mSurface = null
+				runCatching { oldDevice.close() }
+			} catch (e: Exception) {
+				e.printStackTrace()
+			} finally {
+				Log.d("Camera2Device", "执行关闭完毕，开始执行退出~~~~~~")
+				releaseHandler()
+				Log.d("Camera2Device", "执行退出完成")
+			}
+		}
 		return true
+	}
+	
+	private fun stopPreviewInternal() {
+		if (!isPreviewIng.get()) return
+		isPreviewIng.set(false)
+		mImageReader?.setOnImageAvailableListener(null, null)
+		runCatching {
+			if (previewLock.tryLock(500, TimeUnit.MILLISECONDS)) {
+				try {
+					while (true) {
+						val image = mImageReader?.acquireNextImage() ?: break
+						image.close()
+					}
+				} finally {
+					previewLock.unlock()
+				}
+			}
+		}
+		runCatching {
+			mCameraSession?.stopRepeating()
+		}
+		isOpenPreviewIng.set(false)
 	}
 	
 	override fun setPreviewSize(width: Int, height: Int, format: CameraPreviewFormat): Boolean {
@@ -199,21 +303,28 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	override fun startPreview() {
 		val cameraDevice = mCameraDeviceAtomic.get()
 		if (cameraDevice == null || isPreviewIng.get() || isOpenPreviewIng.get()) return
-		updateTexture() // 更新分辨率后重新设置
-		isOpenPreviewIng.set(true)
+		isOpenPreviewIng.compareAndSet(false, true)
 		if (mCameraSession == null) {
-			cameraDevice.createCaptureSession(ArrayList<Surface>().also {
-				this@Camera2Device.mSurface?.let { surface -> it.add(surface) }
-				mImageReader?.surface?.let { surface -> it.add(surface) }
-			}, object : CameraCaptureSession.StateCallback() {
-				override fun onConfigured(session: CameraCaptureSession) {
-					mCameraSession = session
-					startPreviewReader(createCaptureRequest(cameraDevice))
-				}
+			try {
+				cameraDevice.createCaptureSession(ArrayList<Surface>().also {
+					this@Camera2Device.mSurface?.let { surface -> it.add(surface) }
+					mImageReader?.surface?.let { surface -> it.add(surface) }
+				}, object : CameraCaptureSession.StateCallback() {
+					override fun onConfigured(session: CameraCaptureSession) {
+						mCameraSession = session
+						startPreviewReader(createCaptureRequest(cameraDevice))
+					}
+					
+					override fun onConfigureFailed(session: CameraCaptureSession) {
+						isOpenPreviewIng.set(false)
+						session.close()
+					}
+				}, mCameraHandler)
+			} catch (e: CameraAccessException) {
+				e.printStackTrace()
+				isOpenPreviewIng.set(false)
 				
-				override fun onConfigureFailed(session: CameraCaptureSession) {
-				}
-			}, mCameraHandler)
+			}
 		} else startPreviewReader(createCaptureRequest(cameraDevice))
 	}
 	
@@ -221,9 +332,15 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		mImageReader?.setOnImageAvailableListener({
 			readReaderBytes(it)
 		}, mCameraHandler)
-		mCameraSession?.setRepeatingRequest(captureRequest, mRepeatingCallback, mCameraHandler)
+		try {
+			mCameraSession?.setRepeatingRequest(captureRequest, mRepeatingCallback, mCameraHandler)
+			isPreviewIng.set(true)
+		} catch (e: CameraAccessException) {
+			e.printStackTrace()
+			isPreviewIng.set(false)
+			mImageReader?.setOnImageAvailableListener(null, null)
+		}
 		isOpenPreviewIng.set(false)
-		isPreviewIng.set(true)
 	}
 	
 	override fun stopPreview() {
@@ -424,28 +541,16 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	 * 初始化摄像头handler
 	 */
 	private fun initHandler(cameraId: String) {
-		//创建handler线程
 		if (mCameraHandler != null) return
-		mCameraHandler = Handler(loadHandlerThread(cameraId).looper)
-	}
-	
-	private fun loadHandlerThread(cameraId: String): HandlerThread {
-		return mHandlerThread ?: HandlerThread("camera2Factory_${cameraId}").apply {
-			mHandlerThread = this
-			this.start()
+		
+		val threadName = "camera2Factory_${cameraId}_${System.currentTimeMillis()}"
+		val handlerThread = HandlerThread(threadName).apply {
+			start()
+			// 可选：设置线程优先级（相机线程建议高优先级）
+			Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
 		}
-	}
-	
-	private fun stopHandlerThread() {
-		mHandlerThread?.quitSafely()
-		try {
-			mHandlerThread?.join()
-			mCameraHandler?.removeCallbacksAndMessages(null)
-		} catch (e: Exception) {
-			e.printStackTrace()
-		}
-		mHandlerThread = null
-		mCameraHandler = null
+		mHandlerThread = handlerThread
+		mCameraHandler = Handler(handlerThread.looper)
 	}
 	
 	/**
@@ -509,9 +614,32 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		//获取当前是前置还是后置
 		this.mIsJpegMirror = cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT
 		// 前置默认需要镜像
-		mDisplayOrientation = loadOrientation(
-			cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0, this.mIsJpegMirror, acRotation
-		)
+		mSensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
+		mDisplayOrientation = loadOrientation(mSensorOrientation, this.mIsJpegMirror, acRotation)
+	}
+	
+	override suspend fun takePicture(cropWidth: Int, cropHeight: Int): Bitmap? {
+		return withTimeoutOrNull(2000) {
+			suspendCancellableCoroutine { continuation ->
+				// 如果已经有拍照请求，直接失败（避免并发）
+				val callback: (ByteArray, Int, Int, Int) -> Unit = { bytes, format, width, height ->
+					val bmp = runCatching {
+						bytes.toBitmap(format, width, height)?.cropBitmap(// 旋转方向需要根据角度来计算,否则会出现方向不对,或者拉伸的问题
+							mPicOrientation % 360, mIsJpegMirror, cropWidth, cropHeight
+						)
+					}.onFailure { it.printStackTrace() }.getOrNull()
+					continuation.resume(bmp)
+				}
+				
+				if (!pictureContinuation.compareAndSet(null, callback)) {
+					continuation.resume(null)
+					return@suspendCancellableCoroutine
+				}
+				continuation.invokeOnCancellation {
+					pictureContinuation.compareAndSet(callback, null)
+				}
+			}
+		}
 	}
 	
 	override suspend fun takeCapturePicture(width: Int, height: Int, cropWidth: Int, cropHeight: Int): Bitmap? {
@@ -553,28 +681,28 @@ class Camera2Device(context: Context) : ICameraDevice() {
 								mCaptureSession = session
 								session.capture(
 									cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
-									addTarget(mCaptureReader.surface)
-									set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-								}.build(), object : CameraCaptureSession.CaptureCallback() {
-									override fun onCaptureFailed(session: CameraCaptureSession, request: CaptureRequest, failure: CaptureFailure) {
-										super.onCaptureFailed(session, request, failure)
-										//拍照失败
-										Log.d("camera2Tag", "拍照失败")
-										session.close()
-										mCaptureReader.close()
-										mCaptureSession = null
-										if (continuation.isActive) continuation.resume(null)
-									}
-									
-									override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
-										super.onCaptureCompleted(session, request, result)
-										//拍照完成
-										Log.d("camera2Tag", "拍照完成")
-										mCaptureReader.close()
-										session.close()
-										mCaptureSession = null
-									}
-								}, mCameraHandler
+										addTarget(mCaptureReader.surface)
+										set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+									}.build(), object : CameraCaptureSession.CaptureCallback() {
+										override fun onCaptureFailed(session: CameraCaptureSession, request: CaptureRequest, failure: CaptureFailure) {
+											super.onCaptureFailed(session, request, failure)
+											//拍照失败
+											Log.d("camera2Tag", "拍照失败")
+											session.close()
+											mCaptureReader.close()
+											mCaptureSession = null
+											if (continuation.isActive) continuation.resume(null)
+										}
+										
+										override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
+											super.onCaptureCompleted(session, request, result)
+											//拍照完成
+											Log.d("camera2Tag", "拍照完成")
+											mCaptureReader.close()
+											session.close()
+											mCaptureSession = null
+										}
+									}, mCameraHandler
 								)
 							}
 							
@@ -600,30 +728,6 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		}
 	}
 	
-	override suspend fun takePicture(cropWidth: Int, cropHeight: Int): Bitmap? {
-		return withTimeoutOrNull(3000) {
-			suspendCancellableCoroutine { continuation ->
-				// 如果已经有拍照请求，直接失败（避免并发）
-				val callback: (ByteArray, Int, Int, Int) -> Unit = { bytes, format, width, height ->
-					val bmp = runCatching {
-						bytes.toBitmap(format, width, height)?.cropBitmap(
-							mPicOrientation, mIsJpegMirror, cropWidth, cropHeight
-						)
-					}.onFailure { it.printStackTrace() }.getOrNull()
-					continuation.resume(bmp)
-				}
-				
-				if (!pictureContinuation.compareAndSet(null, callback)) {
-					continuation.resume(null)
-					return@suspendCancellableCoroutine
-				}
-				continuation.invokeOnCancellation {
-					pictureContinuation.compareAndSet(callback, null)
-				}
-			}
-		}
-	}
-	
 	/**
 	 * 获取支持的分辨率列表
 	 */
@@ -631,7 +735,7 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		//获取当前输出帧的信息
 		val streamConfigurationMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return null
 		val outputFormats = streamConfigurationMap.outputFormats?.filter { it.isUserFormat() }
-		if (outputFormats.isNullOrEmpty()) return null
+		if (outputFormats == null || outputFormats.isEmpty()) return null
 		val outputSupportSizes = mutableListOf<CameraSupportSize>()
 		outputFormats.forEach {
 			val outputSizes = streamConfigurationMap.getOutputSizes(it)
@@ -713,28 +817,4 @@ class Camera2Device(context: Context) : ICameraDevice() {
 		}
 		return captureRequestBuilder.build()
 	}
-	
-	/**
-	 * 更新textureView的宽高
-	 */
-	private fun updateTexture() {
-		val reader = mImageReader ?: return
-		mTextureCache.get()?.also { view -> // 设置
-			mTextureCache.get()?.surfaceTexture?.setDefaultBufferSize(reader.width, reader.height)
-			val sensorOrientation = getSupportParameters(SupportParameters.SENSOR_ORIENTATION) ?: 0
-			val isSwapped = sensorOrientation == 90 || sensorOrientation == 270
-			val bufferWidth: Int
-			val bufferHeight: Int
-			if (isSwapped) {
-				bufferWidth = reader.height   // 1080
-				bufferHeight = reader.width   // 1920
-			} else {
-				bufferWidth = reader.width    // 1920
-				bufferHeight = reader.height  // 1080
-			}
-			view.updateSurfaceTransformWithScale(bufferWidth, bufferHeight, this.mDisplayOrientation)
-		}
-	}
-	
-	
 }

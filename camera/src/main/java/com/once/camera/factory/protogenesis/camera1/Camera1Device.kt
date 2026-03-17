@@ -65,7 +65,7 @@ class Camera1Device(camera: Camera, cameraId: Int, acRotation: Int) : ICameraDev
 		return runCatching { mCamera.parameters = parameters }.isSuccess
 	}
 	
-	override suspend fun startPreview(): Boolean {
+	override fun startPreview(): Boolean {
 		if (isPreviewIng.get()) return false
 		val camera = mCameraAtomic.get() ?: return false
 		val previewSize = camera.parameters.previewSize
@@ -283,7 +283,7 @@ class Camera1Device(camera: Camera, cameraId: Int, acRotation: Int) : ICameraDev
 		}
 	}
 	
-	override suspend fun takePicture(cropWidth:Int,cropHeight: Int): Bitmap? {
+	override suspend fun takePicture(cropWidth: Int, cropHeight: Int): Bitmap? {
 		val camera = mCameraAtomic.get() ?: return null
 		val data = withTimeoutOrNull(3000) {
 			suspendCancellableCoroutine<ByteArray?> { continuation ->
@@ -297,7 +297,7 @@ class Camera1Device(camera: Camera, cameraId: Int, acRotation: Int) : ICameraDev
 		} ?: return null
 		return withContext(Dispatchers.IO) {
 			// jpeg转为bitmap
-			return@withContext data.toBitmap(this@Camera1Device.mDisplayOrientation,mIsJpegMirror,cropWidth,cropHeight)
+			return@withContext data.toBitmap(this@Camera1Device.mDisplayOrientation, mIsJpegMirror, cropWidth, cropHeight)
 		}
 	}
 	

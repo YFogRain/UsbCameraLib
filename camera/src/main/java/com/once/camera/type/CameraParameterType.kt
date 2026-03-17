@@ -14,7 +14,6 @@ object CameraParameterType {
 	const val SATURATION: String = "com.camera.control.saturation" //饱和度
 	const val ZOOM: String = "com.camera.control.zoom" //缩放
 	const val FLASH: String = "com.camera.control.flash" //闪光灯
-	const val ORIENTATION: String = "com.camera.control.orientation" // 方向
 	const val JPEG_MIRROR: String = "com.camera.control.jpeg_mirror" // 是否拍照镜像
 	const val FOCUS: String = "com.camera.control.focus" //焦距设置
 	const val IRIS: String = "com.camera.control.iris" //光圈
@@ -24,4 +23,8 @@ object CameraParameterType {
 	const val COLOR_EFFECTS: String = "com.camera.control.color_effects" //滤镜效果
 	const val ISO: String = "com.camera.control.iso" //iso值
 	const val FACE_DETECT: String = "com.camera.control.face_detect" //人脸检测
+	
+	const val PREVIEW_ORIENTATION: String = "com.camera.control.preview_orientation" // 方向
+	const val SENSOR_ORIENTATION: String = "com.camera.control.sensor_orientation" // 获取传感器方向
+	const val PIC_ORIENTATION: String = "com.camera.control.pic_orientation" // 拍照方向。默认跟预览方向相同
 }

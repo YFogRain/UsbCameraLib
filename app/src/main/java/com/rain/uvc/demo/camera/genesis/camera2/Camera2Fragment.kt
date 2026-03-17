@@ -1,7 +1,6 @@
 package com.rain.uvc.demo.camera.genesis.camera2
 
 import android.content.pm.PackageManager
-import android.hardware.usb.UsbDevice
 import android.os.Bundle
 import android.widget.Toast
 import androidx.core.content.ContextCompat

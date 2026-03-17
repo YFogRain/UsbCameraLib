@@ -190,7 +190,7 @@ object CameraControlHelper {
 				suspendCancellableCoroutine { continuation ->
 					val camera2Device = Camera2Device(context)
 					continuation.invokeOnCancellation {
-						camera2Device.close()
+						camera2Device.cancelOpen()
 					}
 					camera2Device.open(context, cameraId, acRotation) { isSuccess, message ->
 						if (continuation.isActive) {
