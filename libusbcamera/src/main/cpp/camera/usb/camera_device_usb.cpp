@@ -11,9 +11,9 @@
 #include "libuvc/libuvc_internal.h"
 
 CameraDeviceUsbImpl::CameraDeviceUsbImpl(uvc_context_t *context,
-        uvc_device_t *device,
-        uvc_device_handle_t *deviceHandle,
-        int fd)
+                                         uvc_device_t *device,
+                                         uvc_device_handle_t *deviceHandle,
+                                         int fd)
         : mContext(context), mDevice(device), mDeviceHandle(deviceHandle), mFd(fd) {
     mCameraStream = new CameraStreamUsbImpl(deviceHandle);
 }
@@ -22,6 +22,7 @@ CameraDeviceUsbImpl::~CameraDeviceUsbImpl() {
     mCameraStream->stopPreview();
     mCameraStream->releaseWindows();
     mCameraStream->releasePreviewFunc();
+    releaseButtonListener(); // 释放button的监听
     delete mCameraStream;
     if (LIKELY(mDeviceHandle)) {
         // 关闭对应的设备
@@ -182,14 +183,16 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
             break;
         case CAMERA_PARAMETER_AUTO_WHITE_BALANCE:
             uint8_t autoWhiteBalance;
-            if (uvc_get_white_balance_temperature_auto(mDeviceHandle, &autoWhiteBalance, UVC_GET_CUR) == UVC_SUCCESS) {
+            if (uvc_get_white_balance_temperature_auto(mDeviceHandle, &autoWhiteBalance,
+                                                       UVC_GET_CUR) == UVC_SUCCESS) {
                 return autoWhiteBalance; // 说明开启的自动模式
             }
             break;
         case CAMERA_PARAMETER_WHITE_BALANCE:
             // 其他情况，返回当前的模式值
             uint16_t whiteBalance;
-            if (uvc_get_white_balance_temperature(mDeviceHandle, &whiteBalance, UVC_GET_CUR) == UVC_SUCCESS) {
+            if (uvc_get_white_balance_temperature(mDeviceHandle, &whiteBalance, UVC_GET_CUR) ==
+                UVC_SUCCESS) {
                 return whiteBalance;
             }
             break;
@@ -320,7 +323,8 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
         uint16_t min;
         uint16_t max;
         if (uvc_get_white_balance_temperature(mDeviceHandle, &min, UVC_GET_MIN) == UVC_SUCCESS) {
-            if (uvc_get_white_balance_temperature(mDeviceHandle, &max, UVC_GET_MAX) == UVC_SUCCESS) {
+            if (uvc_get_white_balance_temperature(mDeviceHandle, &max, UVC_GET_MAX) ==
+                UVC_SUCCESS) {
                 return std::make_pair(min, max);
             }
         }
@@ -407,3 +411,109 @@ int CameraDeviceUsbImpl::getFormatType(uint8_t descriptorSubtype) {
             return -1;
     }
 }
+
+bool CameraDeviceUsbImpl::setButtonListener(JavaVM *vm, JNIEnv *env, jobject listener) {
+    LOG_D("开始初始化设置监听。。。。。。。。。。");
+    std::lock_guard<std::mutex> lock(buttonMutex);
+    // 先释放旧的（包含 callback）
+    // 1️⃣ 释放旧的 Java listener（不动 UVC callback）
+    if (buttonListener && theVM) {
+        JNIEnv *envOld = nullptr;
+        if (theVM->GetEnv((void **) &envOld, JNI_VERSION_1_6) == JNI_OK) {
+            envOld->DeleteGlobalRef(buttonListener);
+        } else if (theVM->AttachCurrentThread(&envOld, nullptr) == JNI_OK) {
+            envOld->DeleteGlobalRef(buttonListener);
+            theVM->DetachCurrentThread();
+        }
+    }
+    buttonListener = nullptr;
+    onButtonMethod = nullptr;
+    theVM = nullptr;
+    LOG_D("旧资源释放完毕");
+    if (!vm || !env || !listener) {
+        LOG_E("listener is null");
+        return true;
+    }
+    this->theVM = vm;
+    this->buttonListener = env->NewGlobalRef(listener);;
+    if (!this->buttonListener) {
+        LOG_E("监听设置失败，listener为null");
+        return false;
+    }
+    jclass buttonClass = env->GetObjectClass(listener);
+    if (buttonClass) {
+        //宽高
+        this->onButtonMethod = env->GetMethodID(buttonClass, "buttonClick", "(II)V");
+    }
+    env->ExceptionClear();
+    if (!onButtonMethod) {
+        env->DeleteGlobalRef(listener);
+        this->buttonListener = nullptr;
+        LOG_E("设置监听失败");
+        return false;
+    }
+    if (!buttonCallbackRegistered && mDeviceHandle) {
+        uvc_set_button_callback(mDeviceHandle, CameraDeviceUsbImpl::uvc_button_callback, this);
+        buttonCallbackRegistered = true;
+    }
+
+    return true;
+}
+
+void CameraDeviceUsbImpl::releaseButtonListener() {
+    std::lock_guard<std::mutex> lock(buttonMutex);
+    // ✅ 先关闭 callback（非常关键）
+    if (buttonCallbackRegistered && mDeviceHandle) {
+        uvc_set_button_callback(mDeviceHandle, nullptr, nullptr);
+        buttonCallbackRegistered = false;
+    }
+    if (buttonListener && theVM) {
+        JNIEnv *env = nullptr;
+        if (theVM->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_OK) {
+            env->DeleteGlobalRef(buttonListener);
+        } else if (theVM->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+            env->DeleteGlobalRef(buttonListener);
+            theVM->DetachCurrentThread();
+        }
+    }
+    buttonListener = nullptr;
+    onButtonMethod = nullptr;
+    theVM = nullptr;
+    LOG_D("Button listener released");
+}
+
+/**
+* 按钮回调
+*/
+void CameraDeviceUsbImpl::uvc_button_callback(int button, int state, void *user_ptr) {
+    LOG_D("CameraDeviceButton = 收到按钮事件= {button=%d,state=%d}", button, state);
+    if (!user_ptr) return;
+    auto *device = static_cast<CameraDeviceUsbImpl *>(user_ptr);
+    device->onButtonStateCallback(button, state);
+}
+
+void CameraDeviceUsbImpl::onButtonStateCallback(int type, int state) {
+    std::lock_guard<std::mutex> lock(buttonMutex);
+    if (!theVM || !buttonListener || !onButtonMethod) return;
+    JNIEnv *env = nullptr;
+    bool needDetach = false;
+    // 获取 JNIEnv（当前线程是 libusb 线程）
+    if (theVM->GetEnv((void **) &env, JNI_VERSION_1_6) != JNI_OK) {
+        if (theVM->AttachCurrentThread(&env, nullptr) != JNI_OK) {
+            LOG_E("AttachCurrentThread failed");
+            return;
+        }
+        needDetach = true;
+    }
+    // 调用 Java
+    env->CallVoidMethod(buttonListener, onButtonMethod, type, state);
+    // 异常检查（很重要）
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        LOG_E("Java exception in onButton");
+    }
+    if (needDetach) {
+        theVM->DetachCurrentThread();
+    }
+}
+

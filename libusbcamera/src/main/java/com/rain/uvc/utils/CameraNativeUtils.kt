@@ -1,6 +1,7 @@
 package com.rain.uvc.utils
 
 import android.view.Surface
+import com.rain.uvc.listener.IButtonListener
 import com.rain.uvc.listener.IFrameListener
 import com.rain.uvc.mode.CameraSize
 import com.rain.uvc.mode.CameraSupportSize
@@ -110,6 +111,14 @@ object CameraNativeUtils {
 	 */
 	@JvmStatic
 	external fun setPreviewListener(nativeId: Long, listener: IFrameListener?, mode: Int): Boolean
+	
+	/**
+	 * 设置按钮监听
+	 * @param nativeId 设置的对应id
+	 * @param listener 监听器
+	 */
+	@JvmStatic
+	external fun setButtonListener(nativeId: Long, listener: IButtonListener?): Boolean
 	
 	/**
 	 * 获取支持的参数信息

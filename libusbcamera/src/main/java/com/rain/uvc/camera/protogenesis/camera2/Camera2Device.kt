@@ -25,6 +25,7 @@ import com.rain.uvc.camera.ICameraDevice
 import com.rain.uvc.camera.protogenesis.camera1.isUserFormat
 import com.rain.uvc.camera.protogenesis.camera1.toFormat
 import com.rain.uvc.camera.protogenesis.camera1.toPreviewFormat
+import com.rain.uvc.listener.IButtonListener
 import com.rain.uvc.mode.CameraSize
 import com.rain.uvc.mode.CameraSupportSize
 import com.rain.uvc.mode.FaceDetectMode
@@ -101,7 +102,9 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	init {
 		mContext.set(context.applicationContext)
 	}
-	
+	override fun getDeviceId(): String? {
+		return mCameraDeviceAtomic.get()?.id
+	}
 	/**
 	 * 打开结果回调
 	 */
@@ -372,6 +375,9 @@ class Camera2Device(context: Context) : ICameraDevice() {
 	override fun setDisplaySurface(surface: Surface): Boolean {
 		mTextureCache.set(null)
 		return setDisplaySurfaceData(surface)
+	}
+	
+	override fun setButtonListener(listener: IButtonListener?) {
 	}
 	
 	private fun setDisplaySurfaceData(surface: Surface): Boolean {

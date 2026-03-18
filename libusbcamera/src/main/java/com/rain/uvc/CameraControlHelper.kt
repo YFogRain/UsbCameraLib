@@ -153,7 +153,7 @@ object CameraControlHelper {
 			}
 			return@withContext Result.success(
 				CameraUvcDevice(
-					context, nativeId, usbDevice.deviceName, usbDeviceConnection
+					context, nativeId, usbDevice.deviceName, "${usbDevice.vendorId}-${usbDevice.productId}", usbDeviceConnection
 				)
 			)
 		}

@@ -20,6 +20,7 @@ import com.rain.uvc.parameters.SupportParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 
@@ -63,8 +64,6 @@ class CameraCppViewModel : BaseViewModel() {
 				openResultFlow.emit(message)
 				return@launch
 			}
-			initCameraParameters(cameraDevice)
-			
 			val previewSizes = cameraDevice.getSupportedParameter(SupportParameters.PREVIEW_SIZE)?.find { it.format == CameraPreviewFormat.MJPEG || it.format == CameraPreviewFormat.JPEG }?.sizes
 			Log.d("CameraCppViewModel", "分辨率列表:${GsonHelper.getHelper().modeToJson(previewSizes)}")
 			if (previewSizes.isNullOrEmpty()) {
@@ -72,7 +71,7 @@ class CameraCppViewModel : BaseViewModel() {
 				openResultFlow.emit("未获取到分辨率信息")
 				return@launch
 			}
-			val previewSize =   previewSizes.find {
+			val previewSize = previewSizes.find {
 				((it.width == 1920 && it.height == 1080) || (it.width == 1080 && it.height == 1920))
 			} ?: previewSizes.find {
 				((it.width == 640 && it.height == 480) || (it.width == 480 && it.height == 640))
@@ -86,6 +85,20 @@ class CameraCppViewModel : BaseViewModel() {
 	
 	fun initPreview(surfaceView: TextureView) {
 		mCameraDevice.get()?.setDisplaySurface(surfaceView)
+	}
+	
+	/**
+	 * 设置按钮事件，目前拍照的按钮类型为1，抬起事件状态为0
+	 */
+	fun setButtonListener() {
+		val device = mCameraDevice.get() ?: return
+		// 仅单独设备设置目前测试使用
+		if (device.deviceId != "2760-22136") return
+		mCameraDevice.get()?.setButtonListener { type, state ->
+			if (type == 1 && state == 0) {
+				takePicture() // 执行拍照
+			}
+		}
 	}
 	
 	fun startPreview() {
@@ -113,16 +126,18 @@ class CameraCppViewModel : BaseViewModel() {
 	}
 	
 	fun takePicture() {
-		viewModelScope.launch(Dispatchers.IO) {
-			val picture = mCameraDevice.get()?.takePicture()
-			if (picture != null) PictureUtils.saveJpegBytes(OverallContext.baseContext, picture)
-			Log.d("CameraCppViewModel", "拍照结果:$picture")
+		viewModelScope.launch(Dispatchers.Main) {
+			val picPath = withContext(Dispatchers.IO) {
+				return@withContext mCameraDevice.get()?.takePicture()?.let {
+					PictureUtils.saveJpegBytes(OverallContext.baseContext, it)
+				}
+			}
+			Log.d("CameraCppViewModel", "拍照结果:$picPath")
+			val message = if (!picPath.isNullOrEmpty()) {
+				"拍照成功,路径=$picPath"
+			} else "拍照失败"
+			Toast.makeText(OverallContext.baseContext, message, Toast.LENGTH_SHORT).show()
 		}
-	}
-	
-	private fun initCameraParameters(cameraDevice: NCameraDevice) {
-		val supportPreviewSize = cameraDevice.getSupportedParameter(SupportParameters.PREVIEW_SIZE)
-		
 	}
 	
 	fun recorder() {

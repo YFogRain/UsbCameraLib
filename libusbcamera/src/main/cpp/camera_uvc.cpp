@@ -187,3 +187,17 @@ Java_com_rain_uvc_utils_CameraNativeUtils_nativeTakePicture(JNIEnv *env, jclass 
     env->SetByteArrayRegion(byteArray, 0, size, reinterpret_cast<jbyte *>(pictureBytes.data()));
     return byteArray;
 }
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_com_rain_uvc_utils_CameraNativeUtils_setButtonListener(JNIEnv *env, jclass clazz,
+                                                            jlong nativeId, jobject listener) {
+    LOG_D("开始设置button按钮~~~");
+    auto *camera = reinterpret_cast<ICameraDevice *>(nativeId);
+    if (camera) {
+        JavaVM *vm;
+        env->GetJavaVM(&vm);
+        return camera->setButtonListener(vm, env, listener);
+    }
+    return false;
+}

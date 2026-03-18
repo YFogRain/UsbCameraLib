@@ -15,6 +15,7 @@ import android.view.TextureView
 import com.rain.uvc.parameters.Parameters
 import com.rain.uvc.parameters.SupportParameters
 import com.rain.uvc.camera.ICameraDevice
+import com.rain.uvc.listener.IButtonListener
 import com.rain.uvc.parameters.CameraDataFormat
 import com.rain.uvc.parameters.CameraParameterType
 import com.rain.uvc.parameters.CameraPreviewFormat
@@ -29,7 +30,7 @@ import kotlin.concurrent.Volatile
  * @createTime: 2025/9/18
  * @des uvc相机的操作
  */
-class CameraUvcDevice(context: Context, nativeId: Long, val deviceName: String, connection: UsbDeviceConnection) : ICameraDevice() {
+class CameraUvcDevice(context: Context, nativeId: Long, val deviceName: String, val deviceVPId: String, connection: UsbDeviceConnection) : ICameraDevice() {
 	//设备名称，如果为video时为设备路径，usb时通过name检查当前是否是同一个值的回调
 	private val mNativeAtomic: AtomicLong = AtomicLong(nativeId)
 	
@@ -67,6 +68,10 @@ class CameraUvcDevice(context: Context, nativeId: Long, val deviceName: String, 
 	init {
 		mContext.set(context.applicationContext)
 		initReceiver()
+	}
+	
+	override fun getDeviceId(): String {
+		return deviceVPId
 	}
 	
 	override fun setPreviewSize(width: Int, height: Int, format: CameraPreviewFormat): Boolean {
@@ -121,7 +126,7 @@ class CameraUvcDevice(context: Context, nativeId: Long, val deviceName: String, 
 	override fun <V> setParameter(key: Parameters.Key<V>, value: V): Boolean {
 		val nativeId = mNativeAtomic.get()
 		if (nativeId == 0L) return false
-		return when(key.type){
+		return when (key.type) {
 			CameraParameterType.PIC_ORIENTATION -> {
 				if (value !is Int) return false
 				this.mPicOrientation = value
@@ -227,5 +232,11 @@ class CameraUvcDevice(context: Context, nativeId: Long, val deviceName: String, 
 		val context = mContext.get() ?: return
 		if (isReceiverSuccess) runCatching { context.unregisterReceiver(usbDetachedReceiver) }
 		isReceiverSuccess = false
+	}
+	
+	override fun setButtonListener(listener: IButtonListener?) {
+		val nativeId = mNativeAtomic.get()
+		if (nativeId == 0L) return
+		CameraNativeUtils.setButtonListener(nativeId, listener)
 	}
 }

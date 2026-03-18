@@ -15,6 +15,7 @@ import android.view.TextureView
 import com.rain.uvc.parameters.Parameters
 import com.rain.uvc.parameters.SupportParameters
 import com.rain.uvc.camera.ICameraDevice
+import com.rain.uvc.listener.IButtonListener
 import com.rain.uvc.mode.CameraSize
 import com.rain.uvc.mode.CameraSupportSize
 import com.rain.uvc.mode.FaceDetectMode
@@ -36,6 +37,7 @@ import kotlin.coroutines.resume
  */
 class Camera1Device(camera: Camera, cameraId: Int, acRotation: Int) : ICameraDevice() {
 	private val mCameraAtomic = AtomicReference(camera)
+	private val mCurrentCameraId = cameraId
 	
 	// 缓存控件
 	private val mTextureCache = AtomicReference<TextureView>()
@@ -48,6 +50,10 @@ class Camera1Device(camera: Camera, cameraId: Int, acRotation: Int) : ICameraDev
 	init {
 		initNormalParameters(camera)
 		initCameraFacing(cameraId, acRotation)
+	}
+	
+	override fun getDeviceId(): String {
+		return mCurrentCameraId.toString()
 	}
 	
 	/**
@@ -120,6 +126,9 @@ class Camera1Device(camera: Camera, cameraId: Int, acRotation: Int) : ICameraDev
 			e.printStackTrace()
 		}
 		return false
+	}
+	
+	override fun setButtonListener(listener: IButtonListener?) {
 	}
 	
 	override fun <V> setParameter(key: Parameters.Key<V>, value: V): Boolean {

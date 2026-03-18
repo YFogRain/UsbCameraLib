@@ -96,7 +96,7 @@ object CameraUvcManager {
 		if (nativeId == 0L) {
 			return Result.failure(CameraStateException("请检查当前路径权限且为video类型"))
 		}
-		return Result.success(NCameraDevice(context, nativeId, videoPath, null))
+		return Result.success(NCameraDevice(context, nativeId, videoPath, videoPath, null))
 	}
 	
 	/**
@@ -136,7 +136,7 @@ object CameraUvcManager {
 			Log.d("CameraUvcManager", usbDevice.deviceName + "-当前设备的内存映射id为:" + nativeId)
 			return@withContext Result.success(
 				NCameraDevice(
-					context, nativeId, usbDevice.deviceName, usbDeviceConnection
+					context, nativeId, usbDevice.deviceName, "${usbDevice.vendorId}-${usbDevice.productId}", usbDeviceConnection
 				)
 			)
 		}

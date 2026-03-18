@@ -17,9 +17,15 @@ public:
     bool setParameter(int type, int value) override;
     std::variant<std::monostate, int, std::string> getParameter(int type) override;
     std::variant<std::monostate, std::pair<int, int>, std::string, int> getSupportParameters(int type) override;
-
+    bool setButtonListener(JavaVM *vm, JNIEnv *env, jobject listener) override;
+    void releaseButtonListener() override;
 private:
     int mVideoFd; // 对应的文件描述符
+    JavaVM *theVM = nullptr; //回调对应全局应该保存的东西
+    jobject buttonListener = nullptr; // 按钮回调的对象
+    jmethodID onButtonMethod = nullptr; // 按钮回调的方法
+
+    std::mutex buttonMutex;     // 窗口操作锁，单线程操作当前指定窗口
 
     CameraStreamV4l2Impl *mCameraStream;
 

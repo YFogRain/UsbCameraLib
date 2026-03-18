@@ -178,3 +178,49 @@ int CameraDeviceV4L2Impl::loadTypeToId(int type) {
     }
     return id;
 }
+
+bool CameraDeviceV4L2Impl::setButtonListener(JavaVM *vm, JNIEnv *env, jobject listener) {
+    std::lock_guard<std::mutex> lock(buttonMutex);
+    // 先释放旧的（包含 callback）
+    releaseButtonListener();
+    if (!vm || !env || !listener) {
+        LOG_E("listener is null");
+        return true;
+    }
+    this->theVM = vm;
+    this->buttonListener = env->NewGlobalRef(listener);;
+    if (!this->buttonListener) {
+        LOG_E("监听设置失败，listener为null");
+        return false;
+    }
+    jclass buttonClass = env->GetObjectClass(listener);
+    if (buttonClass) {
+        //宽高
+        this->onButtonMethod = env->GetMethodID(buttonClass, "buttonClick", "(II)V");
+    }
+    env->ExceptionClear();
+    if (!onButtonMethod) {
+        env->DeleteGlobalRef(listener);
+        this->buttonListener = nullptr;
+        LOG_E("设置监听失败");
+        return false;
+    }
+    return true;
+}
+
+void CameraDeviceV4L2Impl::releaseButtonListener() {
+    std::lock_guard<std::mutex> lock(buttonMutex);
+    if (buttonListener && theVM) {
+        JNIEnv *env = nullptr;
+        if (theVM->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_OK) {
+            env->DeleteGlobalRef(buttonListener);
+        } else if (theVM->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+            env->DeleteGlobalRef(buttonListener);
+            theVM->DetachCurrentThread();
+        }
+    }
+    buttonListener = nullptr;
+    onButtonMethod = nullptr;
+    theVM = nullptr;
+    LOG_D("Button listener released");
+}

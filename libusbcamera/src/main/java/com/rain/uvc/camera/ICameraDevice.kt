@@ -5,6 +5,7 @@ import android.view.Surface
 import android.view.SurfaceView
 import android.view.TextureView
 import android.view.View
+import com.rain.uvc.listener.IButtonListener
 import com.rain.uvc.mode.FaceDetectMode
 import com.rain.uvc.parameters.Parameters
 import com.rain.uvc.parameters.SupportParameters
@@ -72,12 +73,19 @@ abstract class ICameraDevice {
 	abstract fun setDisplaySurface(view: TextureView): Boolean
 	abstract fun setDisplaySurface(surface: Surface): Boolean
 	
+	abstract fun getDeviceId(): String?
+	
 	/**
 	 * 设置预览监听
 	 */
 	fun setPreviewListener(listener: ((bytes: ByteArray, width: Int, height: Int) -> Unit)?) {
 		this.iPreviewListener = listener
 	}
+	
+	/**
+	 * 设置预览监听
+	 */
+	abstract fun setButtonListener(listener: IButtonListener?)
 	
 	/**
 	 * 设置usb摄像头断开关闭回调

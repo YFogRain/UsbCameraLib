@@ -11,6 +11,7 @@ import android.os.Build
 import android.view.Surface
 import android.view.SurfaceView
 import android.view.TextureView
+import com.rain.uvc.listener.IButtonListener
 import com.rain.uvc.listener.IFrameListener
 import com.rain.uvc.parameters.CameraDataFormat
 import com.rain.uvc.parameters.CameraPreviewFormat
@@ -33,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference
  * @createTime: 2026/2/2
  * @des
  */
-class NCameraDevice(context: Context, nativeId: Long, val deviceName: String, connection: UsbDeviceConnection?) {
+class NCameraDevice(context: Context, nativeId: Long, val deviceName: String,val deviceId: String, connection: UsbDeviceConnection?) {
 	// 请求c层资源的对应的内存id
 	private val mNativeAtomic = AtomicLong(0L)
 	private var iDetachedCloseListener: (() -> Unit)? = null
@@ -199,6 +200,15 @@ class NCameraDevice(context: Context, nativeId: Long, val deviceName: String, co
 	fun setDetachedCloseListener(listener: (() -> Unit)?): Boolean {
 		this.iDetachedCloseListener = listener
 		return true
+	}
+	
+	/**
+	 * 设置预览监听
+	 */
+	fun setButtonListener(listener: IButtonListener?) {
+		val nativeId = mNativeAtomic.get()
+		if (nativeId == 0L) return
+		CameraNativeUtils.setButtonListener(nativeId, listener)
 	}
 	
 	/**

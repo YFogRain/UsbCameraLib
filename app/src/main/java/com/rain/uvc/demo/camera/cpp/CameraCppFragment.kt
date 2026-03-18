@@ -43,7 +43,7 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 	private fun open() {
 		val usbDevice = arguments?.getParcelable<UsbDevice>("usb_device")
 		if (usbDevice != null) {
-			 viewModel.openCamera(usbDevice)
+			viewModel.openCamera(usbDevice)
 			return
 		}
 		val videoPath = arguments?.getString("video_path")
@@ -70,6 +70,7 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 			Toast.makeText(requireContext(), "打开摄像头失败，原因:$message", Toast.LENGTH_SHORT).show()
 			return
 		}
+		viewModel.setButtonListener()
 		viewModel.initPreview(mBinding.surfaceView)
 		viewModel.startPreview()
 	}
