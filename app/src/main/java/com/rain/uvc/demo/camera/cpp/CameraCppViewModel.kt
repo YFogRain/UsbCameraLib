@@ -65,7 +65,10 @@ class CameraCppViewModel : BaseViewModel() {
 				return@launch
 			}
 			val previewSizes = cameraDevice.getSupportedParameter(SupportParameters.PREVIEW_SIZE)?.find { it.format == CameraPreviewFormat.MJPEG || it.format == CameraPreviewFormat.JPEG }?.sizes
-			Log.d("CameraCppViewModel", "分辨率列表:${GsonHelper.getHelper().modeToJson(previewSizes)}")
+			Log.d(
+				"CameraCppViewModel",
+				"分辨率列表:${GsonHelper.getHelper().modeToJson(previewSizes)}"
+			)
 			if (previewSizes.isNullOrEmpty()) {
 				cameraDevice.close()
 				openResultFlow.emit("未获取到分辨率信息")
@@ -77,7 +80,11 @@ class CameraCppViewModel : BaseViewModel() {
 				((it.width == 640 && it.height == 480) || (it.width == 480 && it.height == 640))
 			} ?: previewSizes[0]
 			Log.d("CameraCppViewModel", "分辨率:${previewSize.width}*${previewSize.height}")
-			cameraDevice.setPreviewSize(previewSize.width, previewSize.height, CameraPreviewFormat.MJPEG)
+			cameraDevice.setPreviewSize(
+				previewSize.width, previewSize.height, CameraPreviewFormat.MJPEG
+			)
+			cameraDevice.setParameter(Parameters.JPEG_MIRROR,true)
+			cameraDevice.setParameter(Parameters.PREVIEW_ORIENTATION, 90)
 			mCameraDevice.set(cameraDevice)
 			openResultFlow.emit(null)
 		}
@@ -146,12 +153,16 @@ class CameraCppViewModel : BaseViewModel() {
 			val path = mMediaMuxer?.end()
 			mMediaMuxer = null
 			recordState.value = false
-			Toast.makeText(OverallContext.baseContext, "视频保存地址 = $path", Toast.LENGTH_SHORT).show()
+			Toast.makeText(
+				OverallContext.baseContext, "视频保存地址 = $path", Toast.LENGTH_SHORT
+			).show()
 			return
 		}
 		val previewSize = cameraDevice.getParameter(Parameters.PREVIEW_SIZE)
 		if (previewSize == null) {
-			Toast.makeText(OverallContext.baseContext, "获取视频分辨率失败", Toast.LENGTH_SHORT).show()
+			Toast.makeText(
+				OverallContext.baseContext, "获取视频分辨率失败", Toast.LENGTH_SHORT
+			).show()
 			return
 		}
 		mMediaMuxer = MediaMuxerThread(loadRecordPath(), false)

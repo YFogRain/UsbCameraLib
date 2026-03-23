@@ -9,10 +9,15 @@
 CameraStreamUsbImpl::CameraStreamUsbImpl(uvc_device_handle_t *deviceHandle)
         : mDeviceHandle(deviceHandle), frameWidth(640), frameHeight(480),
           frameFormat(PREVIEW_FORMAT_BGR) {
+    mPreview = new GLPreview();
 }
 
 CameraStreamUsbImpl::~CameraStreamUsbImpl() {
     mDeviceHandle = nullptr;
+    if (mPreview) {
+        delete mPreview;
+        mPreview = nullptr;
+    }
 }
 
 bool CameraStreamUsbImpl::startPreview() {
@@ -51,6 +56,7 @@ bool CameraStreamUsbImpl::stopPreview() {
             captureThread.join();
         }
     }
+    // ⭐⭐ 新增
     LOG_D("停止预览结束");
     clearCaptureFrames();
     clearPreviewFrames();
@@ -64,14 +70,16 @@ bool CameraStreamUsbImpl::setPreviewSize(int width, int height, int format) {
     frameFormat = format;
     uvc_stream_ctrl_t ctrl;
     // 设置完成后需要提前获取一次，否则打开时无法正常获取到流
-    uvc_error_t ret = uvc_get_stream(mDeviceHandle, &ctrl, getPreviewFormat(), previewWidth, previewHeight);
+    uvc_error_t ret = uvc_get_stream(mDeviceHandle, &ctrl, getPreviewFormat(), previewWidth,
+                                     previewHeight);
     LOG_D("设置预览分辨率同步获取预览流-setPreviewSize-结果:%d", ret);
     return true;
 }
 
 int CameraStreamUsbImpl::prepare_preview(uvc_stream_ctrl_t *ctrl) {
     LOG_D("获取对应的流控制器-size:%d-%d", previewWidth, previewHeight);
-    uvc_error_t ret = uvc_get_stream(mDeviceHandle, ctrl, getPreviewFormat(), previewWidth, previewHeight);
+    uvc_error_t ret = uvc_get_stream(mDeviceHandle, ctrl, getPreviewFormat(), previewWidth,
+                                     previewHeight);
     LOG_D("获取对应的流控制器-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
@@ -88,14 +96,14 @@ int CameraStreamUsbImpl::prepare_preview(uvc_stream_ctrl_t *ctrl) {
         frameHeight = previewHeight;
     }
     frameBytes = getPreviewBytesSize();
-    changeWindowSize(frameWidth, frameHeight);
     return UVC_SUCCESS;
 }
 
 int CameraStreamUsbImpl::do_preview(uvc_stream_ctrl_t *ctrl) {
     clearCaptureFrames();
     clearPreviewFrames();
-    uvc_error_t ret = uvc_start_streaming(mDeviceHandle, ctrl, uvc_stream_callback, (void *) this, 0);
+    uvc_error_t ret = uvc_start_streaming(mDeviceHandle, ctrl, uvc_stream_callback, (void *) this,
+                                          0);
     LOG_D("开启预览流-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
@@ -128,7 +136,9 @@ stream_frame_t *CameraStreamUsbImpl::allocate_stream_frame(uvc_frame_t *inFrame)
         }
         memcpy(outFrame->data, inFrame->data, inFrame->data_bytes);
     }
-    outFrame->rotation = mOrientation;
+    if (mPreview) {
+        outFrame->rotation = mPreview->getRotation();
+    }
     return outFrame;
 }
 
@@ -140,7 +150,8 @@ void CameraStreamUsbImpl::uvc_stream_callback(uvc_frame_t *frame, void *vptr_arg
         LOG_E("当前数据返回的是null，则直接下一回合：：%d", preview->mIsCaptureRunning.load());
         return;
     }
-    if ((frame->frame_format != UVC_FRAME_FORMAT_MJPEG && frame->data_bytes < preview->frameBytes) || !frame->data) {
+    if ((frame->frame_format != UVC_FRAME_FORMAT_MJPEG &&
+         frame->data_bytes < preview->frameBytes) || !frame->data) {
         LOG_E("当前数据大小不符合::data_bytes:%zu,frameBytes:%zu", frame->data_bytes,
               preview->frameBytes);
         return;
@@ -208,7 +219,8 @@ stream_frame_t *CameraStreamUsbImpl::waitCaptureFrames() {
     stream_frame_t *frame = nullptr;
     {
         std::unique_lock<std::mutex> lock(captureMutex);
-        captureCond.wait(lock, [this] { return !mIsCaptureRunning.load() || !captureFrames.empty(); });
+        captureCond.wait(lock,
+                         [this] { return !mIsCaptureRunning.load() || !captureFrames.empty(); });
         if (mIsCaptureRunning.load() && !captureFrames.empty()) {
             frame = captureFrames.front();
             captureFrames.pop_front();
@@ -221,7 +233,9 @@ stream_frame_t *CameraStreamUsbImpl::waitPreviewCallFrames() {
     stream_frame *frame = nullptr;
     {
         std::unique_lock<std::mutex> lock(previewMutex);
-        previewResultCond.wait(lock, [this] { return !mIsPreviewCallRunning.load() || !previewResultFrames.empty(); });
+        previewResultCond.wait(lock, [this] {
+            return !mIsPreviewCallRunning.load() || !previewResultFrames.empty();
+        });
         if (mIsPreviewCallRunning.load() && !previewResultFrames.empty()) {
             frame = previewResultFrames.front();
             previewResultFrames.pop_front();
@@ -233,6 +247,10 @@ stream_frame_t *CameraStreamUsbImpl::waitPreviewCallFrames() {
 void CameraStreamUsbImpl::thread_func_capture() {
     LOG_D("=====开启循环捕获线程数据");
     LOG_D("=====mIsRunning：：：%d", mIsCaptureRunning.load());
+    // ⭐⭐⭐ 在这里初始化GL
+    if (mPreview) {
+        mPreview->initPreview(frameWidth, frameHeight);
+    }
     while (mIsCaptureRunning.load()) {
         // 等待获取预览的数据
         stream_frame_t *pFrame = waitCaptureFrames();
@@ -243,12 +261,16 @@ void CameraStreamUsbImpl::thread_func_capture() {
         free_stream(pFrame); // 释放源数据
         // 绘制
         if (bgrFrame && bgrFrame->data && bgrFrame->data_size > 0) { // 如果数据不为空
-            drawFrame(bgrFrame->data, bgrFrame->data_size, bgrFrame->width, bgrFrame->height);
+            // ⭐⭐⭐ GPU渲染（替换CPU方案）
+            mPreview->drawFrame(bgrFrame->data, bgrFrame->width, bgrFrame->height,
+                                bgrFrame->data_size);
         }
         // 发送给回调线程处理
         putPictureFrame(bgrFrame);
         putPreviewCallFrames(bgrFrame);
-
+    }
+    if (mPreview) {
+        mPreview->releasePreview();
     }
 }
 
@@ -273,7 +295,8 @@ void CameraStreamUsbImpl::thread_func_preview_call() {
             }
         }
         // 格式化数据格式
-        std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, width, height, previewFormat);
+        std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, width, height,
+                                                         previewFormat);
         // 释放源数据
         free_stream(pFrame);
         if (outFrame.empty()) {

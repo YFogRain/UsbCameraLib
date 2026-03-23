@@ -20,10 +20,10 @@ CameraDeviceUsbImpl::CameraDeviceUsbImpl(uvc_context_t *context,
 
 CameraDeviceUsbImpl::~CameraDeviceUsbImpl() {
     mCameraStream->stopPreview();
-    mCameraStream->releaseWindows();
     mCameraStream->releasePreviewFunc();
     releaseButtonListener(); // 释放button的监听
     delete mCameraStream;
+    mCameraStream = nullptr;
     if (LIKELY(mDeviceHandle)) {
         // 关闭对应的设备
         LOG_D("uvc_close mDeviceHandle");

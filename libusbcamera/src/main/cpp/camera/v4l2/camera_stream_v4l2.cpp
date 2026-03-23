@@ -12,10 +12,13 @@
 
 CameraStreamV4l2Impl::CameraStreamV4l2Impl(int fd)
         : videoFd(fd), frameWidth(640), frameHeight(480), frameFormat(PREVIEW_FORMAT_BGR) {
+    mPreview = new GLPreview();
 }
 
 CameraStreamV4l2Impl::~CameraStreamV4l2Impl() {
     videoFd = -1;
+    delete mPreview;
+    mPreview = nullptr;
 }
 
 bool CameraStreamV4l2Impl::setPreviewSize(int width, int height, int format) {
@@ -63,7 +66,6 @@ bool CameraStreamV4l2Impl::startPreview() {
     }
     LOG_D("当前使用的分辨率信息:%d*%d ,format:%d", frameWidth, frameHeight, frameFormat);
     // 设置窗口的宽高
-    changeWindowSize(frameWidth, frameHeight);
     // 2. 设置缓冲区buffer
     if (!prepare_mmap()) { // 初始化缓冲区
         LOG_E("缓冲区准备失败");
@@ -150,7 +152,8 @@ bool CameraStreamV4l2Impl::prepare_mmap() {
             return false;
         }
         captureBuffers[i].length = buf.length;
-        captureBuffers[i].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, videoFd, buf.m.offset);
+        captureBuffers[i].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED,
+                                       videoFd, buf.m.offset);
         if (captureBuffers[i].start == MAP_FAILED) {
             LOG_E("获取缓冲区数据,错误码:%d", errno);
             return false;
@@ -185,7 +188,9 @@ stream_frame_t *CameraStreamV4l2Impl::allocate_stream_frame(uint8_t *data, int l
     outFrame->width = frameWidth;
     outFrame->height = frameHeight;
     outFrame->format = frameFormat;
-    outFrame->rotation = mOrientation;
+    if (mPreview) {
+        outFrame->rotation = mPreview->getRotation();
+    }
     outFrame->data_size = length;
     outFrame->data = static_cast<uint8_t *>(malloc(length));
     if (!outFrame->data) {
@@ -265,7 +270,8 @@ stream_frame_t *CameraStreamV4l2Impl::waitPreviewFrames() {
     stream_frame_t *frame = nullptr;
     {
         std::unique_lock<std::mutex> lock(previewMutex);
-        previewCond.wait(lock, [this] { return !mIsCaptureRunning.load() || !previewFrames.empty(); });
+        previewCond.wait(lock,
+                         [this] { return !mIsCaptureRunning.load() || !previewFrames.empty(); });
         if (mIsCaptureRunning.load() && !previewFrames.empty()) {
             frame = previewFrames.front();
             previewFrames.pop_front();
@@ -278,7 +284,9 @@ stream_frame_t *CameraStreamV4l2Impl::waitPreviewCallFrames() {
     stream_frame_t *frame = nullptr;
     {
         std::unique_lock<std::mutex> lock(previewResultMutex);
-        previewResultCond.wait(lock, [this] { return !mIsPreviewCallRunning.load() || !previewResultFrames.empty(); });
+        previewResultCond.wait(lock, [this] {
+            return !mIsPreviewCallRunning.load() || !previewResultFrames.empty();
+        });
         if (mIsPreviewCallRunning.load() && !previewResultFrames.empty()) {
             frame = previewResultFrames.front();
             previewResultFrames.pop_front();
@@ -302,7 +310,8 @@ void CameraStreamV4l2Impl::thread_func_capture() {
         if (!(buf.flags & V4L2_BUF_FLAG_ERROR)) {
             if (captureBuffers && buf.index >= 0 && buf.index < captureBufferLength) {
                 stream_frame_t *captureFrame =
-                        allocate_stream_frame((uint8_t *) captureBuffers[buf.index].start, buf.bytesused);
+                        allocate_stream_frame((uint8_t *) captureBuffers[buf.index].start,
+                                              buf.bytesused);
                 if (captureFrame && captureFrame->data && captureFrame->data_size > 0) {
                     // 将数据复制到外部，然后释放当前缓冲区
                     putPreviewFrames(captureFrame);
@@ -321,6 +330,9 @@ void CameraStreamV4l2Impl::thread_func_capture() {
 void CameraStreamV4l2Impl::thread_func_preview() {
     LOG_D("=====开启循环捕获线程数据");
     LOG_D("=====mIsRunning：：：%d", mIsCaptureRunning.load());
+    if (mPreview) {
+        mPreview->initPreview(frameWidth, frameHeight);
+    }
     while (mIsCaptureRunning.load()) {
         // 等待获取预览的数据
         stream_frame_t *pFrame = waitPreviewFrames();
@@ -331,7 +343,8 @@ void CameraStreamV4l2Impl::thread_func_preview() {
         free_stream(pFrame); // 释放源数据
         // 绘制
         if (bgrFrame && bgrFrame->data && bgrFrame->data_size > 0) { // 如果数据不为空
-            drawFrame(bgrFrame->data, bgrFrame->data_size, bgrFrame->width, bgrFrame->height);
+            mPreview->drawFrame(bgrFrame->data, bgrFrame->width, bgrFrame->height,
+                                bgrFrame->data_size);
         }
         putPictureFrame(bgrFrame);
         // 发送给回调线程处理
@@ -350,7 +363,8 @@ void CameraStreamV4l2Impl::thread_func_preview_call() {
             continue;
         }
         // 格式化数据格式
-        std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, pFrame->width, pFrame->height, previewFormat);
+        std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, pFrame->width,
+                                                         pFrame->height, previewFormat);
         // 释放源数据
         free_stream(pFrame);
         if (outFrame.empty()) {
@@ -364,7 +378,8 @@ void CameraStreamV4l2Impl::thread_func_preview_call() {
         if (outFrame.data() && data_bytes > 0) {
             jobject buf = env->NewDirectByteBuffer(outFrame.data(), data_bytes);
             if (buf) {
-                env->CallVoidMethod(previewListener, onFrameMethod, pFrame->width, pFrame->height, buf);
+                env->CallVoidMethod(previewListener, onFrameMethod, pFrame->width, pFrame->height,
+                                    buf);
                 if (env->ExceptionCheck()) {
                     LOG_D("ExceptionCheck");
                     env->ExceptionDescribe();

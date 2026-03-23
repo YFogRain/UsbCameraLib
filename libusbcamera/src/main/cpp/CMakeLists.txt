@@ -56,6 +56,9 @@ add_library(uvcCamera SHARED
         camera/v4l2/camera_stream_v4l2.cpp
         camera/v4l2/video_v4l2_utils.cpp
         camera/img_util.cpp
+
+        preview/src/gl_preview.cpp
+        preview/src/gl_renderer.cpp
 )
 
 target_include_directories(uvcCamera PRIVATE
@@ -64,6 +67,7 @@ target_include_directories(uvcCamera PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/camera/headers"
         "${CMAKE_CURRENT_SOURCE_DIR}/log"
         "${CMAKE_CURRENT_SOURCE_DIR}/opencv/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/preview/include"
 )
 
 file(GLOB 3RDPARTY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/opencv/3rdparty/libs/${ANDROID_ABI}/*.a)
@@ -77,6 +81,8 @@ target_link_libraries(uvcCamera
         uvc
         z
         mediandk
+        GLESv3
+        EGL
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_core.a
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_imgproc.a
         ${CMAKE_SOURCE_DIR}/opencv/staticlibs/${ANDROID_ABI}/libopencv_imgcodecs.a

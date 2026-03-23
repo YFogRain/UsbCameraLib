@@ -19,6 +19,7 @@
 #include <atomic>
 #include <android/native_window.h>
 #include <filesystem>
+#include "gl_preview.h"
 
 #define MAX_FRAME 2
 
@@ -48,14 +49,6 @@ public:
     virtual bool startPreview() = 0;                                    // 关闭预览
     virtual bool stopPreview() = 0;                                     // 开启预览
     virtual bool setPreviewSize(int width, int height, int format) = 0; // 设置预览分辨率
-
-    void releaseWindows() {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (mPreviewWindow) {
-            ANativeWindow_release(mPreviewWindow);
-            mPreviewWindow = nullptr;
-        }
-    };
 
     void releasePreviewFunc() {
         std::lock_guard<std::mutex> lock(previewFuncMutex);
@@ -103,36 +96,44 @@ public:
     }
 
     bool setDisplaySurface(ANativeWindow *preview_window) {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (mPreviewWindow != preview_window) {
-            if (mPreviewWindow) {
-                ANativeWindow_release(mPreviewWindow);
-            }
-            mPreviewWindow = preview_window;
-            if (LIKELY(mPreviewWindow)) {
-                ANativeWindow_setBuffersGeometry(mPreviewWindow, previewWidth, previewHeight, UVC_FORMAT_FRAME_WINDOW);
-            }
-            ImgUtils::setDisplayOrientation(mPreviewWindow, mOrientation);
+        if (mPreview) {
+            mPreview->setCurrentSurface(preview_window);
+            return true;
         }
-        return true;
+        return false;
     };
 
     bool setDisplayOrientation(int orientation) {
         LOG_D("当前的设备方向:触发设置方向");
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        mOrientation = orientation;
-        return ImgUtils::setDisplayOrientation(mPreviewWindow, mOrientation);
+        if (mPreview) {
+            mPreview->setRotation(orientation);
+            return true;
+        }
+        return false;
     }
 
     // 设置拍照镜像
     bool setJpegMirrorState(bool isMirror) {
-        isJpegMirror = isMirror;
-        return true;
+        if (mPreview) {
+            mPreview->setMirror(isMirror);
+            return true;
+        }
+        return false;
     }
 
-    int getDisplayOrientation() const { return mOrientation; }
+    int getDisplayOrientation() const {
+        if (mPreview) {
+            return mPreview->getRotation();
+        }
+        return 0;
+    }
 
-    int getJpegMirrorState() const { return isJpegMirror; }
+    int getJpegMirrorState() const {
+        if (mPreview) {
+            return mPreview->getMirrorState();
+        }
+        return 0;
+    }
 
     std::string getCurrentPreviewSize() {
         return std::to_string(previewWidth) + ":" + std::to_string(previewHeight);
@@ -151,21 +152,22 @@ public:
             LOG_E("未获取到图片帧");
             return {};
         }
+        auto isMirror = mPreview ? mPreview->getMirrorState() : false;
         auto result = ImgUtils::bgr2Mjpeg(frame->data, frame->width, frame->height, frame->rotation,
-                                          isJpegMirror);
+                                          isMirror);
         // 2. 释放资源
         // 2. 释放资源
         free_stream(frame);
         return result;
     };
 protected:
+
     JavaVM *theVM = nullptr; //回调对应全局应该保存的东西
     jobject previewListener = nullptr; //回调的对象
     jmethodID onFrameMethod = nullptr; //回调的方法
-    int mOrientation;                // 预览方向
-    bool isJpegMirror = false; // 是否预览镜像
-    std::mutex surfaceMutex;     // 窗口操作锁，单线程操作当前指定窗口
     std::mutex previewFuncMutex; // 预览回调锁
+
+    GLPreview *mPreview = nullptr;
 
     std::string mSurfaceId;
     int previewWidth = 640;
@@ -178,33 +180,26 @@ protected:
     std::atomic<bool> mIsPictureRunning{false}; // 当前是否拍照状态
     stream_frame *pictureFrame = nullptr;       // 拍照的数据
 
-    void drawFrame(uint8_t *data, size_t dataSize, int w, int h) {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (!mPreviewWindow || !data || dataSize <= 0 || w == 0 || h == 0) {
-            return;
-        }
-        ANativeWindow_Buffer buffer;
-        // 锁定缓冲区以获取可以写入的内存区域
-        if (ANativeWindow_lock(mPreviewWindow, &buffer, nullptr) == 0) {
-            auto *dst = (uint8_t *) buffer.bits;
-            // 将RGB数据复制到RGBA图像，并设置alpha值为255
-            for (int i = 0, j = 0; i < w * h; ++i, j += 4) {
-                dst[j] = data[i * 3 + 2];     // R
-                dst[j + 1] = data[i * 3 + 1]; // G
-                dst[j + 2] = data[i * 3]; // B
-                dst[j + 3] = 0xFF;                 // A
-            }
-            // 解锁缓冲区
-            ANativeWindow_unlockAndPost(mPreviewWindow);
-        }
-    };
-
-    void changeWindowSize(int width, int height) {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (LIKELY(mPreviewWindow)) {
-            ANativeWindow_setBuffersGeometry(mPreviewWindow, width, height, UVC_FORMAT_FRAME_WINDOW);
-        }
-    };
+//    void drawFrame(uint8_t *data, size_t dataSize, int w, int h) {
+//        std::lock_guard<std::mutex> lock(surfaceMutex);
+//        if (!mPreviewWindow || !data || dataSize <= 0 || w == 0 || h == 0) {
+//            return;
+//        }
+//        ANativeWindow_Buffer buffer;
+//        // 锁定缓冲区以获取可以写入的内存区域
+//        if (ANativeWindow_lock(mPreviewWindow, &buffer, nullptr) == 0) {
+//            auto *dst = (uint8_t *) buffer.bits;
+//            // 将RGB数据复制到RGBA图像，并设置alpha值为255
+//            for (int i = 0, j = 0; i < w * h; ++i, j += 4) {
+//                dst[j] = data[i * 3 + 2];     // R
+//                dst[j + 1] = data[i * 3 + 1]; // G
+//                dst[j + 2] = data[i * 3]; // B
+//                dst[j + 3] = 0xFF;                 // A
+//            }
+//            // 解锁缓冲区
+//            ANativeWindow_unlockAndPost(mPreviewWindow);
+//        }
+//    };
 
     // 复制一份frame
     static stream_frame_t *allocate_stream_frame(stream_frame_t *inFrame) {
@@ -231,7 +226,8 @@ protected:
         }
         outFrame->format = PREVIEW_FORMAT_BGR;
         cv::Mat outImg =
-                ImgUtils::any2Bgr(inFrame->data, inFrame->data_size, inFrame->width, inFrame->height, inFrame->format);
+                ImgUtils::any2Bgr(inFrame->data, inFrame->data_size, inFrame->width,
+                                  inFrame->height, inFrame->format);
         if (outImg.empty()) {
             free_stream(outFrame);
             return nullptr;
@@ -250,7 +246,8 @@ protected:
             return nullptr;
         }
         outFrame->format = outFormat;
-        std::vector<uint8_t> outImg = ImgUtils::format(inFrame->data, inFrame->width, inFrame->height, outFormat);
+        std::vector<uint8_t> outImg = ImgUtils::format(inFrame->data, inFrame->width,
+                                                       inFrame->height, outFormat);
         if (outImg.empty()) {
             free_stream(outFrame);
             return nullptr;
@@ -296,9 +293,6 @@ protected:
             pictureFrame = nullptr;
         }
     }
-
-private:
-    ANativeWindow *mPreviewWindow = nullptr; // 预览的窗口
 };
 
 #endif // UVCCAMERA_I_CAMERA_STREAM_H
