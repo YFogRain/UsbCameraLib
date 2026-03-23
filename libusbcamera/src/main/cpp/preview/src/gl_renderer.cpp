@@ -133,7 +133,6 @@ void GLRenderer::updateMatrix() {
 }
 
 void GLRenderer::render(uint8_t *&data, int width, int height, int dataSize) {
-    LOG_D("预览信息 size = %d = %d*%d", dataSize, width, height);
     if (!data) return;
 
     glUseProgram(mProgram);
