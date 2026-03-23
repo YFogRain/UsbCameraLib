@@ -83,8 +83,8 @@ class CameraCppViewModel : BaseViewModel() {
 			cameraDevice.setPreviewSize(
 				previewSize.width, previewSize.height, CameraPreviewFormat.MJPEG
 			)
-			cameraDevice.setParameter(Parameters.JPEG_MIRROR,true)
-			cameraDevice.setParameter(Parameters.PREVIEW_ORIENTATION, 90)
+//			cameraDevice.setParameter(Parameters.JPEG_MIRROR,true)
+//			cameraDevice.setParameter(Parameters.PREVIEW_ORIENTATION, 90)
 			mCameraDevice.set(cameraDevice)
 			openResultFlow.emit(null)
 		}
