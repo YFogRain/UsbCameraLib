@@ -43,7 +43,6 @@ GLuint GLShaderUtils::createProgram(const char *vertexSource, const char *fragme
     // 创建程序
     GLuint program = glCreateProgram();
     if (program == 0) {
-        LOG_E("GLShaderUtils", "创建着色器程序失败");
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
         return 0;
@@ -60,7 +59,7 @@ GLuint GLShaderUtils::createProgram(const char *vertexSource, const char *fragme
     if (!success) {
         char infoLog[512];
         glGetProgramInfoLog(program, 512, nullptr, infoLog);
-        LOG_E("GLShaderUtils", "着色器程序链接失败：%s", infoLog);
+        LOG_E( "着色器程序链接失败：%s", infoLog);
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
         glDeleteProgram(program);

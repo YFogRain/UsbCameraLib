@@ -10,7 +10,7 @@
  */
 
 // 顶点着色器
-static const char VERTEX_SHADER_SOURCE[] = R"(#version 300 es // 设置openGL版本
+static const char VERTEX_SHADER_SOURCE[] = R"(#version 300 es
 layout(location = 0) in vec4 a_position; // 位置属性
 layout(location = 1) in vec2 a_textCoord; // 纹理坐标属性
 
@@ -26,7 +26,7 @@ void main(){
 
 
 // 片段着色器
-static const char FRAGMENT_SHADER_SOURCE[] = R"(#version 300 es // 设置openGL版本
+static const char FRAGMENT_SHADER_SOURCE[] = R"(#version 300 es
 precision mediump float; // 声明float类型
 
 in vec2 v_textCoord; // 输入纹理坐标属性
