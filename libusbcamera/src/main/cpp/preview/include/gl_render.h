@@ -33,7 +33,7 @@ struct OpenGLContext {
 //    GLint uFormat = 0;
 
     // 释放的纹理
-    GLuint mTexture = 0;
+    GLuint mTextureId = 0;
 //    GLuint texY = 0;
 //    GLuint texUV = 0;
 
@@ -46,6 +46,9 @@ struct OpenGLContext {
     EGLDisplay eglDisplay = EGL_NO_DISPLAY;
     EGLContext eglContext = EGL_NO_CONTEXT;
     EGLSurface eglSurface = EGL_NO_SURFACE;
+
+    int texWidth;
+    int texHeight;
 };
 
 class GLRender {
@@ -59,7 +62,7 @@ public:
     void release();
 
     // 执行绘制
-    void render(uint8_t *data, int width, int height, GL_FORMAT format) const;
+    void render(uint8_t *data, int width, int height, GL_FORMAT format);
 
     // 更新坐标配置
     void updateMatrix(bool isMirror, int rotation);

@@ -56,7 +56,7 @@ bool GLRender::init(ANativeWindow *window, int width, int height) {
 //    glContext.mYTexture = glGetUniformLocation(glContext.program, "y_texture");
 //    glContext.mUVTexture = glGetUniformLocation(glContext.program, "uv_texture");
     // 初始化纹理单元
-    glUniform1i(glContext.mTexture, 0);
+    glUniform1i(glContext.mRgbTexture, 0);
 //    glUniform1i(glContext.mYTexture, 0);
 //    glUniform1i(glContext.mUVTexture, 1);
 
@@ -65,7 +65,7 @@ bool GLRender::init(ANativeWindow *window, int width, int height) {
     // ========================
 //    glGenTextures(1, &glContext.texY);
 //    glGenTextures(1, &glContext.texUV);
-    glGenTextures(1, &glContext.mTexture);
+    glGenTextures(1, &glContext.mTextureId);
 
     // 公共纹理配置
     auto configTexture = [](GLuint tex) {
@@ -79,11 +79,18 @@ bool GLRender::init(ANativeWindow *window, int width, int height) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     };
 
-    configTexture(glContext.mTexture);
+    configTexture(glContext.mTextureId);
 //    configTexture(glContext.texY);
 //    configTexture(glContext.texUV);
+    // 只分配，不传数据
 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                 GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glContext.texWidth = width;
+    glContext.texHeight = height;
     initVertices();
+    // 对齐修复
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     return true;
 }
 
@@ -121,9 +128,9 @@ bool GLRender::initVertices() {
 
 void GLRender::release() {
     // 1. 删除纹理（3个都要删）
-    if (glContext.mTexture != 0) {
-        glDeleteTextures(1, &glContext.mTexture);
-        glContext.mTexture = 0;
+    if (glContext.mTextureId != 0) {
+        glDeleteTextures(1, &glContext.mTextureId);
+        glContext.mTextureId = 0;
     }
 //    if (glContext.texY != 0) {
 //        glDeleteTextures(1, &glContext.texY);
@@ -196,20 +203,20 @@ bool GLRender::initEGL(ANativeWindow *window) {
     // 1. 获取 EGL 显示连接（关联设备屏幕）
     auto eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (eglDisplay == EGL_NO_DISPLAY) {
-        LOG_E( "获取关联设备屏幕失败: %d", eglGetError());
+        LOG_E("获取关联设备屏幕失败: %d", eglGetError());
         return false;
     }
     // 2. 初始化 EGL
     EGLint major, minor;
     if (!eglInitialize(eglDisplay, &major, &minor)) {
-        LOG_E( "初始化EGL失败: %d", eglGetError());
+        LOG_E("初始化EGL失败: %d", eglGetError());
         return false;
     }
     EGLConfig eglConfig = nullptr;
     EGLint numConfigs;
     if (!eglChooseConfig(eglDisplay, attribConfigs, &eglConfig, 1, &numConfigs) ||
         numConfigs == 0 || !eglConfig) {
-        LOG_E( "获取EGL配置失败: %d", eglGetError());
+        LOG_E("获取EGL配置失败: %d", eglGetError());
         return false;
     }
     if (!eglConfig) {
@@ -218,24 +225,24 @@ bool GLRender::initEGL(ANativeWindow *window) {
     // 4. 创建 EGL 窗口表面（绑定 Android 窗口）
     auto eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, window, nullptr);
     if (eglSurface == EGL_NO_SURFACE) {
-        LOG_E( "创建EGL窗口表面失败: %d", eglGetError());
+        LOG_E("创建EGL窗口表面失败: %d", eglGetError());
         return false;
     }
     // initEGL中修改contextAttribs逻辑
     EGLContext eglContext = eglCreateContext(eglDisplay, eglConfig, nullptr, contextAttribES3);
     if (eglContext == EGL_NO_CONTEXT) {
-        LOG_E( "创建egl3的context实例失败: %d", eglGetError());
+        LOG_E("创建egl3的context实例失败: %d", eglGetError());
         eglContext = eglCreateContext(eglDisplay, eglConfig, nullptr, contextAttribES2);
         if (eglContext == EGL_NO_CONTEXT) {
             eglDestroySurface(eglDisplay, eglSurface);
-            LOG_E( "创建egl2的context实例失败: %d", eglGetError());
+            LOG_E("创建egl2的context实例失败: %d", eglGetError());
             return false;
         }
     }
 
     // 6. 绑定上下文到当前线程（核心：让 OpenGL 指令生效）
     if (!eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) {
-        LOG_E( "绑定上下文失败: %d", eglGetError());
+        LOG_E("绑定上下文失败: %d", eglGetError());
         eglDestroySurface(eglDisplay, eglSurface);
         eglDestroyContext(eglDisplay, eglContext);
         return false;
@@ -246,52 +253,55 @@ bool GLRender::initEGL(ANativeWindow *window) {
     // 7. 获取窗口尺寸
 //    eglQuerySurface(eglDisplay, eglSurface, EGL_WIDTH, &width);
 //    eglQuerySurface(eglDisplay, eglSurface, EGL_HEIGHT, &height);
-    LOG_D( "初始化完毕");
+    LOG_D("初始化完毕");
     return true;
 }
 
 
 void GLRender::destroyEGL() {
     if (glContext.eglDisplay != EGL_NO_DISPLAY) {
-        // 先解绑上下文（关键，避免其他线程占用）
-        EGLBoolean ret = eglMakeCurrent(glContext.eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
-                                        EGL_NO_CONTEXT);
+        eglMakeCurrent(glContext.eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (glContext.eglContext != EGL_NO_CONTEXT) {
-            ret = eglDestroyContext(glContext.eglDisplay, glContext.eglContext);
+            eglDestroyContext(glContext.eglDisplay, glContext.eglContext);
             glContext.eglContext = EGL_NO_CONTEXT;
         }
         if (glContext.eglSurface != EGL_NO_SURFACE) {
-            ret = eglDestroySurface(glContext.eglDisplay, glContext.eglSurface);
+            eglDestroySurface(glContext.eglDisplay, glContext.eglSurface);
             glContext.eglSurface = EGL_NO_SURFACE;
         }
-        ret = eglTerminate(glContext.eglDisplay);
+        eglTerminate(glContext.eglDisplay);
         glContext.eglDisplay = EGL_NO_DISPLAY;
     }
 }
 
-void GLRender::render(uint8_t *data, int width, int height, GL_FORMAT format) const {
+void GLRender::render(uint8_t *data, int width, int height, GL_FORMAT format) {
     if (!data)return;
     if (!glContext.eglDisplay || !glContext.eglSurface)return;
-    // 确保当前线程绑定EGL上下文
-    if (!eglMakeCurrent(glContext.eglDisplay, glContext.eglSurface, glContext.eglSurface,
-                        glContext.eglContext)) {
-        return;
-    }
-    // 对齐修复
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glUseProgram(glContext.program);
     // 设置格式
 //    glUniform1i(glContext.uFormat, format);
 //    glUniform1i(glContext.uFormat, format);
     // 清理buffer缓存
-    glClear(GL_COLOR_BUFFER_BIT);
+//    glClear(GL_COLOR_BUFFER_BIT);
 //    if (format == FORMAT_RGB || format == FORMAT_BGR) {
     // 激活纹理
     glActiveTexture(GL_TEXTURE0);
     // 绑定纹理
-    glBindTexture(GL_TEXTURE_2D, glContext.mTexture);
+    glBindTexture(GL_TEXTURE_2D, glContext.mTextureId);
+    if (width != glContext.texWidth || height != glContext.texHeight) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                     GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+
+        glContext.texWidth = width;
+        glContext.texHeight = height;
+    }
+    // 每次更新图像
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                    width, height,
+                    GL_RGB, GL_UNSIGNED_BYTE, data);
     // 绘制纹理
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
-                 GL_RGB, GL_UNSIGNED_BYTE, data);
+//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+//                 GL_RGB, GL_UNSIGNED_BYTE, data);
 //    } else if (format == FORMAT_NV21) {
 //        // NV21
 //        glActiveTexture(GL_TEXTURE0);
@@ -311,9 +321,6 @@ void GLRender::render(uint8_t *data, int width, int height, GL_FORMAT format) co
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     //  交换缓冲区（将后台缓冲区显示到屏幕）
     eglSwapBuffers(glContext.eglDisplay, glContext.eglSurface);
-
-    // 解绑
-    glBindVertexArray(0);
 }
 
 
