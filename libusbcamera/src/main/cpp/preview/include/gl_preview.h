@@ -1,60 +1,82 @@
 //
-// Created by MI T on 2026/3/23.
+// Created by MI T on 2026/3/24.
 //
 
-#ifndef YZY_ANDROID_APP_GL_PREVIEW_H
-#define YZY_ANDROID_APP_GL_PREVIEW_H
+#ifndef OPENGLDEMO_GL_PREVIEW_H
+#define OPENGLDEMO_GL_PREVIEW_H
 
+#include "gl_render.h"
 #include "android/native_window.h"
-#include "gl_renderer.h"
 #include <mutex>
 
-/**
- * openGL预览类
- */
 class GLPreview {
 public:
     GLPreview();
 
     ~GLPreview();
 
-    void setCurrentSurface(ANativeWindow *window);
+    void setCurrentSurface(ANativeWindow *window) {
+        std::lock_guard<std::mutex> lock(mMutex);
+        if (this->mPreviewWindow) {
+            ANativeWindow_release(this->mPreviewWindow);
+        }
+        this->mPreviewWindow = window;
+    };
 
-    //  初始化window
-    bool initPreview(int width, int height);
+    void releaseSurface() {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mRender.release();
+        if (this->mPreviewWindow) {
+            ANativeWindow_release(this->mPreviewWindow);
+        }
+        this->mPreviewWindow = nullptr;
+    };
 
-    void drawFrame(uint8_t *data, int width, int height, int dataSize); // 绘制
+    bool initRender(int width, int height);
 
-    // 控制
-    void setMirror(bool mirror); // 是否镜像
+    void destroyRender();
 
-    void setRotation(int degree); // 设置方向
+    // 绘制，目前强制使用brg格式，后续尝试多种格式
+    void drawFrame(uint8_t *data, int width, int height, GL_FORMAT format);
 
-    void releasePreview(); // 释放
+    // 是否镜像
+    void setMirror(bool mirror) {
+        std::lock_guard<std::mutex> lock(mMutex);
+        this->mMirrorState = mirror;
+        mMatrixDirty.store(true);
+//        mRender.updateMatrix(this->mMirrorState, this->mRotation);
+    };
 
-    int getRotation() {
-        return mRenderer.getRotation();
+    // 设置方向
+    void setRotation(int degree) {
+        std::lock_guard<std::mutex> lock(mMutex);
+        this->mRotation = degree;
+        mMatrixDirty.store(true);
+//        mRender.updateMatrix(this->mMirrorState, this->mRotation);
+    };
+
+    [[nodiscard]] int getRotation() const {
+        return mRotation;
     }
 
-    bool getMirrorState() {
-        return mRenderer.getMirrorState();
+    [[nodiscard]] bool getMirrorState() const {
+        return mMirrorState;
     }
 
-private:
-    bool initEGL(ANativeWindow *window);
-
-    void destroyEGL();
+    void clearDraw() {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mRender.clearDraw();
+    }
 
 private:
     std::mutex mMutex;
+    ANativeWindow *mPreviewWindow = nullptr;
+    // 标记：是否需要更新矩阵
+    std::atomic<bool> mMatrixDirty{false};
+    bool mMirrorState = false;
+    int mRotation = 0;
+    GLRender mRender;
 
-    EGLDisplay mDisplay = EGL_NO_DISPLAY;
-    EGLSurface mSurface = EGL_NO_SURFACE;
-    EGLContext mContext = EGL_NO_CONTEXT;
-
-    ANativeWindow *mWindow = nullptr;
-
-    GLRenderer mRenderer;
 };
 
-#endif //YZY_ANDROID_APP_GL_PREVIEW_H
+#endif //OPENGLDEMO_GL_PREVIEW_H

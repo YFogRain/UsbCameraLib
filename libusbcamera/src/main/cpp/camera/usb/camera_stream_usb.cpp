@@ -249,7 +249,7 @@ void CameraStreamUsbImpl::thread_func_capture() {
     LOG_D("=====mIsRunning：：：%d", mIsCaptureRunning.load());
     // ⭐⭐⭐ 在这里初始化GL
     if (mPreview) {
-        mPreview->initPreview(frameWidth, frameHeight);
+        mPreview->initRender(frameWidth, frameHeight);
     }
     while (mIsCaptureRunning.load()) {
         // 等待获取预览的数据
@@ -262,15 +262,14 @@ void CameraStreamUsbImpl::thread_func_capture() {
         // 绘制
         if (bgrFrame && bgrFrame->data && bgrFrame->data_size > 0) { // 如果数据不为空
             // ⭐⭐⭐ GPU渲染（替换CPU方案）
-            mPreview->drawFrame(bgrFrame->data, bgrFrame->width, bgrFrame->height,
-                                bgrFrame->data_size);
+            mPreview->drawFrame(bgrFrame->data, bgrFrame->width, bgrFrame->height, FORMAT_BGR);
         }
         // 发送给回调线程处理
         putPictureFrame(bgrFrame);
         putPreviewCallFrames(bgrFrame);
     }
     if (mPreview) {
-        mPreview->releasePreview();
+        mPreview->destroyRender();
     }
 }
 

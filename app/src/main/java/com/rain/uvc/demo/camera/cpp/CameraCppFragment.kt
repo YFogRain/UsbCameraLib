@@ -27,7 +27,10 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 		mBinding.toolbar.setNavigationOnClickListener {
 			popStack()
 		}
-		if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+		if (ContextCompat.checkSelfPermission(
+				requireContext(),
+				android.Manifest.permission.CAMERA
+			) != PackageManager.PERMISSION_GRANTED) {
 			Toast.makeText(requireContext(), "请检查摄像头权限", Toast.LENGTH_SHORT).show()
 			return
 		}
@@ -36,6 +39,9 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 		}
 		mBinding.cardRecorder.singleClick {
 			viewModel.recorder()
+		}
+		mBinding.cardRotation.singleClick {
+			viewModel.updateRotation()
 		}
 		mBinding.surfaceView.post { open() }
 	}
@@ -51,7 +57,11 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 			viewModel.openCamera(videoPath)
 			return
 		}
-		Toast.makeText(OverallContext.baseContext, "请传入正确的摄像头id", Toast.LENGTH_SHORT).show()
+		Toast.makeText(
+			OverallContext.baseContext,
+			"请传入正确的摄像头id",
+			Toast.LENGTH_SHORT
+		).show()
 	}
 	
 	override fun initModelObserve() {
@@ -67,7 +77,11 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding, CameraCppViewMod
 	
 	private fun resultOpen(message: String?) {
 		if (!message.isNullOrEmpty()) {
-			Toast.makeText(requireContext(), "打开摄像头失败，原因:$message", Toast.LENGTH_SHORT).show()
+			Toast.makeText(
+				requireContext(),
+				"打开摄像头失败，原因:$message",
+				Toast.LENGTH_SHORT
+			).show()
 			return
 		}
 		viewModel.setButtonListener()

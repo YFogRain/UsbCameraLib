@@ -58,7 +58,8 @@ add_library(uvcCamera SHARED
         camera/img_util.cpp
 
         preview/src/gl_preview.cpp
-        preview/src/gl_renderer.cpp
+        preview/src/gl_render.cpp
+        preview/src/gl_shader_util.cpp
 )
 
 target_include_directories(uvcCamera PRIVATE

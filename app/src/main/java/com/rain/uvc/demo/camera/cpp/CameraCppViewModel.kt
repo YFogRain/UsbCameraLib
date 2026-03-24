@@ -35,6 +35,7 @@ class CameraCppViewModel : BaseViewModel() {
 	
 	//录制线程
 	private var mMediaMuxer: MediaMuxerThread? = null
+	private var mCurrentRotation: Int = 0
 	
 	//打开结果,成功返回null，失败返回错误原因
 	val openResultFlow = MutableSharedFlow<String?>()
@@ -83,7 +84,7 @@ class CameraCppViewModel : BaseViewModel() {
 			cameraDevice.setPreviewSize(
 				previewSize.width, previewSize.height, CameraPreviewFormat.MJPEG
 			)
-//			cameraDevice.setParameter(Parameters.JPEG_MIRROR,true)
+//			cameraDevice.setParameter(Parameters.JPEG_MIRROR, true)
 //			cameraDevice.setParameter(Parameters.PREVIEW_ORIENTATION, 90)
 			mCameraDevice.set(cameraDevice)
 			openResultFlow.emit(null)
@@ -145,6 +146,12 @@ class CameraCppViewModel : BaseViewModel() {
 			} else "拍照失败"
 			Toast.makeText(OverallContext.baseContext, message, Toast.LENGTH_SHORT).show()
 		}
+	}
+	
+	fun updateRotation() {
+		val cameraDevice = mCameraDevice.get() ?: return
+		mCurrentRotation = (mCurrentRotation + 90) % 360
+		cameraDevice.setParameter(Parameters.PREVIEW_ORIENTATION, mCurrentRotation)
 	}
 	
 	fun recorder() {

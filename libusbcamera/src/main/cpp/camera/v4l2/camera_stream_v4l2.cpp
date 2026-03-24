@@ -331,7 +331,7 @@ void CameraStreamV4l2Impl::thread_func_preview() {
     LOG_D("=====开启循环捕获线程数据");
     LOG_D("=====mIsRunning：：：%d", mIsCaptureRunning.load());
     if (mPreview) {
-        mPreview->initPreview(frameWidth, frameHeight);
+        mPreview->initRender(frameWidth, frameHeight);
     }
     while (mIsCaptureRunning.load()) {
         // 等待获取预览的数据
@@ -343,12 +343,14 @@ void CameraStreamV4l2Impl::thread_func_preview() {
         free_stream(pFrame); // 释放源数据
         // 绘制
         if (bgrFrame && bgrFrame->data && bgrFrame->data_size > 0) { // 如果数据不为空
-            mPreview->drawFrame(bgrFrame->data, bgrFrame->width, bgrFrame->height,
-                                bgrFrame->data_size);
+            mPreview->drawFrame(bgrFrame->data, bgrFrame->width, bgrFrame->height,FORMAT_BGR);
         }
         putPictureFrame(bgrFrame);
         // 发送给回调线程处理
         putPreviewCallFrames(bgrFrame);
+    }
+    if (mPreview) {
+        mPreview->destroyRender();
     }
 }
 
