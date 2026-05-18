@@ -1,13 +1,14 @@
 package com.rain.uvc.demo.camera
 
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.util.Log
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.updateMargins
+import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.rain.uvc.demo.R
@@ -16,58 +17,30 @@ import com.rain.uvc.demo.databinding.FgCameraSelectBinding
 import com.rain.uvc.demo.utils.LanguageHelper
 import com.rain.uvc.demo.utils.jumpNav
 import com.rain.uvc.demo.utils.singleClick
+import kotlin.getValue
 
 /**
  * @author yuan
  * @createTime: 2025/2/19
  * @des 选择项
  */
-class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelectViewModel>() {
+class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding>() {
+	override val viewModel by viewModels<HomeSelectViewModel>()
 	
 	private val permissionCall = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
 		if (!it) {
 			Toast.makeText(requireContext(), "请检查摄像头权限", Toast.LENGTH_SHORT).show()
 			return@registerForActivityResult
 		}
-//		if (!checkManageExternal()) {
-//			externalPerResult.launch(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).also {
-//				it.data = Uri.fromParts("package", OverallContext.baseContext.packageName, null)
-//			})
-//			return@registerForActivityResult
-//		}
-		viewModel.loadDevice()
-	}
-	private val externalPerResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
-		if (!checkManageExternal()) {
-			Toast.makeText(requireContext(), "请检查文件权限", Toast.LENGTH_SHORT).show()
-			return@registerForActivityResult
-		}
-		// 悬浮窗权限检查
-		viewModel.loadDevice()
 	}
 	
 	override fun loadLayoutResId(): Int = R.layout.fg_camera_select
 	
-	override fun initializeCreated(savedInstanceState: Bundle?) {
-		setStatusBarColor(ContextCompat.getColor(requireContext(), R.color.white))
+	override fun initializeEnd(savedInstanceState: Bundle?) {
+		Log.d("HomeSelectFragment", "执行初始化～～")
 		setStatusBarTextColor(true)
 		initRec()
 		initEvent()
-	}
-	
-	override fun initializeFirstCreated(savedInstanceState: Bundle?) {
-		if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-			permissionCall.launch(android.Manifest.permission.CAMERA)
-			return
-		}
-//		if (!checkManageExternal()) {
-//			 externalPerResult.launch(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).also {
-//				 it.data = Uri.fromParts("package", OverallContext.baseContext.packageName, null)
-//			 })
-//			return
-//		}
-		//在系统重建时
-		viewModel.loadDevice()
 	}
 	
 	private fun initRec() {
@@ -83,13 +56,26 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 	}
 	
 	private fun itemClick(groupPosition: Int, childPosition: Int) {
+		// 如果没有权限，则去申请权限
+		if (ContextCompat.checkSelfPermission(
+				requireContext(), android.Manifest.permission.CAMERA
+			) != PackageManager.PERMISSION_GRANTED) {
+			permissionCall.launch(android.Manifest.permission.CAMERA)
+			return
+		}
 		val item = viewModel.adapter.getItem(groupPosition, childPosition) ?: return
 		Log.d("HomeSelectFragment", "当前使用的类型:${item.deviceType}")
 		when (val device = item.deviceType) {
-			is CameraDeviceMode.Native1 -> jumpNav(R.id.camera_to_native1, "cameraId" to device.cameraId)
-			is CameraDeviceMode.Native2 -> jumpNav(R.id.camera_to_native2, "cameraId" to device.cameraId)
+//			is CameraDeviceMode.Native1 -> jumpNav(
+//				R.id.camera_to_native1, "cameraId" to device.cameraId
+//			)
+//			is CameraDeviceMode.Native2 -> jumpNav(
+//				R.id.camera_to_native2, "cameraId" to device.cameraId
+//			)
 			is CameraDeviceMode.USB -> jumpNav(R.id.camera_to_cpp, "usb_device" to device.device)
-			is CameraDeviceMode.V4L2 -> jumpNav(R.id.camera_to_cpp, "video_path" to device.videoPath)
+			is CameraDeviceMode.V4L2 -> jumpNav(
+				R.id.camera_to_cpp, "video_path" to device.videoPath
+			)
 			is CameraDeviceMode.LOCALE -> {
 				Log.d("HomeSelectFragment", "当前语言类型:${device.locale.toLanguageTag()}")
 				LanguageHelper.updateLocale(requireContext(), device.locale)
@@ -97,14 +83,22 @@ class HomeSelectFragment : BaseDataBindFragment<FgCameraSelectBinding, HomeSelec
 				navController.popBackStack(navController.currentDestination?.id ?: 0, true)
 				navController.navigate(navController.graph.startDestinationId)
 			}
-			CameraDeviceMode.OTHER -> {}
+			else -> {}
 		}
 	}
 	
-	fun checkManageExternal(): Boolean {
-		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-			return true
-		}
-		return Environment.isExternalStorageManager()
+	override fun initBottomHeight(bottom: Int): Int {
+		val params = mBinding.recList.layoutParams as ViewGroup.MarginLayoutParams
+		params.updateMargins(
+			params.leftMargin, params.topMargin, params.rightMargin, params.bottomMargin + bottom
+		)
+		val refreshParams = mBinding.cardRefresh.layoutParams as ViewGroup.MarginLayoutParams
+		refreshParams.updateMargins(
+			refreshParams.leftMargin,
+			refreshParams.topMargin,
+			refreshParams.rightMargin,
+			refreshParams.bottomMargin + bottom
+		)
+		return 0
 	}
 }

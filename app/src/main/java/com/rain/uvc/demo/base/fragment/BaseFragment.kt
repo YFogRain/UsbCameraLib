@@ -1,104 +1,74 @@
 package com.rain.uvc.demo.base.fragment
 
+import android.annotation.SuppressLint
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.OnBackPressedCallback
-import androidx.annotation.CallSuper
-import androidx.annotation.ColorInt
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
-import com.rain.uvc.demo.base.activity.BaseActivity
-import com.rain.uvc.demo.base.viewModel.BaseViewModel
-import com.rain.uvc.demo.utils.conversionViewModel
+import com.rain.uvc.demo.R
 import com.rain.uvc.demo.utils.viewLifeScope
+import com.rain.uvc.demo.base.viewModel.BaseViewModel
 
-abstract class BaseFragment<VM : BaseViewModel> : Fragment() {
-	/**
-	 * viewBind的对象
-	 */
-	protected val viewModel: VM by lazy { conversionViewModel() }
-	
+abstract class BaseFragment : Fragment() {
 	//返回键拦截
 	private val backDispatcher by lazy { requireActivity().onBackPressedDispatcher }
+	protected open fun loadUsAcViewModel(): Boolean = false
 	
-	private var isCreateReset: Boolean = true //是否销毁重建的，只有执行了onAttach方法，才会设置为false，因此，在onViewCreate时才能准确判断
+	//viewModel
+	protected open val viewModel: BaseViewModel? = null
 	
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		isCreateReset = false
-		Log.d("BaseFragment", "onCreate-${this.javaClass}")
-		backDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-			override fun handleOnBackPressed() {
-				Log.d("BaseFragment", "handleOnBackPressed:${isEnabled}")
-				if (onKeyDown()) return
-				//将当前enable设置为false
-				isEnabled = false
-				backDispatcher.onBackPressed()
-			}
-		})
-	}
-	
-	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
 		return initCreateView(inflater, container)
 	}
 	
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
-		Log.d("BaseFragment", "onViewCreated-${this.javaClass}")
+		applyWindowInsets(view)
+		// 添加返回键拦截
+		backDispatcher.addCallback(
+			viewLifecycleOwner, object : OnBackPressedCallback(true) {
+				override fun handleOnBackPressed() {
+					if (onKeyDown()) return
+					//将当前enable设置为false
+					isEnabled = false
+					backDispatcher.onBackPressed()
+				}
+				
+			})
 		initMVVMState()
-		initializeCreated(savedInstanceState)
-		if (!isCreateReset) initializeFirstCreated(savedInstanceState)
+		initializeEnd(savedInstanceState)
 	}
-	
-	override fun onDestroyView() {
-		dismissDialogLoad()
-		isCreateReset = true
-		super.onDestroyView()
-	}
-	
-	abstract fun initCreateView(inflater: LayoutInflater, container: ViewGroup?): View?
 	
 	/**
-	 * 返回按钮点击
+	 * 初始化view创建
 	 */
-	open fun onKeyDown(): Boolean {
-		return false
-	}
+	protected abstract fun initCreateView(inflater: LayoutInflater, container: ViewGroup?): View
 	
 	/**
 	 * view初始化之后
 	 */
-	protected abstract fun initializeCreated(savedInstanceState: Bundle?)
+	protected abstract fun initializeEnd(savedInstanceState: Bundle?)
 	
-	protected open fun initializeFirstCreated(savedInstanceState: Bundle?) {}
-	
-	/**
-	 * 是否创建viewModel，默认为创建
-	 */
-	protected open fun isCreatedViewModel(): Boolean = true
-	
-	/**
-	 * 初始化viewModel的loadingx
-	 */
-	@CallSuper
 	protected open fun initMVVMState() {
 		//设置loading回调
-		if (!isCreatedViewModel()) return
-		viewModel.setDialogStateChange(viewLifeScope) {
+		if (loadUsAcViewModel()) return // 如果是activity注册的，则不需要处理
+		viewModel?.setDialogStateChange(viewLifeScope) {
 			if (it) showDialogLoad() else dismissDialogLoad()
 		}
 	}
 	
 	/**
-	 * 显示loading
+	 * 显示dialog
 	 */
-	private var loading: AlertDialog? = null
+	@SuppressLint("InflateParams")
 	protected fun showDialogLoad() {
 	}
 	
@@ -108,6 +78,9 @@ abstract class BaseFragment<VM : BaseViewModel> : Fragment() {
 	protected fun dismissDialogLoad() {
 	}
 	
+	/**
+	 * 隐藏弹窗
+	 */
 	protected fun hideInput() {
 		try {
 			val inputManager = context?.getSystemService(AppCompatActivity.INPUT_METHOD_SERVICE) as? InputMethodManager ?: return
@@ -118,12 +91,55 @@ abstract class BaseFragment<VM : BaseViewModel> : Fragment() {
 		}
 	}
 	
-	protected fun setStatusBarColor(@ColorInt color: Int) {
-		(activity as? BaseActivity<*>)?.setStatusBarColor(color)
+	/**
+	 * 返回按钮点击
+	 */
+	protected open fun onKeyDown(): Boolean {
+		return false
 	}
 	
-	protected fun setStatusBarTextColor(isLight: Boolean) {
-		(activity as? BaseActivity<*>)?.setStatusBarTextColor(isLight)
+	private fun applyWindowInsets(root: View) {
+		ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+			val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+			setupStatusBarHeight(root, systemBars.top)
+			val lp = view.layoutParams as? ViewGroup.MarginLayoutParams
+			lp?.let {
+				it.bottomMargin = initBottomHeight(systemBars.bottom)
+				view.layoutParams = it
+			}
+			insets
+		}
+		ViewCompat.requestApplyInsets(root)
+		setStatusBarTextColor(true)
 	}
 	
+	private fun setupStatusBarHeight(view: View, statusBarHeight: Int) {
+		view.findViewById<View>(R.id.statusBarBg)?.also {
+			it.updateLayoutParams {
+				height = statusBarHeight
+			}
+		}
+		view.findViewById<View>(R.id.statusBarBg)?.updateLayoutParams {
+			height = statusBarHeight
+		}
+	}
+	
+	/**
+	 * 设置状态栏文字颜色
+	 * @param isDark true = 深色文字（适合浅色背景），false = 浅色文字（适合深色背景）
+	 */
+	protected fun setStatusBarTextColor(isDark: Boolean) {
+		val window = activity?.window ?: return
+		WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = isDark
+	}
+	
+	/**
+	 *  初始化底部高度
+	 */
+	protected open fun initBottomHeight(bottom: Int): Int = bottom
+	
+	override fun onDestroyView() {
+		super.onDestroyView()
+		dismissDialogLoad()
+	}
 }

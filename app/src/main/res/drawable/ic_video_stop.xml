@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="70dp"
+    android:height="70dp"
+    android:viewportWidth="70"
+    android:viewportHeight="70">
+    <!-- 外圈 -->
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M35,5C18.43,5 5,18.43 5,35s13.43,30 30,30 30,-13.43 30,-30S51.57,5 35,5zM35,60c-13.79,0 -25,-11.21 -25,-25s11.21,-25 25,-25 25,11.21 25,25 -11.21,25 -25,25z"/>
+    <!-- 停止方块 -->
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M25,25h20v20h-20z"/>
+</vector>

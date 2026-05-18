@@ -14,8 +14,6 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
 import android.view.WindowManager
-import com.rain.uvc.mode.CameraSize
-import com.rain.uvc.mode.CameraSupportSize
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull

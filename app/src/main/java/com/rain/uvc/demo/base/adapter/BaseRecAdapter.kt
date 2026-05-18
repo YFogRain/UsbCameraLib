@@ -2,7 +2,6 @@ package com.rain.uvc.demo.base.adapter
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.util.Log
 import android.view.ViewGroup
 import androidx.annotation.LayoutRes
 import androidx.databinding.ViewDataBinding
@@ -11,11 +10,11 @@ import com.rain.uvc.demo.utils.getBind
 import com.rain.uvc.demo.utils.singleClick
 
 /**
- * adapter父类
+ * rec-view的base类
  */
 abstract class BaseRecAdapter<T> : RecyclerView.Adapter<BaseRecHolder<T, *>>() {
 	private var adapterList: MutableList<T>? = null
-	private var recycler: RecyclerView? = null
+	protected var recycler: RecyclerView? = null
 	override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
 		super.onAttachedToRecyclerView(recyclerView)
 		this.recycler = recyclerView
@@ -24,15 +23,24 @@ abstract class BaseRecAdapter<T> : RecyclerView.Adapter<BaseRecHolder<T, *>>() {
 	override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
 		super.onDetachedFromRecyclerView(recyclerView)
 		recycler = null
+		itemClickListener = null
+		onItemLongClickListener = null
 	}
 	
 	/**
 	 * 初始化设置数据
 	 */
 	@SuppressLint("NotifyDataSetChanged")
-	open fun setData(list: MutableList<T>?) {
+	open fun setItems(list: MutableList<T>?) {
 		this.adapterList = list
 		notifyDataSetChanged()
+	}
+	
+	fun clear() {
+		val oldDataSize = itemCount
+		if (oldDataSize <= 0) return
+		notifyItemRangeRemoved(0, oldDataSize)
+		
 	}
 	
 	/**
@@ -86,8 +94,6 @@ abstract class BaseRecAdapter<T> : RecyclerView.Adapter<BaseRecHolder<T, *>>() {
 		removeItemData(position)
 	}
 	
-	fun getItemData(position: Int) = adapterList?.getOrNull(position)
-	
 	/**
 	 * 更新某条数据
 	 */
@@ -95,6 +101,19 @@ abstract class BaseRecAdapter<T> : RecyclerView.Adapter<BaseRecHolder<T, *>>() {
 		if (data == null || adapterList.isNullOrEmpty()) return
 		val indexOf = adapterList?.indexOf(data) ?: -1
 		if (indexOf >= 0) notifyItemChanged(indexOf)
+	}
+	
+	/**
+	 * 更新某条数据
+	 */
+	fun updateItemData(data: T?, payload: Any) {
+		if (data == null || adapterList.isNullOrEmpty()) return
+		val indexOf = adapterList?.indexOf(data) ?: -1
+		if (indexOf >= 0) notifyItemChanged(indexOf, payload)
+	}
+	
+	fun updateAllItem(payload: Any) {
+		notifyItemRangeChanged(0, itemCount, payload)
 	}
 	
 	/**
@@ -118,24 +137,32 @@ abstract class BaseRecAdapter<T> : RecyclerView.Adapter<BaseRecHolder<T, *>>() {
 	
 	override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BaseRecHolder<T, *> {
 		val holder = createHolder(parent, viewType)
-		holder.itemView.singleClick {
-			val position = holder.adapterPosition
-			if (position == RecyclerView.NO_POSITION) return@singleClick
-			itemClickListener?.invoke(position)
+		if (itemClickListener != null) {
+			holder.itemView.singleClick {
+				val position = holder.adapterPosition
+				if (position == RecyclerView.NO_POSITION) return@singleClick
+				itemClickListener?.invoke(position)
+			}
 		}
-		holder.itemView.setOnLongClickListener {
-			val position = holder.adapterPosition
-			if (position == RecyclerView.NO_POSITION) return@setOnLongClickListener true
-			onItemLongClickListener?.invoke(position)
-			return@setOnLongClickListener true
+		if (onItemLongClickListener != null) {
+			holder.itemView.setOnLongClickListener {
+				val position = holder.adapterPosition
+				if (position == RecyclerView.NO_POSITION) return@setOnLongClickListener true
+				onItemLongClickListener?.invoke(position)
+				return@setOnLongClickListener true
+			}
 		}
 		return holder
 	}
 	
 	override fun onBindViewHolder(holder: BaseRecHolder<T, *>, position: Int) {
-		val t = adapterList?.getOrNull(position)
-		if (t != null) holder.setData(t, position)
-		collectHolder(holder, position)
+		val t = getItem(position) ?: return
+		holder.setData(t, position)
+		collectHolder(holder, t, position)
+	}
+	
+	fun getItem(position: Int): T? {
+		return adapterList?.getOrNull(position)
 	}
 	
 	override fun onBindViewHolder(holder: BaseRecHolder<T, *>, position: Int, payloads: MutableList<Any>) {
@@ -143,20 +170,20 @@ abstract class BaseRecAdapter<T> : RecyclerView.Adapter<BaseRecHolder<T, *>>() {
 			onBindViewHolder(holder, position)
 			return
 		}
-		val t = adapterList?.getOrNull(position)
-		if (t != null) holder.updateData(t, position, payloads[0])
-		collectHolder(holder, position, payloads[0])
+		val t = getItem(position) ?: return
+		holder.updateData(t, position, payloads[0])
+		collectHolder(holder, t, position, payloads[0])
 	}
 	
 	/**
 	 * 绑定数据
 	 */
-	open fun collectHolder(holder: BaseRecHolder<T, *>, position: Int) {}
+	open fun collectHolder(holder: BaseRecHolder<T, *>, mode: T, position: Int) {}
 	
 	/**
 	 * 绑定数据，指定更新某些值
 	 */
-	open fun collectHolder(holder: BaseRecHolder<T, *>, position: Int, payload: Any) {}
+	open fun collectHolder(holder: BaseRecHolder<T, *>, mode: T, position: Int, payload: Any) {}
 	
 	override fun getItemCount() = adapterList?.size ?: 0
 	
@@ -178,37 +205,46 @@ abstract class BaseRecAdapter<T> : RecyclerView.Adapter<BaseRecHolder<T, *>>() {
 	/**
 	 * 创建viewHolder。默认返回baseRecHolder
 	 */
-	open fun createHolder(parent: ViewGroup, viewType: Int, @LayoutRes layoutResId: Int, variableId: Int): BaseRecHolder<T, *> {
+	open fun createHolder(
+		parent: ViewGroup, viewType: Int,
+		@LayoutRes layoutResId: Int,
+		variableId: Int,
+	): BaseRecHolder<T, *> {
 		return BaseRecHolder(parent.getBind(layoutResId), variableId)
 	}
 }
 
-open class BaseRecHolder<T, DB : ViewDataBinding>(val dataBind: DB, val variableId: Int = -1) : RecyclerView.ViewHolder(dataBind.root) {
-	protected val mContext: Context = itemView.context
+/**
+ * dataBinding 使用的viewHolder
+ */
+open class BaseRecHolder<T, DB : ViewDataBinding>(val mBinding: DB, val variableId: Int = -1) : RecyclerView.ViewHolder(
+	mBinding.root
+) {
+	val mContext: Context = itemView.context
 	
 	/**
 	 * holder刷新当前item的所有数据
 	 * 由adapter.onBindViewHolder(RecyclerView.ViewHolder holder, int position)回調
 	 */
-	open fun setData(model: T, position: Int) {
-		initBindModel(model)
+	open fun setData(mode: T, position: Int) {
+		initBindModel(mode)
 	}
 	
 	/**
 	 * holder局部刷新，只更新改变了的数据，payloads为刷新设置的标记
 	 * 由adapter.onBindViewHolder(RecyclerView.ViewHolder holder, int position, List<Object> payloads)回調
 	 */
-	open fun updateData(model: T, position: Int, payloads: Any) {
-		initBindModel(model)
+	open fun updateData(mode: T, position: Int, payloads: Any) {
+		initBindModel(mode)
 	}
 	
 	/**
 	 * dataBind更新数据方法
 	 */
-	private fun initBindModel(model: T) {
+	private fun initBindModel(mode: T) {
 		if (variableId != -1) {
-			dataBind.setVariable(variableId, model)
-			dataBind.executePendingBindings()
+			mBinding.setVariable(variableId, mode)
+			mBinding.executePendingBindings()
 		}
 	}
 }

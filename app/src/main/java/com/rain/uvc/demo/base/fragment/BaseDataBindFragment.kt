@@ -6,14 +6,13 @@ import android.view.ViewGroup
 import androidx.annotation.LayoutRes
 import androidx.databinding.DataBindingUtil
 import androidx.databinding.ViewDataBinding
-import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.singleClick
 
 /**
  * dataBind基类 - VB 为[ViewDataBinding]
  * 在[loadVariableId]不为-1的情况下进行[ViewDataBinding]和[mViewModel]的绑定
  */
-abstract class BaseDataBindFragment<DB : ViewDataBinding, VM : BaseViewModel> : BaseFragment<VM>() {
+abstract class BaseDataBindFragment<DB : ViewDataBinding> : BaseFragment() {
 	protected lateinit var mBinding: DB
 	
 	/**
@@ -32,7 +31,7 @@ abstract class BaseDataBindFragment<DB : ViewDataBinding, VM : BaseViewModel> : 
 	 */
 	open fun initModelObserve() = Unit
 	
-	override fun initCreateView(inflater: LayoutInflater, container: ViewGroup?): View? {
+	override fun initCreateView(inflater: LayoutInflater, container: ViewGroup?): View {
 		return DataBindingUtil.inflate<DB>(inflater, loadLayoutResId(), container, false).apply {
 			mBinding = this
 			mBinding.root.singleClick { hideInput() }
@@ -43,7 +42,7 @@ abstract class BaseDataBindFragment<DB : ViewDataBinding, VM : BaseViewModel> : 
 		super.initMVVMState()
 		mBinding.lifecycleOwner = viewLifecycleOwner
 		val variableId = loadVariableId()
-		if (isCreatedViewModel() && variableId != -1) {
+		if (viewModel != null && variableId != -1) {
 			mBinding.setVariable(variableId, viewModel)
 		}
 		initModelObserve()

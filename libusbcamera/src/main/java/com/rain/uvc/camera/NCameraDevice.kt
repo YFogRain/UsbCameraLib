@@ -228,7 +228,7 @@ class NCameraDevice(context: Context, nativeId: Long, val deviceName: String,val
 	/**
 	 * 获取支持的类型列表
 	 */
-	fun <T> getSupportedParameter(key: SupportParameters.Key<T>): T? {
+	fun <T> getSupportedParameters(key: SupportParameters.Key<T>): T? {
 		return getSupportedParameter(mNativeAtomic.get(), key)
 	}
 	

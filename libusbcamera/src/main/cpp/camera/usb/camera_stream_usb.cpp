@@ -257,6 +257,9 @@ void CameraStreamUsbImpl::thread_func_capture() {
         if (!pFrame) {
             continue;
         }
+        // JPEG -> Surface
+
+        // 转换绘制
         stream_frame_t *bgrFrame = any2Bgr(pFrame);
         free_stream(pFrame); // 释放源数据
         // 绘制
