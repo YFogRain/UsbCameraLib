@@ -12,7 +12,7 @@ fun Array<Image.Plane>?.imageDataToBytes(format: Int, width: Int, height: Int): 
 	if (this.isNullOrEmpty()) return null
 	//如果当前是yuv的数据类型，并且，数据长度不是3个，则直接return
 	if (format == ImageFormat.YUV_420_888) {
-		return yuvToBytes()
+		return yuvToNv21(width, height)
 	}
 	val buffer = this[0].buffer
 	if (!buffer.isAvailable()) return null
@@ -37,20 +37,41 @@ fun Array<Image.Plane>?.imageDataToBytes(format: Int, width: Int, height: Int): 
 	return null
 }
 
-private fun Array<Image.Plane>.yuvToBytes(): ByteArray? {
+private fun Array<Image.Plane>.yuvToNv21(width: Int, height: Int): ByteArray? {
 	if (this.size != 3) return null
-	val yBuffer = this[0].buffer
-	val uBuffer = this[1].buffer
-	val vBuffer = this[2].buffer
+	if (width <= 0 || height <= 0) return null
+	val yPlane = this[0]
+	val uPlane = this[1]
+	val vPlane = this[2]
+	val yBuffer = yPlane.buffer.duplicate()
+	val uBuffer = uPlane.buffer.duplicate()
+	val vBuffer = vPlane.buffer.duplicate()
 	if (!yBuffer.isAvailable() || !uBuffer.isAvailable() || !vBuffer.isAvailable()) return null
-	val lengthY = yBuffer.remaining()
-	val lengthU = uBuffer.remaining()
-	val lengthV = vBuffer.remaining()
-	if (lengthY == 0 || lengthU == 0 || lengthV == 0) return null
-	val outBytes = ByteArray(lengthY + lengthU + lengthV)
-	yBuffer.get(outBytes, 0, lengthY)
-	uBuffer.get(outBytes, lengthY, lengthU)
-	vBuffer.get(outBytes, lengthY + lengthU, lengthV)
+	val frameSize = width * height
+	val outBytes = ByteArray(frameSize + frameSize / 2)
+	var yIndex = 0
+	for (row in 0 until height) {
+		val rowStart = row * yPlane.rowStride
+		for (col in 0 until width) {
+			val srcIndex = rowStart + col * yPlane.pixelStride
+			if (srcIndex >= yBuffer.limit()) return null
+			outBytes[yIndex++] = yBuffer.get(srcIndex)
+		}
+	}
+	val chromaWidth = width / 2
+	val chromaHeight = height / 2
+	var uvIndex = frameSize
+	for (row in 0 until chromaHeight) {
+		val uRowStart = row * uPlane.rowStride
+		val vRowStart = row * vPlane.rowStride
+		for (col in 0 until chromaWidth) {
+			val vIndex = vRowStart + col * vPlane.pixelStride
+			val uIndex = uRowStart + col * uPlane.pixelStride
+			if (vIndex >= vBuffer.limit() || uIndex >= uBuffer.limit()) return null
+			outBytes[uvIndex++] = vBuffer.get(vIndex)
+			outBytes[uvIndex++] = uBuffer.get(uIndex)
+		}
+	}
 	return outBytes
 }
 

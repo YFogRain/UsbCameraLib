@@ -13,6 +13,6 @@ public interface IFrameListener {
      * @param height 高
      * @param frame  对应数据的ByteBuffer对象
      */
-    void onFrame(int width, int height, ByteBuffer frame);
+    void onFrame(ByteBuffer frame, int width, int height);
 }
 

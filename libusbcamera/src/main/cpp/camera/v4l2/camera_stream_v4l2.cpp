@@ -8,7 +8,9 @@
 #include "linux/v4l2-subdev.h"
 #include "video_v4l2_utils.h"
 #include <sys/ioctl.h>
+#include <chrono>
 #include <sys/mman.h>
+#include <utility>
 
 CameraStreamV4l2Impl::CameraStreamV4l2Impl(int fd)
         : videoFd(fd), frameWidth(640), frameHeight(480), frameFormat(PREVIEW_FORMAT_BGR) {
@@ -16,6 +18,8 @@ CameraStreamV4l2Impl::CameraStreamV4l2Impl(int fd)
 }
 
 CameraStreamV4l2Impl::~CameraStreamV4l2Impl() {
+    CameraStreamV4l2Impl::stopPreview();
+    releasePreviewFunc();
     videoFd = -1;
     delete mPreview;
     mPreview = nullptr;
@@ -37,7 +41,7 @@ bool CameraStreamV4l2Impl::startPreview() {
         return false;
     }
     // 1. 获取宽高信息，设置到当前调用位置
-    struct v4l2_format fmt;
+    struct v4l2_format fmt{};
     memset(&fmt, 0, sizeof(fmt));
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (ioctl(videoFd, VIDIOC_G_FMT, &fmt) == 0) { // 获取当前的宽高配置信息
@@ -64,11 +68,12 @@ bool CameraStreamV4l2Impl::startPreview() {
     } else {
         previewFps = 30; // fallback
     }
-    LOG_D("当前使用的分辨率信息:%d*%d ,format:%d", frameWidth, frameHeight, frameFormat);
+    LOG_D("CameraDeviceV4L2Impl", "当前使用的分辨率信息:%d*%d ,format:%d", frameWidth, frameHeight,
+          frameFormat);
     // 设置窗口的宽高
     // 2. 设置缓冲区buffer
     if (!prepare_mmap()) { // 初始化缓冲区
-        LOG_E("缓冲区准备失败");
+        LOG_E("CameraDeviceV4L2Impl", "缓冲区准备失败");
         return false;
     }
     // 3. 打开流
@@ -80,15 +85,17 @@ bool CameraStreamV4l2Impl::startPreview() {
     mIsCaptureRunning.store(true);
     captureThread = std::thread(&CameraStreamV4l2Impl::thread_func_capture, this);
     previewThread = std::thread(&CameraStreamV4l2Impl::thread_func_preview, this);
-    mIsPreviewCallRunning.store(true);
-    previewResultThread = std::thread(&CameraStreamV4l2Impl::thread_func_preview_call, this);
+    if (hasPreviewDataListener()) {
+        mIsPreviewCallRunning.store(true);
+        previewResultThread = std::thread(&CameraStreamV4l2Impl::thread_func_preview_call, this);
+    }
     return true;
 }
 
 bool CameraStreamV4l2Impl::stopPreview() {
     previewFps = 30;
-    LOG_D("停止预览开始");
-    LOG_D("mIsRunning:%d", mIsCaptureRunning.load());
+    LOG_D("CameraDeviceV4L2Impl", "停止预览开始");
+    LOG_D("CameraDeviceV4L2Impl", "mIsRunning:%d", mIsCaptureRunning.load());
     if (mIsCaptureRunning.load()) {
         // 停止预览线程
         {
@@ -106,14 +113,16 @@ bool CameraStreamV4l2Impl::stopPreview() {
         if (previewThread.joinable()) {
             previewThread.join();
         }
-        // 停止预览回调线程
-        previewResultCond.notify_one();
-        if (previewResultThread.joinable()) {
-            previewResultThread.join();
+        if (mIsPreviewCallRunning.load()) {
+            // 停止预览回调线程
+            previewResultCond.notify_one();
+            if (previewResultThread.joinable()) {
+                previewResultThread.join();
+            }
         }
         enum v4l2_buf_type bufType = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (ioctl(videoFd, VIDIOC_STREAMOFF, &bufType) < 0) {
-            LOG_E("停止视频流失败, 错误码: %d", errno);
+            LOG_E("CameraDeviceV4L2Impl", "停止视频流失败, 错误码: %d", errno);
         }
         // 停止预览
     }
@@ -121,7 +130,7 @@ bool CameraStreamV4l2Impl::stopPreview() {
     clearPreviewFrames();
     clearPreviewResultFrames();
     clearPictureFrame();
-    LOG_D("停止预览结束");
+    LOG_D("CameraDeviceV4L2Impl", "停止预览结束");
     return true;
 }
 
@@ -135,42 +144,42 @@ bool CameraStreamV4l2Impl::prepare_mmap() {
     req.memory = V4L2_MEMORY_MMAP;
 
     if (ioctl(videoFd, VIDIOC_REQBUFS, &req) < 0) {
-        LOG_E("请求缓冲区失败,错误码:%d", errno);
+        LOG_E("CameraDeviceV4L2Impl", "请求缓冲区失败,错误码:%d", errno);
         return false;
     }
     captureBufferLength = req.count;
     captureBuffers = new Buffer[req.count];
     // 初始化缓冲区
     for (unsigned int i = 0; i < req.count; i++) {
-        struct v4l2_buffer buf;
+        struct v4l2_buffer buf{};
         memset(&buf, 0, sizeof(buf));
         buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
         if (ioctl(videoFd, VIDIOC_QUERYBUF, &buf) < 0) {
-            LOG_E("获取缓冲区数据,错误码:%d", errno);
+            LOG_E("CameraDeviceV4L2Impl", "获取缓冲区数据,错误码:%d", errno);
             return false;
         }
         captureBuffers[i].length = buf.length;
-        captureBuffers[i].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED,
+        captureBuffers[i].start = mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED,
                                        videoFd, buf.m.offset);
         if (captureBuffers[i].start == MAP_FAILED) {
-            LOG_E("获取缓冲区数据,错误码:%d", errno);
+            LOG_E("CameraDeviceV4L2Impl", "获取缓冲区数据,错误码:%d", errno);
             return false;
         }
         // Queue the buffer
         if (ioctl(videoFd, VIDIOC_QBUF, &buf) < 0) {
-            LOG_E("放回缓冲区数据失败,错误码:%d", errno);
+            LOG_E("CameraDeviceV4L2Impl", "放回缓冲区数据失败,错误码:%d", errno);
             return false;
         }
     }
     return true;
 }
 
-bool CameraStreamV4l2Impl::startCameraStream() {
+bool CameraStreamV4l2Impl::startCameraStream() const {
     enum v4l2_buf_type bufType = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (ioctl(videoFd, VIDIOC_STREAMON, &bufType) < 0) {
-        LOG_E("视频流启动失败, 错误码: %d", errno);
+        LOG_E("CameraDeviceV4L2Impl", "视频流启动失败, 错误码: %d", errno);
         return false;
     }
     return true;
@@ -231,7 +240,7 @@ void CameraStreamV4l2Impl::cleanup_buffers() {
 void CameraStreamV4l2Impl::clearPreviewResultFrames() {
     std::lock_guard<std::mutex> lock(previewResultMutex);
     if (!previewResultFrames.empty()) {
-        for (stream_frame_t *pFrame: previewResultFrames) { // 直接遍历，避免 size() 变化
+        for (stream_frame_t *pFrame: previewResultFrames) {
             free_stream(pFrame);
         }
         previewResultFrames.clear();
@@ -296,15 +305,15 @@ stream_frame_t *CameraStreamV4l2Impl::waitPreviewCallFrames() {
 }
 
 void CameraStreamV4l2Impl::thread_func_capture() {
-    LOG_D("=====开启循环捕获线程数据");
-    struct v4l2_buffer buf;
+    LOG_D("CameraDeviceV4L2Impl", "=====开启循环捕获线程数据");
+    struct v4l2_buffer buf{};
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
 
     while (mIsCaptureRunning && videoFd != -1) {
         // 从缓冲区队列中获取帧
         if (ioctl(videoFd, VIDIOC_DQBUF, &buf) < 0) {
-            LOG_E("从缓冲区队列中获取帧失败, 错误码: %d", errno);
+            LOG_E("CameraDeviceV4L2Impl", "从缓冲区队列中获取帧失败, 错误码: %d", errno);
             continue;
         }
         if (!(buf.flags & V4L2_BUF_FLAG_ERROR)) {
@@ -322,16 +331,16 @@ void CameraStreamV4l2Impl::thread_func_capture() {
         }
         // 处理完毕后，将缓冲区重新放回队列
         if (ioctl(videoFd, VIDIOC_QBUF, &buf) < 0) {
-            LOG_E("将缓冲区放回队列失败, 错误码: %d", errno);
+            LOG_E("CameraDeviceV4L2Impl", "将缓冲区放回队列失败, 错误码: %d", errno);
         }
     }
 }
 
 void CameraStreamV4l2Impl::thread_func_preview() {
-    LOG_D("=====开启循环捕获线程数据");
-    LOG_D("=====mIsRunning：：：%d", mIsCaptureRunning.load());
-    if (mPreview) {
-        mPreview->initRender(frameWidth, frameHeight);
+    LOG_D("CameraDeviceV4L2Impl", "=====开启循环捕获线程数据");
+    LOG_D("CameraDeviceV4L2Impl", "=====mIsRunning：：：%d", mIsCaptureRunning.load());
+    if (mPreview && !mPreview->init(frameWidth, frameHeight)) {
+        LOG_E("CameraStreamUsbImpl", "GLPreview init failed");
     }
     while (mIsCaptureRunning.load()) {
         // 等待获取预览的数据
@@ -339,24 +348,45 @@ void CameraStreamV4l2Impl::thread_func_preview() {
         if (!pFrame) {
             continue;
         }
-        stream_frame_t *bgrFrame = any2Bgr(pFrame);
-        free_stream(pFrame); // 释放源数据
-        // 绘制
-        if (bgrFrame && bgrFrame->data && bgrFrame->data_size > 0) { // 如果数据不为空
-            mPreview->drawFrame(bgrFrame->data, bgrFrame->width, bgrFrame->height,FORMAT_BGR);
+        if (pFrame->format == PREVIEW_FORMAT_BGR) {
+            if (mPreview) {
+                mPreview->drawFrame(pFrame->data, pFrame->width, pFrame->height);
+            }
+            putPictureFrame(pFrame);
+            if (hasPreviewDataListener()) {
+                putPreviewCallFrames(pFrame);
+                pFrame = nullptr;
+            }
+            free_stream(pFrame);
+            continue;
+        }
+
+        cv::Mat bgrFrame = ImgUtils::any2Bgr(pFrame->data, pFrame->data_size, pFrame->width,
+                                             pFrame->height, pFrame->format);
+        free_stream(pFrame);
+        if (bgrFrame.empty() || !bgrFrame.data) {
+            continue;
+        }
+        if (mPreview) {
+            mPreview->drawFrame(bgrFrame.data, bgrFrame.cols, bgrFrame.rows);
         }
         putPictureFrame(bgrFrame);
-        // 发送给回调线程处理
-        putPreviewCallFrames(bgrFrame);
+        if (hasPreviewDataListener()) {
+            stream_frame_t *callbackFrame = allocate_bgr_stream_frame(
+                    bgrFrame, mPreview ? mPreview->getRotation() : 0);
+            if (callbackFrame) {
+                putPreviewCallFrames(callbackFrame);
+            }
+        }
     }
     if (mPreview) {
-        mPreview->destroyRender();
+        mPreview->releaseOpenGL();
     }
 }
 
 void CameraStreamV4l2Impl::thread_func_preview_call() {
-    LOG_D("=====开启循环捕获线程数据");
-    LOG_D("=====mIsRunning：：：%d", mIsPreviewCallRunning.load());
+    LOG_D("CameraDeviceV4L2Impl","=====开启循环捕获线程数据");
+    LOG_D("CameraDeviceV4L2Impl","=====mIsRunning：：：%d", mIsPreviewCallRunning.load());
     JNIEnv *env = nullptr;
     while (mIsPreviewCallRunning.load()) {
         // 等待获取预览的数据
@@ -370,7 +400,7 @@ void CameraStreamV4l2Impl::thread_func_preview_call() {
         // 释放源数据
         free_stream(pFrame);
         if (outFrame.empty()) {
-            return;
+            continue;
         }
         if (theVM && !env) {
             theVM->AttachCurrentThread(&env, nullptr);
@@ -383,7 +413,7 @@ void CameraStreamV4l2Impl::thread_func_preview_call() {
                 env->CallVoidMethod(previewListener, onFrameMethod, pFrame->width, pFrame->height,
                                     buf);
                 if (env->ExceptionCheck()) {
-                    LOG_D("ExceptionCheck");
+                    LOG_D("CameraDeviceV4L2Impl","ExceptionCheck");
                     env->ExceptionDescribe();
                 }
                 env->ExceptionClear();

@@ -11,7 +11,9 @@ extern int DEBUG_ENABLE;
 
 #define LOG_D(tag, ...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_DEBUG, tag, __VA_ARGS__); } while(0)
 #define LOG_I(tag, ...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_INFO, tag, __VA_ARGS__); } while(0)
-#define LOG_E(tag, ...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_INFO, tag, __VA_ARGS__); } while(0)
+#define LOG_E(tag, ...) do { if(DEBUG_ENABLE) __android_log_print(ANDROID_LOG_ERROR, tag, __VA_ARGS__); } while(0)
+
+
 
 #if defined(__GNUC__)
 #define        CONDITION(cond)                ((__builtin_expect((cond)!=0, 0)))

@@ -72,8 +72,8 @@ dependencies {
     implementation libs.material
     implementation libs.activity.ktx
     implementation libs.gson
-//    implementation project(":libusbcamera")
-    implementation project(":camera_uvc")
+    implementation project(":libusbcamera")
+//    implementation project(":camera_uvc")
     implementation libs.okio
     implementation libs.glide
 

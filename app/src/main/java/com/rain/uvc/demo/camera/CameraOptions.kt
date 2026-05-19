@@ -3,12 +3,12 @@ package com.rain.uvc.demo.camera
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CaptureRequest
 import android.util.Log
-import com.rain.camera.uvc.factory.NativeUsbDevice
-import com.rain.camera.uvc.mode.UvcCameraSize
-import com.rain.camera.uvc.mode.UvcCameraSupportSize
-import com.rain.camera.uvc.parameter.UvcCameraParameter
-import com.rain.camera.uvc.parameter.UvcSupportParameter
 import com.rain.uvc.demo.utils.GsonHelper
+import com.rain.uvc.factory.NativeUsbDevice
+import com.rain.uvc.mode.UvcCameraSize
+import com.rain.uvc.mode.UvcCameraSupportSize
+import com.rain.uvc.parameters.UvcCameraParameter
+import com.rain.uvc.parameters.UvcSupportParameter
 
 /**
  * @author yuan

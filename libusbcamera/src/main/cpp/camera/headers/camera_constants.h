@@ -28,9 +28,8 @@
 #define CAMERA_PARAMETER_HUE 13                // 色调
 #define CAMERA_PARAMETER_AUTO_WHITE_BALANCE 14 // 自动白平衡
 #define CAMERA_PARAMETER_WHITE_BALANCE 15      // 白平衡
-#define CAMERA_PARAMETER_SCENE_MODE 16         // 场景模式
-#define CAMERA_PARAMETER_PRIVACY 17            // 隐私模式
-#define CAMERA_PARAMETER_MIRROR 18             // 镜像处理
+#define CAMERA_PARAMETER_PRIVACY 16            // 隐私模式
+#define CAMERA_PARAMETER_MIRROR 17             // 镜像处理
 
 #define  UVC_FORMAT_FRAME_WINDOW  WINDOW_FORMAT_RGBA_8888
 

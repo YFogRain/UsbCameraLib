@@ -9,6 +9,43 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 #include "libuvc/libuvc_internal.h"
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+
+namespace {
+constexpr uint8_t UVC_AE_MODE_MANUAL = 1;
+constexpr uint8_t UVC_AE_MODE_AUTO = 2;
+constexpr uint8_t UVC_AE_MODE_SHUTTER_PRIORITY = 4;
+constexpr uint8_t UVC_AE_MODE_APERTURE_PRIORITY = 8;
+
+template<typename T>
+T clampTo(int value) {
+    return static_cast<T>(
+            std::clamp(
+                    value,
+                    static_cast<int>(std::numeric_limits<T>::min()),
+                    static_cast<int>(std::numeric_limits<T>::max())
+            )
+    );
+}
+
+uint8_t boolToUvc(int value) {
+    return value == 1 ? 1 : 0;
+}
+
+bool isAutoExposureMode(uint8_t mode) {
+    return mode == UVC_AE_MODE_AUTO ||
+           mode == UVC_AE_MODE_SHUTTER_PRIORITY ||
+           mode == UVC_AE_MODE_APERTURE_PRIORITY;
+}
+
+bool supportsAutoExposureMode(uint8_t modeMask) {
+    return (modeMask & UVC_AE_MODE_AUTO) != 0 ||
+           (modeMask & UVC_AE_MODE_SHUTTER_PRIORITY) != 0 ||
+           (modeMask & UVC_AE_MODE_APERTURE_PRIORITY) != 0;
+}
+}
 
 CameraDeviceUsbImpl::CameraDeviceUsbImpl(uvc_context_t *context,
                                          uvc_device_t *device,
@@ -19,14 +56,14 @@ CameraDeviceUsbImpl::CameraDeviceUsbImpl(uvc_context_t *context,
 }
 
 CameraDeviceUsbImpl::~CameraDeviceUsbImpl() {
-    mCameraStream->stopPreview();
+    mCameraStream->CameraStreamUsbImpl::stopPreview();
     mCameraStream->releasePreviewFunc();
-    releaseButtonListener(); // 释放button的监听
+    CameraDeviceUsbImpl::releaseButtonListener(); // 释放button的监听
     delete mCameraStream;
     mCameraStream = nullptr;
     if (LIKELY(mDeviceHandle)) {
         // 关闭对应的设备
-        LOG_D("uvc_close mDeviceHandle");
+        LOG_D("CameraDeviceUsbImpl", "uvc_close mDeviceHandle");
         uvc_close(mDeviceHandle);
         mDeviceHandle = nullptr;
     }
@@ -35,7 +72,7 @@ CameraDeviceUsbImpl::~CameraDeviceUsbImpl() {
         mDevice = nullptr;
     }
     if (mContext) {
-        LOG_D("uvc_exit mContext");
+        LOG_D("CameraDeviceUsbImpl", "uvc_exit mContext");
         uvc_exit(mContext);
         mContext = nullptr;
     }
@@ -43,64 +80,73 @@ CameraDeviceUsbImpl::~CameraDeviceUsbImpl() {
         close(mFd);
         mFd = 0;
     }
-    LOG_D("断开连接结束");
+    LOG_D("CameraDeviceUsbImpl", "断开连接结束");
 }
 
 bool CameraDeviceUsbImpl::setParameter(int type, int value) {
-    LOG_D("---开始设置%d的参数信息", type);
+    LOG_D("CameraDeviceUsbImpl", "---开始设置%d的参数信息", type);
     uvc_error_t ret = UVC_ERROR_IO;
     switch (type) {
         case CAMERA_PARAMETER_AUTO_EXPOSURE:
-            ret = uvc_set_ae_mode(mDeviceHandle, value == 1 ? 8 : 1);
+            if (value == 1) {
+                ret = uvc_set_ae_mode(mDeviceHandle, UVC_AE_MODE_AUTO);
+                if (ret != UVC_SUCCESS) {
+                    ret = uvc_set_ae_mode(mDeviceHandle, UVC_AE_MODE_APERTURE_PRIORITY);
+                }
+            } else {
+                ret = uvc_set_ae_mode(mDeviceHandle, UVC_AE_MODE_MANUAL);
+            }
             break;
         case CAMERA_PARAMETER_EXPOSURE:
-            ret = uvc_set_exposure_abs(mDeviceHandle, value);
+            ret = uvc_set_exposure_abs(mDeviceHandle, clampTo<uint32_t>(value));
             break;
         case CAMERA_PARAMETER_BRIGHTNESS:
-            ret = uvc_set_brightness(mDeviceHandle, value);
+            ret = uvc_set_brightness(mDeviceHandle, clampTo<int16_t>(value));
             break;
         case CAMERA_PARAMETER_CONTRAST:
-            ret = uvc_set_contrast(mDeviceHandle, value);
+            ret = uvc_set_contrast(mDeviceHandle, clampTo<uint16_t>(value));
             break;
         case CAMERA_PARAMETER_GAIN:
-            ret = uvc_set_gain(mDeviceHandle, value);
+            ret = uvc_set_gain(mDeviceHandle, clampTo<uint16_t>(value));
             break;
         case CAMERA_PARAMETER_SATURATION:
-            ret = uvc_set_saturation(mDeviceHandle, value);
+            ret = uvc_set_saturation(mDeviceHandle, clampTo<uint16_t>(value));
             break;
         case CAMERA_PARAMETER_ZOOM:
-            ret = uvc_set_zoom_abs(mDeviceHandle, value);
+            ret = uvc_set_zoom_abs(mDeviceHandle, clampTo<uint16_t>(value));
             break;
         case CAMERA_PARAMETER_AUTO_FOCUS:
-            ret = uvc_set_focus_auto(mDeviceHandle, value == 1 ? 1 : 0);
+            ret = uvc_set_focus_auto(mDeviceHandle, boolToUvc(value));
             break;
         case CAMERA_PARAMETER_FOCUS:
-            ret = uvc_set_focus_abs(mDeviceHandle, value);
+            ret = uvc_set_focus_abs(mDeviceHandle, clampTo<uint16_t>(value));
             break;
         case CAMERA_PARAMETER_IRIS:
-            ret = uvc_set_iris_abs(mDeviceHandle, value);
+            ret = uvc_set_iris_abs(mDeviceHandle, clampTo<uint16_t>(value));
             break;
         case CAMERA_PARAMETER_AUTO_HUE:
-            ret = uvc_set_hue_auto(mDeviceHandle, value == 1 ? 1 : 0);
+            ret = uvc_set_hue_auto(mDeviceHandle, boolToUvc(value));
             break;
         case CAMERA_PARAMETER_HUE:
-            ret = uvc_set_hue(mDeviceHandle, value);
+            ret = uvc_set_hue(mDeviceHandle, clampTo<int16_t>(value));
             break;
         case CAMERA_PARAMETER_AUTO_WHITE_BALANCE:
-            ret = uvc_set_white_balance_temperature_auto(mDeviceHandle, value == 1 ? 1 : 0);
+            ret = uvc_set_white_balance_temperature_auto(mDeviceHandle, boolToUvc(value));
             break;
         case CAMERA_PARAMETER_WHITE_BALANCE:
-            ret = uvc_set_white_balance_temperature(mDeviceHandle, value);
+            ret = uvc_set_white_balance_temperature(mDeviceHandle, clampTo<uint16_t>(value));
             break;
         case CAMERA_PARAMETER_PRIVACY:
-            ret = uvc_set_privacy(mDeviceHandle, value == 1 ? 1 : 0);
+            ret = uvc_set_privacy(mDeviceHandle, boolToUvc(value));
             break;
         case CAMERA_PARAMETER_ORIENTATION:
-            LOG_D("-设置预览方向参数");
+            LOG_D("CameraDeviceUsbImpl", "-设置预览方向参数");
             return mCameraStream->setDisplayOrientation(value);
         case CAMERA_PARAMETER_MIRROR:
-            LOG_D("-设置预览方向参数");
-            return mCameraStream->setJpegMirrorState(value == 1 ? 1 : 0);
+            LOG_D("CameraDeviceUsbImpl", "-设置预览方向参数");
+            return mCameraStream->setJpegMirrorState(value == 1);
+        default:
+            break;
     }
     return ret == UVC_SUCCESS;
 }
@@ -112,7 +158,7 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
         case CAMERA_PARAMETER_AUTO_EXPOSURE:
             uint8_t mode;
             if (uvc_get_ae_mode(mDeviceHandle, &mode, UVC_GET_CUR) == UVC_SUCCESS) {
-                return mode == 8 ? 1 : 0;
+                return isAutoExposureMode(mode) ? 1 : 0;
             }
             break;
         case CAMERA_PARAMETER_EXPOSURE:
@@ -207,12 +253,13 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
 
         case CAMERA_PARAMETER_MIRROR:
             return mCameraStream->getJpegMirrorState();
+        default:
+            break;
     }
     return std::monostate{};
 }
 
-std::variant<std::monostate, std::pair<int, int>, std::string, int>
-CameraDeviceUsbImpl::getSupportParameters(int type) {
+std::variant<std::monostate, std::pair<int, int>, std::string, int> CameraDeviceUsbImpl::getSupportParameters(int type) {
     if (!mDeviceHandle) {
         return std::monostate{};
     }
@@ -221,8 +268,8 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
     } else if (type == CAMERA_PARAMETER_AUTO_EXPOSURE) {
         uint8_t max;
         if (uvc_get_ae_mode(mDeviceHandle, &max, UVC_GET_MAX) == UVC_SUCCESS) {
-            LOG_D("自动曝光最大值:%d", max);
-            return max >= 8 ? 1 : 0;
+            LOG_D("CameraDeviceUsbImpl", "自动曝光最大值:%d", max);
+            return supportsAutoExposureMode(max) ? 1 : 0;
         }
     } else if (type == CAMERA_PARAMETER_EXPOSURE) {
         uint32_t min;
@@ -236,9 +283,9 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
         int16_t min;
         int16_t max;
         if (uvc_get_brightness(mDeviceHandle, &min, UVC_GET_MIN) == UVC_SUCCESS) {
-            LOG_D("brightness-最小值:%d", min);
+            LOG_D("CameraDeviceUsbImpl", "brightness-最小值:%d", min);
             if (uvc_get_brightness(mDeviceHandle, &max, UVC_GET_MAX) == UVC_SUCCESS) {
-                LOG_D("brightness-最大值:%d", max);
+                LOG_D("CameraDeviceUsbImpl", "brightness-最大值:%d", max);
                 return std::make_pair(min, max);
             }
         }
@@ -299,7 +346,7 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
         }
     } else if (type == CAMERA_PARAMETER_AUTO_HUE) { // 自动色调
         uint8_t max;
-        if (uvc_get_hue_auto(mDeviceHandle, &max, UVC_GET_MAX)) {
+        if (uvc_get_hue_auto(mDeviceHandle, &max, UVC_GET_MAX) == UVC_SUCCESS) {
             return max >= 1;
         } else {
             return 0;
@@ -314,7 +361,8 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
         }
     } else if (type == CAMERA_PARAMETER_AUTO_WHITE_BALANCE) { // 自动色调
         uint8_t max;
-        if (uvc_get_white_balance_temperature_auto(mDeviceHandle, &max, UVC_GET_MAX)) {
+        if (uvc_get_white_balance_temperature_auto(mDeviceHandle, &max, UVC_GET_MAX) ==
+            UVC_SUCCESS) {
             return max >= 1;
         } else {
             return 0;
@@ -341,18 +389,18 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
 
 std::string CameraDeviceUsbImpl::getSupportedPreviewSizes() {
     if (!mDeviceHandle) {
-        LOG_E("==未获取到文件描述符");
-        return std::string();
+        LOG_E("CameraDeviceUsbImpl", "==未获取到文件描述符");
+        return {};
     }
     if (!mDeviceHandle->info || !mDeviceHandle->info->stream_ifs) {
-        LOG_E("==没有流控信息");
-        return std::string();
+        LOG_E("CameraDeviceUsbImpl", "==没有流控信息");
+        return {};
     }
-    LOG_D("UVC版本: %x.%02x",
+    LOG_D("CameraDeviceUsbImpl", "UVC版本: %x.%02x",
           mDeviceHandle->info->ctrl_if.bcdUVC >> 8,
           mDeviceHandle->info->ctrl_if.bcdUVC & 0xFF);
 
-    LOG_D("开始获取当前的分辨率信息。。");
+    LOG_D("CameraDeviceUsbImpl", "开始获取当前的分辨率信息。。");
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 
@@ -362,7 +410,7 @@ std::string CameraDeviceUsbImpl::getSupportedPreviewSizes() {
     DL_FOREACH(mDeviceHandle->info->stream_ifs, stream_if) {
         uvc_format_desc_t *fmt_desc;
         uvc_frame_desc_t *frame_desc;
-        LOG_E("当前的接口数量。。%d", stream_if->bInterfaceNumber);
+        LOG_E("CameraDeviceUsbImpl", "当前的接口数量。。%d", stream_if->bInterfaceNumber);
         DL_FOREACH(stream_if->format_descs, fmt_desc) {
             int formatType = getFormatType(fmt_desc->bDescriptorSubtype);
             // 检查格式，如果不支持则直接跳过
@@ -401,19 +449,19 @@ std::string CameraDeviceUsbImpl::getSupportedPreviewSizes() {
 int CameraDeviceUsbImpl::getFormatType(uint8_t descriptorSubtype) {
     switch (descriptorSubtype) {
         case UVC_VS_FORMAT_UNCOMPRESSED:
-            LOG_D("当前为YUV类型");
+            LOG_D("CameraDeviceUsbImpl", "当前为YUV类型");
             return PREVIEW_FORMAT_YUY2;
         case UVC_VS_FORMAT_MJPEG:
-            LOG_D("当前为MJPEG类型");
+            LOG_D("CameraDeviceUsbImpl", "当前为MJPEG类型");
             return PREVIEW_FORMAT_MJPEG;
         default:
-            LOG_D("不支持的格式类型");
+            LOG_D("CameraDeviceUsbImpl", "不支持的格式类型");
             return -1;
     }
 }
 
 bool CameraDeviceUsbImpl::setButtonListener(JavaVM *vm, JNIEnv *env, jobject listener) {
-    LOG_D("开始初始化设置监听。。。。。。。。。。");
+    LOG_D("CameraDeviceUsbImpl", "开始初始化设置监听。。。。。。。。。。");
     std::lock_guard<std::mutex> lock(buttonMutex);
     // 先释放旧的（包含 callback）
     // 1️⃣ 释放旧的 Java listener（不动 UVC callback）
@@ -429,15 +477,15 @@ bool CameraDeviceUsbImpl::setButtonListener(JavaVM *vm, JNIEnv *env, jobject lis
     buttonListener = nullptr;
     onButtonMethod = nullptr;
     theVM = nullptr;
-    LOG_D("旧资源释放完毕");
+    LOG_D("CameraDeviceUsbImpl", "旧资源释放完毕");
     if (!vm || !env || !listener) {
-        LOG_E("listener is null");
+        LOG_E("CameraDeviceUsbImpl", "listener is null");
         return true;
     }
     this->theVM = vm;
-    this->buttonListener = env->NewGlobalRef(listener);;
+    this->buttonListener = env->NewGlobalRef(listener);
     if (!this->buttonListener) {
-        LOG_E("监听设置失败，listener为null");
+        LOG_E("CameraDeviceUsbImpl", "监听设置失败，listener为null");
         return false;
     }
     jclass buttonClass = env->GetObjectClass(listener);
@@ -449,7 +497,7 @@ bool CameraDeviceUsbImpl::setButtonListener(JavaVM *vm, JNIEnv *env, jobject lis
     if (!onButtonMethod) {
         env->DeleteGlobalRef(listener);
         this->buttonListener = nullptr;
-        LOG_E("设置监听失败");
+        LOG_E("CameraDeviceUsbImpl", "设置监听失败");
         return false;
     }
     if (!buttonCallbackRegistered && mDeviceHandle) {
@@ -479,14 +527,15 @@ void CameraDeviceUsbImpl::releaseButtonListener() {
     buttonListener = nullptr;
     onButtonMethod = nullptr;
     theVM = nullptr;
-    LOG_D("Button listener released");
+    LOG_D("CameraDeviceUsbImpl", "Button listener released");
 }
 
 /**
 * 按钮回调
 */
 void CameraDeviceUsbImpl::uvc_button_callback(int button, int state, void *user_ptr) {
-    LOG_D("CameraDeviceButton = 收到按钮事件= {button=%d,state=%d}", button, state);
+    LOG_D("CameraDeviceUsbImpl", "CameraDeviceButton = 收到按钮事件= {button=%d,state=%d}", button,
+          state);
     if (!user_ptr) return;
     auto *device = static_cast<CameraDeviceUsbImpl *>(user_ptr);
     device->onButtonStateCallback(button, state);
@@ -500,7 +549,7 @@ void CameraDeviceUsbImpl::onButtonStateCallback(int type, int state) {
     // 获取 JNIEnv（当前线程是 libusb 线程）
     if (theVM->GetEnv((void **) &env, JNI_VERSION_1_6) != JNI_OK) {
         if (theVM->AttachCurrentThread(&env, nullptr) != JNI_OK) {
-            LOG_E("AttachCurrentThread failed");
+            LOG_E("CameraDeviceUsbImpl", "AttachCurrentThread failed");
             return;
         }
         needDetach = true;
@@ -510,10 +559,9 @@ void CameraDeviceUsbImpl::onButtonStateCallback(int type, int state) {
     // 异常检查（很重要）
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
-        LOG_E("Java exception in onButton");
+        LOG_E("CameraDeviceUsbImpl", "Java exception in onButton");
     }
     if (needDetach) {
         theVM->DetachCurrentThread();
     }
 }
-

@@ -46,7 +46,7 @@ private:
 
     std::string getSupportedPreviewSizes();
 
-    int getFormatType(uint8_t descriptorSubtype);
+    static int getFormatType(uint8_t descriptorSubtype);
 
     ICameraStream *getUserStream() override { return mCameraStream; }
 

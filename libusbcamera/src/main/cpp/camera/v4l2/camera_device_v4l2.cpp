@@ -15,8 +15,9 @@ CameraDeviceV4L2Impl::CameraDeviceV4L2Impl(int fd) : mVideoFd(fd) {
 }
 
 CameraDeviceV4L2Impl::~CameraDeviceV4L2Impl() {
-    mCameraStream->stopPreview();
+    mCameraStream->CameraStreamV4l2Impl::stopPreview();
     mCameraStream->releasePreviewFunc();
+    CameraDeviceV4L2Impl::releaseButtonListener();
     delete mCameraStream;
     mCameraStream = nullptr;
     if (mVideoFd != -1) {
@@ -42,7 +43,7 @@ CameraDeviceV4L2Impl::getSupportParameters(int type) {
         return std::monostate{};
     }
     auto autoExposurePair = std::get<std::pair<int, int>>(result); // 获取到的范围信息
-    LOG_D("当前支持%d类型参数:[%d,%d]", type, autoExposurePair.first, autoExposurePair.second);
+    LOG_D("CameraDeviceV4L2Impl","当前支持%d类型参数:[%d,%d]", type, autoExposurePair.first, autoExposurePair.second);
     if (type == CAMERA_PARAMETER_AUTO_EXPOSURE) {
         return autoExposurePair.second >= V4L2_EXPOSURE_MANUAL ? 1 : 0;
     } else if (type == CAMERA_PARAMETER_AUTO_FOCUS) {
@@ -114,7 +115,7 @@ std::variant<std::monostate, int, std::string> CameraDeviceV4L2Impl::getParamete
         return std::monostate{};
     }
     auto value = std::get<int>(result); // 获取到的范围信息
-    LOG_D("当前%d参数的值为:%d", type, value);
+    LOG_D("CameraDeviceV4L2Impl","当前%d参数的值为:%d", type, value);
     if (type == CAMERA_PARAMETER_AUTO_EXPOSURE) {
         return value == V4L2_EXPOSURE_AUTO ? 1 : 0;
     } else if (type == CAMERA_PARAMETER_AUTO_FOCUS) {
@@ -170,9 +171,9 @@ int CameraDeviceV4L2Impl::loadTypeToId(int type) {
         case CAMERA_PARAMETER_WHITE_BALANCE: // 白平衡
             id = V4L2_CID_WHITE_BALANCE_TEMPERATURE;
             break;
-        case CAMERA_PARAMETER_SCENE_MODE: // 场景模式
-            id = V4L2_CID_SCENE_MODE;
-            break;
+//        case CAMERA_PARAMETER_SCENE_MODE: // 场景模式
+//            id = V4L2_CID_SCENE_MODE;
+//            break;
         case CAMERA_PARAMETER_PRIVACY: // 隐私模式
             id = V4L2_CID_PRIVACY;
             break;
@@ -181,17 +182,17 @@ int CameraDeviceV4L2Impl::loadTypeToId(int type) {
 }
 
 bool CameraDeviceV4L2Impl::setButtonListener(JavaVM *vm, JNIEnv *env, jobject listener) {
-    std::lock_guard<std::mutex> lock(buttonMutex);
     // 先释放旧的（包含 callback）
-    releaseButtonListener();
+    CameraDeviceV4L2Impl::releaseButtonListener();
     if (!vm || !env || !listener) {
-        LOG_E("listener is null");
+        LOG_E("CameraDeviceV4L2Impl","listener is null");
         return true;
     }
+    std::lock_guard<std::mutex> lock(buttonMutex);
     this->theVM = vm;
     this->buttonListener = env->NewGlobalRef(listener);;
     if (!this->buttonListener) {
-        LOG_E("监听设置失败，listener为null");
+        LOG_E("CameraDeviceV4L2Impl","监听设置失败，listener为null");
         return false;
     }
     jclass buttonClass = env->GetObjectClass(listener);
@@ -203,7 +204,7 @@ bool CameraDeviceV4L2Impl::setButtonListener(JavaVM *vm, JNIEnv *env, jobject li
     if (!onButtonMethod) {
         env->DeleteGlobalRef(listener);
         this->buttonListener = nullptr;
-        LOG_E("设置监听失败");
+        LOG_E("CameraDeviceV4L2Impl","设置监听失败");
         return false;
     }
     return true;
@@ -223,5 +224,5 @@ void CameraDeviceV4L2Impl::releaseButtonListener() {
     buttonListener = nullptr;
     onButtonMethod = nullptr;
     theVM = nullptr;
-    LOG_D("Button listener released");
+    LOG_D("CameraDeviceV4L2Impl","Button listener released");
 }

@@ -21,7 +21,6 @@ import com.rain.uvc.demo.R
 import com.rain.uvc.demo.base.dialog.show
 import com.rain.uvc.demo.base.fragment.BaseDataBindFragment
 import com.rain.uvc.demo.camera.dialog.CameraSettingsDialog
-import com.rain.uvc.demo.camera.dialog.PicSettingsDialog
 import com.rain.uvc.demo.databinding.FgCameraBinding
 import com.rain.uvc.demo.utils.popStack
 import com.rain.uvc.demo.utils.singleClick
@@ -107,11 +106,6 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding>() {
 		// 设置按钮点击（右侧）
 		mBinding.igSettings.singleClick {
 			childFragmentManager.show<CameraSettingsDialog>("CameraSettingsDialog") {}
-		}
-		
-		// 场景/白平衡按钮点击（左侧）
-		mBinding.igPic.singleClick {
-			childFragmentManager.show<PicSettingsDialog>("PicSettingsDialog") {}
 		}
 		
 		mBinding.cardPicture.singleClick {// 这里打开相册～

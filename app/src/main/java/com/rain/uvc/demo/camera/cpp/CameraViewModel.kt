@@ -11,27 +11,28 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import android.view.TextureView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.rain.camera.uvc.CameraUvcManager
-import com.rain.camera.uvc.factory.NativeUsbDevice
-import com.rain.camera.uvc.mode.UvcCameraSize
-import com.rain.camera.uvc.mode.UvcCameraSupportSize
-import com.rain.camera.uvc.parameter.UvcCameraParameter
-import com.rain.camera.uvc.parameter.UvcPreviewFormat
-import com.rain.camera.uvc.utils.updateTexture
+import com.rain.uvc.CameraControlHelper
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.camera.CameraOptions
 import com.rain.uvc.demo.camera.CameraSupportOptions
 import com.rain.uvc.demo.provider.OverallContext
 import com.rain.uvc.demo.utils.PictureUtils
 import com.rain.uvc.demo.utils.awaitAvailable
+import com.rain.uvc.factory.NativeUsbDevice
+import com.rain.uvc.mode.UvcCameraSize
+import com.rain.uvc.mode.UvcCameraSupportSize
+import com.rain.uvc.parameters.UvcCameraParameter
+import com.rain.uvc.parameters.UvcPreviewFormat
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
+import java.io.File
 
 /**
  * @author yuan
@@ -98,8 +99,10 @@ class CameraViewModel : BaseViewModel() {
 		
 		mOpenJob = viewModelScope.launch {
 			val cameraResult = if (device != null) {
-				CameraUvcManager.openCamera(context, device)
-			} else if (!videoPath.isNullOrEmpty()) CameraUvcManager.openCamera(context, videoPath)
+				CameraControlHelper.openCamera(context, device)
+			} else if (!videoPath.isNullOrEmpty()) CameraControlHelper.openCamera(
+				context, videoPath
+			)
 			else return@launch
 			val cameraSession = cameraResult.getOrNull()
 			if (cameraResult.isFailure || cameraSession == null) {
@@ -116,12 +119,15 @@ class CameraViewModel : BaseViewModel() {
 			cameraSession.setPreviewSize(
 				previewSize.width, previewSize.height, UvcPreviewFormat.MJPEG
 			)
+			if (isVideoMode.value == true && !cameraSession.prepareRecord(cameraOptions.mVideoFps)) {
+				isVideoMode.postValue(false)
+			}
 			mCameraSession = cameraSession
 			Log.d("CameraBusUtils", "等待初始化~~~")
 			view.awaitAvailable()
 			Log.d("CameraBusUtils", "等待初始化完成~~~")
 			// 设置矩阵变化尺寸
-			if (isActive) cameraSession.updateTexture(view)
+//			if (isActive) cameraSession.updateTexture(view)
 			Log.d("CameraBusUtils", "更新矩阵完成")
 			// 这里等待加载完毕
 			if (isActive) cameraSession.setDisplaySurface(view)
@@ -168,12 +174,24 @@ class CameraViewModel : BaseViewModel() {
 		val session = mCameraSession ?: return
 		val oldState = isVideoMode.value ?: false
 		if (oldState == isVideo || recordIng.value == true) return // 相同时不处理
-		if (!isVideo) {
+		val stopPreviewResult = session.stopPreview()
+		var newVideoState: Boolean
+		if (isVideo) {
+			if (!session.prepareRecord(cameraOptions.mVideoFps)) {
+				newVideoState = false
+				Toast.makeText(
+					OverallContext.baseContext, "切换模式失败", Toast.LENGTH_SHORT
+				).show()
+			} else {
+				newVideoState = true
+			}
+		} else {
 			session.releaseRecord()
+			newVideoState = false
 		}
-		isVideoMode.value = isVideo
+		if (stopPreviewResult) session.startPreview()
+		isVideoMode.value = newVideoState
 	}
-	
 	
 	/**
 	 * 设置视频帧率
@@ -181,7 +199,6 @@ class CameraViewModel : BaseViewModel() {
 	fun updateVideoFps(fps: Int) {
 		cameraOptions.mVideoFps = fps
 		// 设置录制帧率
-		mCameraSession?.setRecordFps(fps)
 	}
 	
 	/**
@@ -200,7 +217,7 @@ class CameraViewModel : BaseViewModel() {
 	fun takePicture() {
 		Log.d("CameraPicture", "开始执行拍照~~~~:")
 		viewModelScope.launch {
-			val data = mCameraSession?.takeCaptureBytes()
+			val data = mCameraSession?.takePicture()
 			if (data != null) {
 				val uri = ByteArrayInputStream(data).use {
 					PictureUtils.saveGallery(
@@ -225,7 +242,9 @@ class CameraViewModel : BaseViewModel() {
 		val isRecording = recordIng.value ?: false
 		if (isRecording) {
 			viewModelScope.launch {
-				Log.d("CameraViewModel", "停止录制结果 = ${mCameraSession?.stopRecord()}")
+				val outputPath = mCameraSession?.stopRecord()
+				val saveUri = outputPath?.let { PictureUtils.saveVideoGallery(OverallContext.baseContext, File(it)) }
+				Log.d("CameraViewModel", "停止录制结果 = $outputPath, saveUri = $saveUri")
 				stopRecordTimer()
 				recordIng.value = false
 			}
@@ -320,7 +339,6 @@ class CameraViewModel : BaseViewModel() {
 			) == PackageManager.PERMISSION_GRANTED
 		}
 	}
-	
 	
 	/**
 	 * 更新白平衡

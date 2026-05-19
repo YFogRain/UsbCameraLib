@@ -56,6 +56,62 @@ fun ByteArray.rgba8888ToJpeg(width: Int, height: Int, quality: Int = 100): ByteA
 	}
 }
 
+fun ByteArray.rgba8888ToNv21(width: Int, height: Int): ByteArray? {
+	if (width <= 0 || height <= 0) return null
+	val rgbaSize = width * height * 4
+	if (this.size < rgbaSize) return null
+	val frameSize = width * height
+	val out = ByteArray(frameSize + frameSize / 2)
+	var rgbaIndex = 0
+	var yIndex = 0
+	var uvIndex = frameSize
+	for (row in 0 until height) {
+		for (col in 0 until width) {
+			val r = this[rgbaIndex].toInt() and 0xff
+			val g = this[rgbaIndex + 1].toInt() and 0xff
+			val b = this[rgbaIndex + 2].toInt() and 0xff
+			val y = ((66 * r + 129 * g + 25 * b + 128) shr 8) + 16
+			val u = ((-38 * r - 74 * g + 112 * b + 128) shr 8) + 128
+			val v = ((112 * r - 94 * g - 18 * b + 128) shr 8) + 128
+			out[yIndex++] = y.coerceIn(0, 255).toByte()
+			if ((row and 1) == 0 && (col and 1) == 0 && uvIndex + 1 < out.size) {
+				out[uvIndex++] = v.coerceIn(0, 255).toByte()
+				out[uvIndex++] = u.coerceIn(0, 255).toByte()
+			}
+			rgbaIndex += 4
+		}
+	}
+	return out
+}
+
+fun Bitmap.toNv21Bytes(): ByteArray? {
+	if (width <= 0 || height <= 0) return null
+	val pixels = IntArray(width * height)
+	getPixels(pixels, 0, width, 0, 0, width, height)
+	val frameSize = width * height
+	val out = ByteArray(frameSize + frameSize / 2)
+	var yIndex = 0
+	var uvIndex = frameSize
+	var index = 0
+	for (row in 0 until height) {
+		for (col in 0 until width) {
+			val color = pixels[index++]
+			val r = color shr 16 and 0xff
+			val g = color shr 8 and 0xff
+			val b = color and 0xff
+			val y = ((66 * r + 129 * g + 25 * b + 128) shr 8) + 16
+			val u = ((-38 * r - 74 * g + 112 * b + 128) shr 8) + 128
+			val v = ((112 * r - 94 * g - 18 * b + 128) shr 8) + 128
+			out[yIndex++] = y.coerceIn(0, 255).toByte()
+			if ((row and 1) == 0 && (col and 1) == 0 && uvIndex + 1 < out.size) {
+				out[uvIndex++] = v.coerceIn(0, 255).toByte()
+				out[uvIndex++] = u.coerceIn(0, 255).toByte()
+			}
+		}
+	}
+	return out
+}
+
 /**
  * 对bitmap进行裁剪缩放等处理
  */

@@ -8,7 +8,7 @@
 #define UVCCAMERA_I_CAMERA_FACTORY_H
 #include <variant>
 #include <jni.h>
-#include "window.h"
+#include <android/native_window.h>
 
 class ICameraFactory {
 

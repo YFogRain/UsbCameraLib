@@ -17,9 +17,6 @@ public:
 
     static std::vector<uint8_t> format(uint8_t *inFrame, uint32_t width, uint32_t height, int outFormat);
 
-    /// 设置预览旋转角度
-    static bool setDisplayOrientation(ANativeWindow *window, int orientation);
-
     /// 图像变化处理（旋转/镜像）
     static cv::Mat transform(uint8_t *inFrame, int width, int height, int rotation,bool isMirror);
 

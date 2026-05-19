@@ -20,23 +20,31 @@ ICameraDevice *CameraFactoryHelper::openCamera(int fd, int busNum, int devAddres
     if (fd == -1 || busNum == -1 || devAddress == -1) {
         return nullptr;
     }
-    uvc_context_t *context;
+    uvc_context_t *context = nullptr;
     uvc_error_t ret = uvc_init(&context, nullptr); // 初始化
-    LOG_D("初始化uvc结果:%d", ret);
+    LOG_D("CameraFactoryHelper", "初始化uvc结果:%d", ret);
     if (ret != UVC_SUCCESS || !context) {
         return nullptr;
     }
-    LOG_D("当前设备的文件描述符：%d---%d/%d", fd, busNum, devAddress);
+    LOG_D("CameraFactoryHelper", "当前设备的文件描述符：%d---%d/%d", fd, busNum, devAddress);
     fd = dup(fd);
-    uvc_device_t *device;
-    ret = uvc_get_device_with_fd(context, &device, fd, busNum, devAddress); // 获取对应的文件描述符
-    if (ret != UVC_SUCCESS || !device) {
-        close(fd);
+    if (fd < 0) {
+        uvc_exit(context);
         return nullptr;
     }
-    uvc_device_handle_t *deviceHandle;
+    uvc_device_t *device = nullptr;
+    ret = uvc_get_device_with_fd(context, &device, fd, busNum, devAddress); // 获取对应的文件描述符
+    if (ret != UVC_SUCCESS || !device) {
+        if (device) {
+            uvc_unref_device(device);
+        }
+        close(fd);
+        uvc_exit(context);
+        return nullptr;
+    }
+    uvc_device_handle_t *deviceHandle = nullptr;
     ret = uvc_open(device, &deviceHandle, fd); // 打开设备
-    LOG_D("uvc设备打开结果:%d", ret);
+    LOG_D("CameraFactoryHelper", "uvc设备打开结果:%d", ret);
     if (ret != UVC_SUCCESS || !deviceHandle) {
         deviceHandle = nullptr;
         uvc_unref_device(device); // 释放device
@@ -59,18 +67,18 @@ ICameraDevice *CameraFactoryHelper::openCamera(const char *videoPath) {
     if (fd < 0) {
         return nullptr;
     }
-    struct v4l2_capability cap;
+    struct v4l2_capability cap{};
     if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0 || !(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
-        LOG_E("获取摄像头数据节点信息失败");
+        LOG_E("CameraFactoryHelper", "获取摄像头数据节点信息失败");
         close(fd);
         return nullptr;
     }
-    LOG_D("驱动程序的名称：%s", cap.driver);
-    LOG_D("硬件设备的名称：%s", cap.card);
-    LOG_D("总线信息：%s", cap.bus_info);
-    LOG_D("驱动版本号：%d", cap.version);
-    LOG_D("设备的能力标志：%d", cap.capabilities);
-    LOG_D("设备的当前能力标志：%d", cap.device_caps);
+    LOG_D("CameraFactoryHelper", "驱动程序的名称：%s", cap.driver);
+    LOG_D("CameraFactoryHelper", "硬件设备的名称：%s", cap.card);
+    LOG_D("CameraFactoryHelper", "总线信息：%s", cap.bus_info);
+    LOG_D("CameraFactoryHelper", "驱动版本号：%d", cap.version);
+    LOG_D("CameraFactoryHelper", "设备的能力标志：%d", cap.capabilities);
+    LOG_D("CameraFactoryHelper", "设备的当前能力标志：%d", cap.device_caps);
     return new CameraDeviceV4L2Impl(fd);
 }
 
@@ -83,9 +91,13 @@ bool CameraFactoryHelper::closeCamera(int64_t cameraId) {
     if (cameraId == -1 || cameraId == 0) {
         return false;
     }
-    ICameraDevice *camera = reinterpret_cast<ICameraDevice *>(cameraId);
-    if (camera->getUserStream()->isRunningPreview()) {
-        camera->getUserStream()->stopPreview();
+    auto *camera = reinterpret_cast<ICameraDevice *>(cameraId);
+    auto *stream = camera->getUserStream();
+    if (stream) {
+        stream->stopRecord();
+        if (stream->isRunningPreview()) {
+            stream->stopPreview();
+        }
     }
     delete camera;
     return true;
@@ -96,14 +108,14 @@ std::vector<std::string> CameraFactoryHelper::loadV4L2Devices() {
     // 打开 /dev 目录
     DIR *dir = opendir("/dev");
     if (dir == nullptr) {
-        LOG_E("打开dev列表失败了");
+        LOG_E("CameraFactoryHelper", "打开dev列表失败了");
         return deviceSet;
     }
     struct dirent *entry;
     while ((entry = readdir(dir)) != nullptr) {
         // 检查文件名是否匹配视频设备
         std::string dev_name = entry->d_name;
-        LOG_D("当前的设备名称:%s", dev_name.c_str());
+        LOG_D("CameraFactoryHelper", "当前的设备名称:%s", dev_name.c_str());
         if (dev_name.rfind("video", 0) == 0) { // 找到以 "video" 开头的设备文件
             std::string dev_path = "/dev/" + dev_name;
             if (isV4L2Supported(dev_path)) { // 说明当前是视频的类
@@ -118,12 +130,12 @@ std::vector<std::string> CameraFactoryHelper::loadV4L2Devices() {
 bool CameraFactoryHelper::isV4L2Supported(const std::string &dev_name) {
     int fd = open(dev_name.c_str(), O_RDWR);
     if (fd == -1) {
-        LOG_E("当前设备无法打开:%s", dev_name.c_str());
+        LOG_E("CameraFactoryHelper", "当前设备无法打开:%s", dev_name.c_str());
         return false;
     }
-    struct v4l2_capability cap;
+    struct v4l2_capability cap{};
     if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0 || !(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
-        LOG_E("获取摄像头数据节点信息失败:%s", dev_name.c_str());
+        LOG_E("CameraFactoryHelper", "获取摄像头数据节点信息失败:%s", dev_name.c_str());
         close(fd);
         return false;
     }

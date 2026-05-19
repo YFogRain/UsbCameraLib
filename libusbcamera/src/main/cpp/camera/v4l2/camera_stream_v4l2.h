@@ -40,8 +40,8 @@ private:
     std::condition_variable previewCond;       // 等待专用的条件变量
     std::condition_variable previewResultCond; // 等待专用的条件变量
 
-    std::deque<stream_frame_t *> previewFrames;       // 检测的缓存数据
-    std::deque<stream_frame_t *> previewResultFrames; // 检测的缓存数据
+    std::deque<stream_frame_t *> previewFrames;       // 预览缓存数据
+    std::deque<stream_frame_t *> previewResultFrames; // 回调缓存数据
 
     Buffer *captureBuffers = nullptr; // 缓冲区数据
     int captureBufferLength = 0;      // 缓冲区数量
@@ -63,7 +63,7 @@ private:
 
     void cleanup_buffers();   // 清理buffers
     bool prepare_mmap();      // 映射缓冲区到用户空间
-    bool startCameraStream(); // 启动视频流
+    bool startCameraStream() const; // 启动视频流
 
     stream_frame_t *allocate_stream_frame(uint8_t *data, int length);
 };

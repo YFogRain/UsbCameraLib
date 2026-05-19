@@ -29,7 +29,6 @@ private:
 
     CameraStreamV4l2Impl *mCameraStream;
 
-    std::string getSupportedPreviewSizes();
     int getFormatType(uint8_t descriptorSubtype);
 
     ICameraStream *getUserStream() override { return mCameraStream; }

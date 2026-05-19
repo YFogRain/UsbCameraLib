@@ -26,9 +26,9 @@ import com.rain.camera.uvc.parameter.UvcSupportParameter
 import com.rain.camera.uvc.recorder.RecorderEngine
 import com.rain.camera.uvc.utils.clearImageReaderQueue
 import com.rain.camera.uvc.utils.imageDataToBytes
-import com.rain.camera.uvc.utils.rgba8888ToJpeg
+import com.rain.camera.uvc.utils.rgba8888ToNv21
 import com.rain.camera.uvc.utils.toBitmap
-import com.rain.camera.uvc.utils.toJpegBytes
+import com.rain.camera.uvc.utils.toNv21Bytes
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -551,15 +551,15 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 	}
 	
 	/**
-	 * 图像转bytes
+	 * 图像统一转成 NV21
 	 */
 	private fun normalizeCaptureBytes(bytes: ByteArray, format: Int, width: Int, height: Int): ByteArray? {
 		return when (format) {
-			ImageFormat.JPEG -> bytes
-			PixelFormat.RGBA_8888 -> bytes.rgba8888ToJpeg(width, height)
+			ImageFormat.NV21, ImageFormat.YUV_420_888 -> bytes
+			PixelFormat.RGBA_8888 -> bytes.rgba8888ToNv21(width, height)
 			else -> bytes.toBitmap(format, width, height)?.let { bitmap ->
 				try {
-					bitmap.toJpegBytes()
+					bitmap.toNv21Bytes()
 				} finally {
 					if (!bitmap.isRecycled) {
 						bitmap.recycle()
@@ -591,7 +591,9 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 				return
 			}
 			// 预览回调
-			mPreviewListener?.invoke(bytes, width, height)
+			normalizeCaptureBytes(bytes, format, width, height)?.let {
+				mPreviewListener?.invoke(it, width, height)
+			}
 			
 		} catch (e: Exception) {
 			e.printStackTrace()

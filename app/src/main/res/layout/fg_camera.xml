@@ -84,20 +84,6 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="@+id/card_type" />
 
-        <!-- 照片设置按钮 -->
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/ig_pic"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:layout_marginStart="30dp"
-            android:src="@drawable/ic_scene"
-            android:tint="@color/white"
-            android:background="@drawable/ripple_oval"
-            android:clickable="true"
-            android:focusable="true"
-            app:layout_constraintBottom_toBottomOf="@+id/card_type"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="@+id/card_type" />
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/ic_picture"
@@ -112,6 +98,7 @@
             app:layout_constraintBottom_toTopOf="@+id/card_type"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
+
         <!-- 当前选择的类型 -->
         <androidx.cardview.widget.CardView
             android:id="@+id/card_type"
