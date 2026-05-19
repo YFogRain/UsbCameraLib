@@ -50,13 +50,13 @@ class AudioEngine {
 		return runCatching {
 			// 最小缓存大小
 			val minBuffer = AudioRecord.getMinBufferSize(
-				sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
+				sampleRate, channelCount, AudioFormat.ENCODING_PCM_16BIT
 			)
 			audioRecord = AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.MIC) // 设置录音源为麦克风
 				.setAudioFormat(
 					AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT) // 编码比特率
 						.setSampleRate(sampleRate) // 采样率
-						.setChannelMask(AudioFormat.CHANNEL_IN_MONO) // 通道模式
+						.setChannelMask(channelCount) // 通道模式
 						.build()
 				).setBufferSizeInBytes(minBuffer * 2) // 缓存大小
 				.build()
@@ -110,8 +110,6 @@ class AudioEngine {
 	
 	private fun startLooper() {
 		if (mRecordJob?.isActive == true) return
-		encoder?.start()
-		audioRecord?.startRecording()
 		mRecordJob = recordScope.launch {
 			val buffer = ByteArray(2048)
 			while (isActive) {

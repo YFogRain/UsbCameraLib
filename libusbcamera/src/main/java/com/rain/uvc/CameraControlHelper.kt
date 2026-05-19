@@ -56,7 +56,7 @@ object CameraControlHelper {
 	 */
 	@JvmStatic
 	fun checkDeviceUvc(usbDevice: UsbDevice): Boolean {
-		if (usbDevice.deviceClass != 239 && usbDevice.deviceSubclass != 2) return false
+		if (usbDevice.deviceClass != 239 || usbDevice.deviceSubclass != 2) return false
 		return usbDevice.productName?.lowercase().let {
 			it.isNullOrEmpty() || !it.contains("android")
 		}

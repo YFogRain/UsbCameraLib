@@ -121,6 +121,7 @@ class VideoEngine {
 	fun releaseSurface() {
 		runCatching { mVideoSurface?.release() }
 		mVideoSurface = null
+		callback = null
 	}
 	
 	/**

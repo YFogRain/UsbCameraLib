@@ -19,12 +19,12 @@ import com.rain.uvc.CameraControlHelper
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.camera.CameraOptions
 import com.rain.uvc.demo.camera.CameraSupportOptions
+import com.rain.uvc.demo.camera.resolvePreviewSize
 import com.rain.uvc.demo.provider.OverallContext
 import com.rain.uvc.demo.utils.PictureUtils
 import com.rain.uvc.demo.utils.awaitAvailable
 import com.rain.uvc.factory.NativeUsbDevice
 import com.rain.uvc.mode.UvcCameraSize
-import com.rain.uvc.mode.UvcCameraSupportSize
 import com.rain.uvc.parameters.UvcCameraParameter
 import com.rain.uvc.parameters.UvcPreviewFormat
 import kotlinx.coroutines.Job
@@ -33,6 +33,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.lang.ref.WeakReference
 
 /**
  * @author yuan
@@ -66,12 +67,16 @@ class CameraViewModel : BaseViewModel() {
 	
 	// 相机打开状态
 	private var mOpenJob: Job? = null
+	private var mPreviewViewRef: WeakReference<TextureView>? = null
 	
 	// 当前参数
 	val cameraOptions = CameraOptions()
 	
 	// 相机支持参数
 	val cameraSupportOptions = CameraSupportOptions()
+	
+	// 录制帧率
+	private var mVideoFps: Int = 30
 	
 	private var mRecordTimerJob: Job? = null
 	private var mRecordStartTime: Long = 0
@@ -86,6 +91,7 @@ class CameraViewModel : BaseViewModel() {
 	 */
 	fun open(view: TextureView) {
 		val context = view.context
+		mPreviewViewRef = WeakReference(view)
 		// 1. 检查权限
 		if (ContextCompat.checkSelfPermission(
 				context, Manifest.permission.CAMERA
@@ -104,25 +110,26 @@ class CameraViewModel : BaseViewModel() {
 				context, videoPath
 			)
 			else return@launch
-			val cameraSession = cameraResult.getOrNull()
-			if (cameraResult.isFailure || cameraSession == null) {
-				Log.d("CameraViewModel", "打开结果 = ${cameraResult.exceptionOrNull()}")
-				return@launch
-			}
-			// 初始化支持的参数
-			cameraSupportOptions.initSupport(cameraSession)
-			cameraOptions.initParameter(cameraSession)
-			val previewSize = cameraSupportOptions.previewSizes?.checkSize() ?: let {
-				cameraSession.close()
-				return@launch
-			}
-			cameraSession.setPreviewSize(
-				previewSize.width, previewSize.height, UvcPreviewFormat.MJPEG
-			)
-			if (isVideoMode.value == true && !cameraSession.prepareRecord(cameraOptions.mVideoFps)) {
-				isVideoMode.postValue(false)
-			}
-			mCameraSession = cameraSession
+				val cameraSession = cameraResult.getOrNull()
+				if (cameraResult.isFailure || cameraSession == null) {
+					Log.d("CameraViewModel", "打开结果 = ${cameraResult.exceptionOrNull()}")
+					return@launch
+				}
+				// 初始化支持的参数
+				cameraSupportOptions.initSupport(cameraSession)
+				cameraOptions.initParameter(cameraSession)
+				val previewSize = cameraSupportOptions.previewSizes?.resolvePreviewSize(cameraOptions.previewSize) ?: let {
+					cameraSession.close()
+					return@launch
+				}
+				cameraSession.setPreviewSize(
+					previewSize.width, previewSize.height, UvcPreviewFormat.MJPEG
+				)
+				cameraOptions.previewSize = previewSize
+				if (isVideoMode.value == true && !cameraSession.prepareRecord(mVideoFps)) {
+					isVideoMode.postValue(false)
+				}
+				mCameraSession = cameraSession
 			Log.d("CameraBusUtils", "等待初始化~~~")
 			view.awaitAvailable()
 			Log.d("CameraBusUtils", "等待初始化完成~~~")
@@ -146,6 +153,7 @@ class CameraViewModel : BaseViewModel() {
 		mOpenJob?.cancel()
 		mCameraSession?.close()
 		mCameraSession = null
+		mPreviewViewRef = null
 	}
 	
 	/**
@@ -159,7 +167,7 @@ class CameraViewModel : BaseViewModel() {
 		
 		// 将 0.0-1.0 映射到实际 zoom 范围
 		val zoomValue = (range.first + (range.last - range.first) * ratio).toInt()
-		cameraOptions.mCurrentZoom = zoomValue
+		cameraOptions.zoom = zoomValue
 		
 		mCameraSession?.setParameter(UvcCameraParameter.ZOOM, zoomValue)
 		zoomText.value = String.format(
@@ -177,7 +185,7 @@ class CameraViewModel : BaseViewModel() {
 		val stopPreviewResult = session.stopPreview()
 		var newVideoState: Boolean
 		if (isVideo) {
-			if (!session.prepareRecord(cameraOptions.mVideoFps)) {
+			if (!session.prepareRecord(mVideoFps)) {
 				newVideoState = false
 				Toast.makeText(
 					OverallContext.baseContext, "切换模式失败", Toast.LENGTH_SHORT
@@ -189,7 +197,9 @@ class CameraViewModel : BaseViewModel() {
 			session.releaseRecord()
 			newVideoState = false
 		}
-		if (stopPreviewResult) session.startPreview()
+		if (stopPreviewResult && session.startPreview()) {
+			cameraOptions.applyParameters(session)
+		}
 		isVideoMode.value = newVideoState
 	}
 	
@@ -197,7 +207,7 @@ class CameraViewModel : BaseViewModel() {
 	 * 设置视频帧率
 	 */
 	fun updateVideoFps(fps: Int) {
-		cameraOptions.mVideoFps = fps
+		mVideoFps = fps
 		// 设置录制帧率
 	}
 	
@@ -216,20 +226,20 @@ class CameraViewModel : BaseViewModel() {
 	 */
 	fun takePicture() {
 		Log.d("CameraPicture", "开始执行拍照~~~~:")
-		viewModelScope.launch {
-			val data = mCameraSession?.takePicture()
-			if (data != null) {
-				val uri = ByteArrayInputStream(data).use {
-					PictureUtils.saveGallery(
-						OverallContext.baseContext,
-						it,
-						cameraOptions.mPicOrientation,
-						"IMG_${SystemClock.elapsedRealtime()}.jpeg"
-					)
-				}
-				if (uri != null) {
-					lastPicPreview.value = uri
-				}
+			viewModelScope.launch {
+				val data = mCameraSession?.takePicture()
+				if (data != null) {
+					val uri = ByteArrayInputStream(data).use {
+						PictureUtils.saveGallery(
+							OverallContext.baseContext,
+							it,
+							0,
+							"IMG_${SystemClock.elapsedRealtime()}.jpeg"
+						)
+					}
+					if (uri != null) {
+						lastPicPreview.value = uri
+					}
 				
 			}
 		}
@@ -341,32 +351,93 @@ class CameraViewModel : BaseViewModel() {
 	}
 	
 	/**
-	 * 更新白平衡
+	 * 更新Int类型相机参数
 	 */
-	fun updateWhiteBalance(mode: Int) {
-		mCameraSession?.setParameter(UvcCameraParameter.WHITE_BALANCE, mode)
+	fun updateIntParameter(key: UvcCameraParameter.Key<Int>, value: Int): Boolean {
+		return mCameraSession?.setParameter(key, value) ?: false
 	}
 	
 	/**
-	 * 更新白平衡
+	 * 更新Boolean类型相机参数
 	 */
-	fun updateBrightness(value: Int) {
-		mCameraSession?.setParameter(UvcCameraParameter.BRIGHTNESS, value)
+	fun updateBoolParameter(key: UvcCameraParameter.Key<Boolean>, value: Boolean): Boolean {
+		return mCameraSession?.setParameter(key, value) ?: false
+	}
+
+	fun updateDisplayOrientation(orientation: Int): Boolean {
+		val session = mCameraSession ?: return false
+		val previewView = mPreviewViewRef?.get()
+		val shouldRestartRecordPipeline = isVideoMode.value == true && recordIng.value != true && previewView != null
+		if (!shouldRestartRecordPipeline) {
+			val result = updateIntParameter(UvcCameraParameter.ORIENTATION, orientation)
+			if (result) {
+				cameraOptions.mPicOrientation = orientation
+			}
+			return result
+		}
+		val activePreviewView = previewView ?: return false
+		if (!session.stopPreview()) return false
+		session.releaseRecord()
+		if (!session.setParameter(UvcCameraParameter.ORIENTATION, orientation)) {
+			restartPreview(session, activePreviewView, true)
+			return false
+		}
+		val restarted = restartPreview(session, activePreviewView, true)
+		if (restarted) {
+			cameraOptions.mPicOrientation = orientation
+		}
+		return restarted
+	}
+
+	fun updateMirrorState(isMirror: Boolean): Boolean {
+		val result = updateBoolParameter(UvcCameraParameter.MIRROR, isMirror)
+		if (result) {
+			cameraOptions.mPicMirrorState = isMirror
+		}
+		return result
+	}
+
+	fun updatePreviewSize(size: UvcCameraSize): Boolean {
+		val session = mCameraSession ?: return false
+		val previewView = mPreviewViewRef?.get() ?: return false
+		if (recordIng.value == true) return false
+		if (cameraOptions.previewSize == size) return true
+		val shouldPrepareRecord = isVideoMode.value == true
+		if (!session.stopPreview()) return false
+		if (shouldPrepareRecord) {
+			session.releaseRecord()
+		}
+		if (!session.setPreviewSize(size.width, size.height, UvcPreviewFormat.MJPEG)) {
+			restartPreview(session, previewView, shouldPrepareRecord)
+			return false
+		}
+		val restarted = restartPreview(session, previewView, shouldPrepareRecord)
+		if (restarted) {
+			cameraOptions.previewSize = size
+		}
+		return restarted
+	}
+
+	private fun restartPreview(
+		session: NativeUsbDevice,
+		previewView: TextureView,
+		shouldPrepareRecord: Boolean
+	): Boolean {
+		if (shouldPrepareRecord && !session.prepareRecord(mVideoFps)) {
+			isVideoMode.postValue(false)
+		}
+		session.setDisplaySurface(previewView)
+		val started = session.startPreview()
+		if (started) {
+			cameraOptions.applyParameters(session)
+		}
+		return started
 	}
 	
 	override fun onCleared() {
 		super.onCleared()
 		cameraSupportOptions.clear()
 		cameraOptions.clear()
+		mPreviewViewRef = null
 	}
-}
-
-private fun MutableList<UvcCameraSupportSize>.checkSize(): UvcCameraSize? {
-	val sizes = this.find { it.format == UvcPreviewFormat.MJPEG || it.format == UvcPreviewFormat.JPEG }?.sizes
-	if (sizes.isNullOrEmpty()) return null
-	return sizes.find {
-		((it.width == 1920 && it.height == 1080) || (it.width == 1080 && it.height == 1920))
-	} ?: sizes.find {
-		((it.width == 640 && it.height == 480) || (it.width == 480 && it.height == 640))
-	} ?: sizes[0]
 }

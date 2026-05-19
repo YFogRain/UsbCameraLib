@@ -14,37 +14,24 @@
 #include <limits>
 
 namespace {
-constexpr uint8_t UVC_AE_MODE_MANUAL = 1;
-constexpr uint8_t UVC_AE_MODE_AUTO = 2;
-constexpr uint8_t UVC_AE_MODE_SHUTTER_PRIORITY = 4;
-constexpr uint8_t UVC_AE_MODE_APERTURE_PRIORITY = 8;
+    constexpr uint8_t UVC_AE_MODE_MANUAL = 1;
+    constexpr uint8_t UVC_AE_MODE_AUTO = 2;
+    constexpr uint8_t UVC_AE_MODE_APERTURE_PRIORITY = 8;
 
-template<typename T>
-T clampTo(int value) {
-    return static_cast<T>(
-            std::clamp(
-                    value,
-                    static_cast<int>(std::numeric_limits<T>::min()),
-                    static_cast<int>(std::numeric_limits<T>::max())
-            )
-    );
-}
+    template<typename T>
+    T clampTo(int value) {
+        return static_cast<T>(
+                std::clamp(
+                        value,
+                        static_cast<int>(std::numeric_limits<T>::min()),
+                        static_cast<int>(std::numeric_limits<T>::max())
+                )
+        );
+    }
 
-uint8_t boolToUvc(int value) {
-    return value == 1 ? 1 : 0;
-}
-
-bool isAutoExposureMode(uint8_t mode) {
-    return mode == UVC_AE_MODE_AUTO ||
-           mode == UVC_AE_MODE_SHUTTER_PRIORITY ||
-           mode == UVC_AE_MODE_APERTURE_PRIORITY;
-}
-
-bool supportsAutoExposureMode(uint8_t modeMask) {
-    return (modeMask & UVC_AE_MODE_AUTO) != 0 ||
-           (modeMask & UVC_AE_MODE_SHUTTER_PRIORITY) != 0 ||
-           (modeMask & UVC_AE_MODE_APERTURE_PRIORITY) != 0;
-}
+    uint8_t boolToUvc(int value) {
+        return value == 1 ? 1 : 0;
+    }
 }
 
 CameraDeviceUsbImpl::CameraDeviceUsbImpl(uvc_context_t *context,
@@ -88,17 +75,11 @@ bool CameraDeviceUsbImpl::setParameter(int type, int value) {
     uvc_error_t ret = UVC_ERROR_IO;
     switch (type) {
         case CAMERA_PARAMETER_AUTO_EXPOSURE:
-            if (value == 1) {
-                ret = uvc_set_ae_mode(mDeviceHandle, UVC_AE_MODE_AUTO);
-                if (ret != UVC_SUCCESS) {
-                    ret = uvc_set_ae_mode(mDeviceHandle, UVC_AE_MODE_APERTURE_PRIORITY);
-                }
-            } else {
-                ret = uvc_set_ae_mode(mDeviceHandle, UVC_AE_MODE_MANUAL);
-            }
+            ret = uvc_set_ae_mode(mDeviceHandle,
+                                  value == 1 ? UVC_AE_MODE_APERTURE_PRIORITY : UVC_AE_MODE_MANUAL);
             break;
         case CAMERA_PARAMETER_EXPOSURE:
-            ret = uvc_set_exposure_abs(mDeviceHandle, clampTo<uint32_t>(value));
+            ret = uvc_set_exposure_abs(mDeviceHandle, value);
             break;
         case CAMERA_PARAMETER_BRIGHTNESS:
             ret = uvc_set_brightness(mDeviceHandle, clampTo<int16_t>(value));
@@ -158,7 +139,7 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
         case CAMERA_PARAMETER_AUTO_EXPOSURE:
             uint8_t mode;
             if (uvc_get_ae_mode(mDeviceHandle, &mode, UVC_GET_CUR) == UVC_SUCCESS) {
-                return isAutoExposureMode(mode) ? 1 : 0;
+                return mode == UVC_AE_MODE_APERTURE_PRIORITY ? 1 : 0;
             }
             break;
         case CAMERA_PARAMETER_EXPOSURE:
@@ -259,7 +240,8 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
     return std::monostate{};
 }
 
-std::variant<std::monostate, std::pair<int, int>, std::string, int> CameraDeviceUsbImpl::getSupportParameters(int type) {
+std::variant<std::monostate, std::pair<int, int>, std::string, int>
+CameraDeviceUsbImpl::getSupportParameters(int type) {
     if (!mDeviceHandle) {
         return std::monostate{};
     }
@@ -268,8 +250,7 @@ std::variant<std::monostate, std::pair<int, int>, std::string, int> CameraDevice
     } else if (type == CAMERA_PARAMETER_AUTO_EXPOSURE) {
         uint8_t max;
         if (uvc_get_ae_mode(mDeviceHandle, &max, UVC_GET_MAX) == UVC_SUCCESS) {
-            LOG_D("CameraDeviceUsbImpl", "自动曝光最大值:%d", max);
-            return supportsAutoExposureMode(max) ? 1 : 0;
+            return max >= UVC_AE_MODE_APERTURE_PRIORITY ? 1 : 0;
         }
     } else if (type == CAMERA_PARAMETER_EXPOSURE) {
         uint32_t min;

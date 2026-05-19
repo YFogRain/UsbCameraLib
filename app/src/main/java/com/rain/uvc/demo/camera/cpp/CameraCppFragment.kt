@@ -20,6 +20,7 @@ import com.bumptech.glide.Glide
 import com.rain.uvc.demo.R
 import com.rain.uvc.demo.base.dialog.show
 import com.rain.uvc.demo.base.fragment.BaseDataBindFragment
+import com.rain.uvc.demo.camera.dialog.CameraPreviewSettingsDialog
 import com.rain.uvc.demo.camera.dialog.CameraSettingsDialog
 import com.rain.uvc.demo.databinding.FgCameraBinding
 import com.rain.uvc.demo.utils.popStack
@@ -99,16 +100,20 @@ class CameraCppFragment : BaseDataBindFragment<FgCameraBinding>() {
 		}
 		
 		// 切换为录像模式
-		mBinding.tvVideo.singleClick {
-			viewModel.updateMode(true)
-		}
-		
-		// 设置按钮点击（右侧）
-		mBinding.igSettings.singleClick {
-			childFragmentManager.show<CameraSettingsDialog>("CameraSettingsDialog") {}
-		}
-		
-		mBinding.cardPicture.singleClick {// 这里打开相册～
+			mBinding.tvVideo.singleClick {
+				viewModel.updateMode(true)
+			}
+			
+			// 设置按钮点击（右侧）
+			mBinding.igSettings.singleClick {
+				childFragmentManager.show<CameraSettingsDialog>("CameraSettingsDialog") {}
+			}
+
+			mBinding.igPreviewSettings.singleClick {
+				childFragmentManager.show<CameraPreviewSettingsDialog>("CameraPreviewSettingsDialog") {}
+			}
+			
+			mBinding.cardPicture.singleClick {// 这里打开相册～
 			val options = ActivityOptions.makeScaleUpAnimation(
 				mBinding.icBitmap, 0, 0, mBinding.icBitmap.width, mBinding.icBitmap.height
 			)

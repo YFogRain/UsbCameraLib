@@ -85,6 +85,8 @@ int CameraDeviceV4L2Impl::loadValueToPutValue(int type, int value) {
             return value == 1 ? 1 : 0;
         case CAMERA_PARAMETER_AUTO_FOCUS:
             return value == 1 ? 1 : 0;
+        case CAMERA_PARAMETER_AUTO_WHITE_BALANCE:
+            return value == 1 ? 1 : 0;
         case CAMERA_PARAMETER_PRIVACY:
             return value == 1 ? 1 : 0;
         default:
@@ -167,6 +169,9 @@ int CameraDeviceV4L2Impl::loadTypeToId(int type) {
             break;
         case CAMERA_PARAMETER_HUE: // 色调
             id = V4L2_CID_HUE;
+            break;
+        case CAMERA_PARAMETER_AUTO_WHITE_BALANCE: // 自动白平衡
+            id = V4L2_CID_AUTO_WHITE_BALANCE;
             break;
         case CAMERA_PARAMETER_WHITE_BALANCE: // 白平衡
             id = V4L2_CID_WHITE_BALANCE_TEMPERATURE;

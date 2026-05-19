@@ -64,6 +64,8 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 	private val mRecorderEngine = RecorderEngine()
 	private var recordFps = 30
 	private val mRecordStartedState = AtomicBoolean(false)
+	private var preparedRecordWidth = 0
+	private var preparedRecordHeight = 0
 	
 	/**
 	 * usb移除监听
@@ -281,19 +283,22 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 		// 正在预览中时无法初始化，需要在预览之前调用
 		if (mRecordStartedState.get() || mPreviewState.get()) return false
 		
+		val (recordWidth, recordHeight) = resolveRecordSize()
 		// 初始化video的surface，使用记录的fps
-		if (!mRecorderEngine.prepareVideo(this.mPreviewWidth, this.mPreviewHeight, fps)) {
+		if (!mRecorderEngine.prepareVideo(recordWidth, recordHeight, fps)) {
 			return false
 		}
 		val videoSurface = mRecorderEngine.getVideoSurface()
 		// 如果未初始化成功，则直接return
 		if (videoSurface == null || !UvcNativeBridge.nativeAddSurfaceTarget(
 				nativeId, TARGET_RECORD, true, videoSurface
-			)) {
+				)) {
 			mRecorderEngine.releaseVideo()
 			return false
 		}
 		recordFps = fps
+		preparedRecordWidth = recordWidth
+		preparedRecordHeight = recordHeight
 		return true
 	}
 	
@@ -306,6 +311,8 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 			UvcNativeBridge.nativeRemoveSurfacesTarget(nativeId, TARGET_RECORD)
 		}
 		mRecorderEngine.releaseVideo()
+		preparedRecordWidth = 0
+		preparedRecordHeight = 0
 	}
 	
 	/**
@@ -325,12 +332,18 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 				"${context.filesDir}${File.separatorChar}Video${File.separatorChar}Video_${System.currentTimeMillis()}.mp4"
 			} else outputPath
 		)
+		val (recordWidth, recordHeight) = resolveRecordSize()
+		if (preparedRecordWidth > 0 && preparedRecordHeight > 0 &&
+			(preparedRecordWidth != recordWidth || preparedRecordHeight != recordHeight)
+		) {
+			return false
+		}
 		
 		if (!mRecorderEngine.prepare(context, 0, outFile, useAudio)) {
 			if (outFile.exists()) outFile.delete()
 			return false
 		}
-		if (!mRecorderEngine.start(this.mPreviewWidth, this.mPreviewHeight, fps)) {
+		if (!mRecorderEngine.start(recordWidth, recordHeight, fps)) {
 			if (outFile.exists()) outFile.delete()
 			return false
 		}
@@ -343,6 +356,22 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 		}
 		mRecordStartedState.set(true)
 		return true
+	}
+
+	private fun resolveRecordSize(): Pair<Int, Int> {
+		val normalizedRotation = normalizeRotation(
+			getParameter(UvcCameraParameter.ORIENTATION) ?: 0
+		)
+		return if (normalizedRotation == 90 || normalizedRotation == 270) {
+			mPreviewHeight to mPreviewWidth
+		} else {
+			mPreviewWidth to mPreviewHeight
+		}
+	}
+
+	private fun normalizeRotation(rotation: Int): Int {
+		val normalized = rotation % 360
+		return if (normalized < 0) normalized + 360 else normalized
 	}
 	
 	/**

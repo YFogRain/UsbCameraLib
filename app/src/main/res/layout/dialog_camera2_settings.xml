@@ -2,115 +2,544 @@
 <layout xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/shape_settings_bg"
-        android:orientation="vertical"
-        android:paddingHorizontal="15dp"
-        android:paddingVertical="15dp">
-
-        <TextView
-            android:id="@+id/tv_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:includeFontPadding="false"
-            android:text="相机设置"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tv_white_balance_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="15dp"
-            android:includeFontPadding="false"
-            android:text="白平衡"
-            android:textColor="@color/white"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rec_white_balance"
-            android:layout_width="match_parent"
-            android:layout_height="40dp"
-            android:layout_marginTop="10dp" />
-
-        <TextView
-            android:id="@+id/tv_brightness_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="15dp"
-            android:includeFontPadding="false"
-            android:text="亮度"
-            android:textColor="@color/white"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+        android:background="@drawable/shape_settings_bg">
 
         <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/ll_brightness"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="horizontal">
+            android:layout_height="300dp"
+            android:orientation="vertical"
+            android:paddingHorizontal="15dp"
+            android:paddingVertical="15dp">
 
+            <!-- 标题 -->
             <TextView
-                android:id="@+id/tv_min_brightness"
+                android:id="@+id/tv_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center"
                 android:includeFontPadding="false"
-                android:text="0"
-                android:textColor="#969799"
-                android:textSize="10sp"
-                tools:ignore="SmallSp" />
-            <!-- 滑块 -->
-            <com.google.android.material.slider.Slider
-                android:id="@+id/slider_brightness"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:padding="0dp"
-                android:stepSize="1"
-                android:value="50"
-                android:valueFrom="0"
-                android:valueTo="100"
-                app:haloColor="@android:color/transparent"
-                app:labelBehavior="floating"
-                app:layout_constraintBottom_toBottomOf="@+id/tv_voice_volume"
-                app:layout_constraintEnd_toStartOf="@+id/tv_max_volume"
-                app:layout_constraintStart_toEndOf="@+id/tv_min_volume"
-                app:layout_constraintTop_toTopOf="@+id/tv_voice_volume"
-                app:thumbColor="@color/white"
-                app:thumbElevation="2dp"
-                app:thumbHeight="10dp"
-                app:thumbRadius="5dp"
-                app:thumbStrokeColor="@android:color/transparent"
-                app:thumbStrokeWidth="0dp"
-                app:thumbTrackGapSize="0dp"
-                app:thumbWidth="10dp"
-                app:tickVisible="false"
-                app:trackColorActive="#51A0FD"
-                app:trackColorInactive="#F5F7F9"
-                app:trackHeight="4dp"
-                app:trackStopIndicatorSize="0dp" />
+                android:text="相机设置"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
 
+            <!-- ========== 自动曝光 ========== -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_auto_exposure"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:includeFontPadding="false"
+                    android:text="自动曝光"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_auto_exposure"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 曝光 -->
             <TextView
-                android:id="@+id/tv_max_brightness"
+                android:id="@+id/tv_exposure_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
+                android:layout_marginTop="12dp"
                 android:includeFontPadding="false"
-                android:text="100"
-                android:textColor="#969799"
-                android:textSize="10sp"
-                app:layout_constraintBottom_toBottomOf="@+id/tv_voice_volume"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="@+id/tv_voice_volume"
-                tools:ignore="SmallSp" />
+                android:text="曝光"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_exposure"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_exposure_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_exposure"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_exposure_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- ========== 亮度 ========== -->
+            <TextView
+                android:id="@+id/tv_brightness_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:includeFontPadding="false"
+                android:text="亮度"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_brightness"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_brightness_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_brightness"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_brightness_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- ========== 对比度 ========== -->
+            <TextView
+                android:id="@+id/tv_contrast_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:includeFontPadding="false"
+                android:text="对比度"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_contrast"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_contrast_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_contrast"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_contrast_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- ========== 增益 ========== -->
+            <TextView
+                android:id="@+id/tv_gain_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:includeFontPadding="false"
+                android:text="增益"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_gain"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_gain_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_gain"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_gain_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- ========== 饱和度 ========== -->
+            <TextView
+                android:id="@+id/tv_saturation_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:includeFontPadding="false"
+                android:text="饱和度"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_saturation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_saturation_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_saturation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_saturation_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- ========== 自动对焦 ========== -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_auto_focus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:includeFontPadding="false"
+                    android:text="自动对焦"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_auto_focus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 聚焦 -->
+            <TextView
+                android:id="@+id/tv_focus_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:includeFontPadding="false"
+                android:text="聚焦"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_focus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_focus_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_focus"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_focus_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- ========== 光圈 ========== -->
+            <TextView
+                android:id="@+id/tv_iris_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:includeFontPadding="false"
+                android:text="光圈"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_iris"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_iris_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_iris"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_iris_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- ========== 自动色调 ========== -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_auto_hue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:includeFontPadding="false"
+                    android:text="自动色调"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_auto_hue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 色调 -->
+            <TextView
+                android:id="@+id/tv_hue_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:includeFontPadding="false"
+                android:text="色调"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_hue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_hue_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_hue"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_hue_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- ========== 自动白平衡 ========== -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_auto_white_balance"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:includeFontPadding="false"
+                    android:text="自动白平衡"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_auto_white_balance"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 白平衡 -->
+            <TextView
+                android:id="@+id/tv_white_balance_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:includeFontPadding="false"
+                android:text="白平衡"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/ll_white_balance"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_white_balance_min"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+
+                <com.google.android.material.slider.Slider
+                    style="@style/Widget.CameraSettings.Slider"
+                    android:id="@+id/slider_white_balance"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/tv_white_balance_max"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:includeFontPadding="false"
+                    android:textColor="#969799"
+                    android:textSize="10sp"
+                    tools:ignore="SmallSp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
 
         </androidx.appcompat.widget.LinearLayoutCompat>
-    </androidx.appcompat.widget.LinearLayoutCompat>
+    </androidx.core.widget.NestedScrollView>
 </layout>
