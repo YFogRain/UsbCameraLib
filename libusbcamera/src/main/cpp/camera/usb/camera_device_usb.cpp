@@ -31,6 +31,19 @@ namespace {
     uint8_t boolToUvc(int value) {
         return value == 1 ? 1 : 0;
     }
+
+    // 是否支持设置
+    template<typename T>
+    bool isControlSupported(uvc_error_t (*getter)(uvc_device_handle_t *, T *, enum uvc_req_code),
+                            uvc_device_handle_t *devh) {
+        T info{};
+        auto ret = getter(devh, &info, UVC_GET_INFO);
+
+        if (ret != UVC_SUCCESS) {
+            return false;
+        }
+        return (info & 0x02) != 0;
+    }
 }
 
 CameraDeviceUsbImpl::CameraDeviceUsbImpl(uvc_context_t *context,
@@ -249,10 +262,9 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
     if (type == CAMERA_PARAMETER_PREVIEW_SIZE) {
         return getSupportedPreviewSizes();
     } else if (type == CAMERA_PARAMETER_AUTO_EXPOSURE) {
-        uint8_t value;
-        // 获取当前值成功时，即表示支持
-        return uvc_get_ae_mode(mDeviceHandle, &value, UVC_GET_CUR) == UVC_SUCCESS ? 1 : 0;
+        return isControlSupported<uint8_t>(uvc_get_ae_mode, mDeviceHandle) ? 1 : 0;
     } else if (type == CAMERA_PARAMETER_EXPOSURE) {
+        // 先检查是否支持写入
         uint32_t min;
         uint32_t max;
         if (uvc_get_exposure_abs(mDeviceHandle, &min, UVC_GET_MIN) == UVC_SUCCESS) {
@@ -264,9 +276,7 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
         int16_t min;
         int16_t max;
         if (uvc_get_brightness(mDeviceHandle, &min, UVC_GET_MIN) == UVC_SUCCESS) {
-            LOG_D("CameraDeviceUsbImpl", "brightness-最小值:%d", min);
             if (uvc_get_brightness(mDeviceHandle, &max, UVC_GET_MAX) == UVC_SUCCESS) {
-                LOG_D("CameraDeviceUsbImpl", "brightness-最大值:%d", max);
                 return std::make_pair(min, max);
             }
         }
@@ -303,8 +313,7 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
             }
         }
     } else if (type == CAMERA_PARAMETER_AUTO_FOCUS) { // 查看是否支持自动对焦
-        uint8_t max;
-        return uvc_get_focus_auto(mDeviceHandle, &max, UVC_GET_CUR) == UVC_SUCCESS? 1 : 0;
+        return isControlSupported<uint8_t>(uvc_get_focus_auto, mDeviceHandle) ? 1 : 0;
     } else if (type == CAMERA_PARAMETER_FOCUS) { // 查看是否支持设置焦距
         uint16_t min;
         uint16_t max;
@@ -322,8 +331,7 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
             }
         }
     } else if (type == CAMERA_PARAMETER_AUTO_HUE) { // 自动色调
-        uint8_t value;
-        return uvc_get_hue_auto(mDeviceHandle, &value, UVC_GET_CUR) == UVC_SUCCESS? 1 : 0;
+        return isControlSupported<uint8_t>(uvc_get_hue_auto, mDeviceHandle) ? 1 : 0;
     } else if (type == CAMERA_PARAMETER_HUE) { // 色调
         int16_t min;
         int16_t max;
@@ -333,25 +341,20 @@ CameraDeviceUsbImpl::getSupportParameters(int type) {
             }
         }
     } else if (type == CAMERA_PARAMETER_AUTO_WHITE_BALANCE) { // 自动色调
-        uint8_t max;
-        return uvc_get_white_balance_temperature_auto(mDeviceHandle, &max, UVC_GET_CUR) ==
-               UVC_SUCCESS? 1 : 0;
+        return isControlSupported<uint8_t>(uvc_get_white_balance_temperature_auto, mDeviceHandle)
+               ? 1 : 0;
     } else if (type == CAMERA_PARAMETER_WHITE_BALANCE) { // 白平衡
         uint16_t min;
         uint16_t max;
-        if (uvc_get_white_balance_temperature(mDeviceHandle, &min, UVC_GET_MIN) == UVC_SUCCESS) {
+        if (uvc_get_white_balance_temperature(mDeviceHandle, &min, UVC_GET_MIN) ==
+            UVC_SUCCESS) {
             if (uvc_get_white_balance_temperature(mDeviceHandle, &max, UVC_GET_MAX) ==
                 UVC_SUCCESS) {
                 return std::make_pair(min, max);
             }
         }
     } else if (type == CAMERA_PARAMETER_PRIVACY) { // 是否支持隐私模式
-        uint8_t max;
-        if (uvc_get_privacy(mDeviceHandle, &max, UVC_GET_MAX) == UVC_SUCCESS) {
-            return max >= 1 ? 1 : 0;
-        } else {
-            return 0;
-        }
+        return isControlSupported<uint8_t>(uvc_get_privacy, mDeviceHandle) ? 1 : 0;
     }
     return std::monostate{};
 }
