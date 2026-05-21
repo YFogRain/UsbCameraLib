@@ -51,7 +51,7 @@ class CameraViewModel : BaseViewModel() {
 	val lastPicPreview = MutableLiveData<Uri?>()
 	
 	// 当前类型：false=拍照模式, true=录像模式
-	val isVideoMode = MutableLiveData(true)
+	val isVideoMode = MutableLiveData(false)
 	
 	// 当前是否正在录制中
 	val recordIng = MutableLiveData(false)
