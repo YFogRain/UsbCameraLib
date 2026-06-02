@@ -3,7 +3,6 @@ package com.rain.uvc.demo.base.activity
 import androidx.annotation.LayoutRes
 import androidx.databinding.DataBindingUtil
 import androidx.databinding.ViewDataBinding
-import com.rain.uvc.demo.base.viewModel.BaseViewModel
 import com.rain.uvc.demo.utils.singleClick
 
 /**
@@ -11,12 +10,14 @@ import com.rain.uvc.demo.utils.singleClick
  * @createTime: 2024/10/29
  * @des
  */
-abstract class BaseDataBindActivity<DB: ViewDataBinding,VM:BaseViewModel> : BaseActivity<VM>() {
-	protected lateinit var mBinding:DB
+abstract class BaseDataBindActivity<DB : ViewDataBinding> : BaseActivity() {
+	protected lateinit var mBinding: DB
+	
 	/**
 	 * 布局中设置的绑定的id
 	 */
 	protected open fun loadVariableId(): Int = -1 //佈局内的id设置null代表不需要dataBind
+	
 	/**
 	 * 布局id
 	 */
@@ -37,8 +38,8 @@ abstract class BaseDataBindActivity<DB: ViewDataBinding,VM:BaseViewModel> : Base
 		super.initMVVMState()
 		mBinding.lifecycleOwner = this
 		val variableId = loadVariableId()
-		if (isCreatedViewModel() && variableId != -1){
-			mBinding.setVariable(variableId,viewModel)
+		if (viewModel != null && variableId != -1) {
+			mBinding.setVariable(variableId, viewModel)
 		}
 		initModelObserve()
 	}

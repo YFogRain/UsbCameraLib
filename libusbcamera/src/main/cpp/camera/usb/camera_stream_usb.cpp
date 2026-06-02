@@ -5,20 +5,22 @@
 // please include "napi/native_api.h".
 
 #include "camera_stream_usb.h"
+#include <chrono>
+#include <utility>
 
 CameraStreamUsbImpl::CameraStreamUsbImpl(uvc_device_handle_t *deviceHandle)
         : mDeviceHandle(deviceHandle), frameWidth(640), frameHeight(480),
           frameFormat(PREVIEW_FORMAT_BGR) {
-    // 初始化互斥锁
-    mVideoRecord = new VideoRecord();
+    mPreview = new GLPreview();
 }
 
 CameraStreamUsbImpl::~CameraStreamUsbImpl() {
-    if (mVideoRecord) {
-        delete mVideoRecord;
-    }
-    mVideoRecord = nullptr;
+    releasePreviewFunc();
     mDeviceHandle = nullptr;
+    if (mPreview) {
+        delete mPreview;
+        mPreview = nullptr;
+    }
 }
 
 bool CameraStreamUsbImpl::startPreview() {
@@ -32,35 +34,34 @@ bool CameraStreamUsbImpl::startPreview() {
 }
 
 bool CameraStreamUsbImpl::stopPreview() {
-    if (mVideoRecord) {
-        mVideoRecord->stopRecord();
-    }
-    LOG_D("停止预览开始");
-    LOG_D("mIsRunning:%d", mIsCaptureRunning.load());
+    LOG_D("CameraStreamUsbImpl", "停止预览开始");
+    LOG_D("CameraStreamUsbImpl", "mIsRunning:%d", mIsCaptureRunning.load());
     if (mIsCaptureRunning.load()) {
         // 停止预览线程
         {
             std::lock_guard<std::mutex> lock(captureMutex);
             mIsCaptureRunning.store(false);
         }
-        {
-            std::lock_guard<std::mutex> lock(previewMutex);
-            mIsPreviewCallRunning.store(false);
-        }
         // 停止预览
         uvc_stop_streaming(mDeviceHandle);
-        // 停止预览回调线程
-        previewResultCond.notify_one();
-        if (previewResultThread.joinable()) {
-            previewResultThread.join();
+
+        // 停止预览捕获线程
+        if (mIsPreviewCallRunning.load()) {
+            mIsPreviewCallRunning.store(false);
+            previewResultCond.notify_one();
+            if (previewResultThread.joinable()) {
+                previewResultThread.join();
+            }
         }
+
         // 停止捕获线程
         captureCond.notify_one();
         if (captureThread.joinable()) {
             captureThread.join();
         }
     }
-    LOG_D("停止预览结束");
+    // ⭐⭐ 新增
+    LOG_D("CameraStreamUsbImpl", "停止预览结束");
     clearCaptureFrames();
     clearPreviewFrames();
     clearPictureFrame();
@@ -73,20 +74,22 @@ bool CameraStreamUsbImpl::setPreviewSize(int width, int height, int format) {
     frameFormat = format;
     uvc_stream_ctrl_t ctrl;
     // 设置完成后需要提前获取一次，否则打开时无法正常获取到流
-    uvc_error_t ret = uvc_get_stream(mDeviceHandle, &ctrl, getPreviewFormat(), previewWidth, previewHeight);
-    LOG_D("设置预览分辨率同步获取预览流-setPreviewSize-结果:%d", ret);
+    uvc_error_t ret = uvc_get_stream(mDeviceHandle, &ctrl, getPreviewFormat(), previewWidth,
+                                     previewHeight);
+    LOG_D("CameraStreamUsbImpl", "设置预览分辨率同步获取预览流-setPreviewSize-结果:%d", ret);
     return true;
 }
 
 int CameraStreamUsbImpl::prepare_preview(uvc_stream_ctrl_t *ctrl) {
-    LOG_D("获取对应的流控制器-size:%d-%d", previewWidth, previewHeight);
-    uvc_error_t ret = uvc_get_stream(mDeviceHandle, ctrl, getPreviewFormat(), previewWidth, previewHeight);
-    LOG_D("获取对应的流控制器-结果:%d", ret);
+    LOG_D("CameraStreamUsbImpl", "获取对应的流控制器-size:%d-%d", previewWidth, previewHeight);
+    uvc_error_t ret = uvc_get_stream(mDeviceHandle, ctrl, getPreviewFormat(), previewWidth,
+                                     previewHeight);
+    LOG_D("CameraStreamUsbImpl", "获取对应的流控制器-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
     }
     previewFps = 10000000 / ctrl->dwFrameInterval;
-    LOG_D("当前设置的fps为:%d", 10000000 / ctrl->dwFrameInterval);
+    LOG_D("CameraStreamUsbImpl", "当前设置的fps为:%d", 10000000 / ctrl->dwFrameInterval);
     // 获取当前预览流需要设置的宽高等数据
     uvc_frame_desc_t *frameDesc = uvc_get_frame_desc(mDeviceHandle, ctrl);
     if (frameDesc) {
@@ -97,23 +100,25 @@ int CameraStreamUsbImpl::prepare_preview(uvc_stream_ctrl_t *ctrl) {
         frameHeight = previewHeight;
     }
     frameBytes = getPreviewBytesSize();
-    changeWindowSize(frameWidth, frameHeight);
     return UVC_SUCCESS;
 }
 
 int CameraStreamUsbImpl::do_preview(uvc_stream_ctrl_t *ctrl) {
     clearCaptureFrames();
     clearPreviewFrames();
-    uvc_error_t ret = uvc_start_streaming(mDeviceHandle, ctrl, uvc_stream_callback, (void *) this, 0);
-    LOG_D("开启预览流-结果:%d", ret);
+    uvc_error_t ret = uvc_start_streaming(mDeviceHandle, ctrl, uvc_stream_callback, (void *) this,
+                                          0);
+    LOG_D("CameraStreamUsbImpl", "开启预览流-结果:%d", ret);
     if (ret != UVC_SUCCESS) {
         return ret;
     }
     // 开启线程，启动捕获流操作
     mIsCaptureRunning.store(true);
     captureThread = std::thread(&CameraStreamUsbImpl::thread_func_capture, this);
-    mIsPreviewCallRunning.store(true);
-    previewResultThread = std::thread(&CameraStreamUsbImpl::thread_func_preview_call, this);
+    if (hasPreviewDataListener()) { // 如果有监听，则启动预览捕获线程
+        mIsPreviewCallRunning.store(true);
+        previewResultThread = std::thread(&CameraStreamUsbImpl::thread_func_preview_call, this);
+    }
     return ret;
 }
 
@@ -137,7 +142,9 @@ stream_frame_t *CameraStreamUsbImpl::allocate_stream_frame(uvc_frame_t *inFrame)
         }
         memcpy(outFrame->data, inFrame->data, inFrame->data_bytes);
     }
-    outFrame->rotation = mDisplayTransformState;
+    if (mPreview) {
+        outFrame->rotation = mPreview->getRotation();
+    }
     return outFrame;
 }
 
@@ -146,18 +153,21 @@ void CameraStreamUsbImpl::uvc_stream_callback(uvc_frame_t *frame, void *vptr_arg
     auto *preview = reinterpret_cast<CameraStreamUsbImpl *>(vptr_args);
     // 如果当前不是正在预览，或者当前数据返回的是null，则直接下一回合
     if (!preview->mIsCaptureRunning.load() || !frame) {
-        LOG_E("当前数据返回的是null，则直接下一回合：：%d", preview->mIsCaptureRunning.load());
+        LOG_E("CameraStreamUsbImpl", "当前数据返回的是null，则直接下一回合：：%d",
+              preview->mIsCaptureRunning.load());
         return;
     }
-    if ((frame->frame_format != UVC_FRAME_FORMAT_MJPEG && frame->data_bytes < preview->frameBytes) || !frame->data) {
-        LOG_E("当前数据大小不符合::data_bytes:%zu,frameBytes:%zu", frame->data_bytes,
+    if ((frame->frame_format != UVC_FRAME_FORMAT_MJPEG &&
+         frame->data_bytes < preview->frameBytes) || !frame->data) {
+        LOG_E("CameraStreamUsbImpl", "当前数据大小不符合::data_bytes:%zu,frameBytes:%zu",
+              frame->data_bytes,
               preview->frameBytes);
         return;
     }
     stream_frame_t *captureFrame = preview->allocate_stream_frame(frame);
     // 获取bgr类型的数据数组
     if (!captureFrame || !captureFrame->data || captureFrame->data_size <= 0) {
-        LOG_E("数据转换失败");
+        LOG_E("CameraStreamUsbImpl", "数据转换失败");
         free_stream(captureFrame);
         return;
     }
@@ -178,7 +188,7 @@ void CameraStreamUsbImpl::clearCaptureFrames() {
 void CameraStreamUsbImpl::clearPreviewFrames() {
     std::lock_guard<std::mutex> lock(previewMutex);
     if (!previewResultFrames.empty()) {
-        for (stream_frame_t *pFrame: previewResultFrames) { // 直接遍历，避免 size() 变化
+        for (stream_frame_t *pFrame: previewResultFrames) {
             free_stream(pFrame);
         }
         previewResultFrames.clear();
@@ -217,7 +227,8 @@ stream_frame_t *CameraStreamUsbImpl::waitCaptureFrames() {
     stream_frame_t *frame = nullptr;
     {
         std::unique_lock<std::mutex> lock(captureMutex);
-        captureCond.wait(lock, [this] { return !mIsCaptureRunning.load() || !captureFrames.empty(); });
+        captureCond.wait(lock,
+                         [this] { return !mIsCaptureRunning.load() || !captureFrames.empty(); });
         if (mIsCaptureRunning.load() && !captureFrames.empty()) {
             frame = captureFrames.front();
             captureFrames.pop_front();
@@ -227,10 +238,12 @@ stream_frame_t *CameraStreamUsbImpl::waitCaptureFrames() {
 }
 
 stream_frame_t *CameraStreamUsbImpl::waitPreviewCallFrames() {
-    stream_frame *frame = nullptr;
+    stream_frame_t *frame = nullptr;
     {
         std::unique_lock<std::mutex> lock(previewMutex);
-        previewResultCond.wait(lock, [this] { return !mIsPreviewCallRunning.load() || !previewResultFrames.empty(); });
+        previewResultCond.wait(lock, [this] {
+            return !mIsPreviewCallRunning.load() || !previewResultFrames.empty();
+        });
         if (mIsPreviewCallRunning.load() && !previewResultFrames.empty()) {
             frame = previewResultFrames.front();
             previewResultFrames.pop_front();
@@ -240,30 +253,47 @@ stream_frame_t *CameraStreamUsbImpl::waitPreviewCallFrames() {
 }
 
 void CameraStreamUsbImpl::thread_func_capture() {
-    LOG_D("=====开启循环捕获线程数据");
-    LOG_D("=====mIsRunning：：：%d", mIsCaptureRunning.load());
+    LOG_D("CameraStreamUsbImpl", "=====开启循环捕获线程数据");
+    LOG_D("CameraStreamUsbImpl", "=====mIsRunning：：：%d", mIsCaptureRunning.load());
+    // ⭐⭐⭐ 在这里初始化GL
+    if (mPreview && !mPreview->init(frameWidth, frameHeight)) {
+        LOG_E("CameraStreamUsbImpl", "GLPreview init failed");
+    }
     while (mIsCaptureRunning.load()) {
         // 等待获取预览的数据
         stream_frame_t *pFrame = waitCaptureFrames();
         if (!pFrame) {
             continue;
         }
-        stream_frame_t *bgrFrame = any2Bgr(pFrame);
-        free_stream(pFrame); // 释放源数据
-        // 绘制
-        if (bgrFrame && bgrFrame->data && bgrFrame->data_size > 0) { // 如果数据不为空
-            drawFrame(bgrFrame->data, bgrFrame->data_size, bgrFrame->width, bgrFrame->height);
+        cv::Mat bgrMat = ImgUtils::any2Bgr(pFrame->data, pFrame->data_size, pFrame->width,
+                                           pFrame->height, pFrame->format);
+        free_stream(pFrame);
+        if (bgrMat.empty() || !bgrMat.data) {
+            continue;
         }
-        // 发送给回调线程处理
-        putPictureFrame(bgrFrame);
-        putPreviewCallFrames(bgrFrame);
-
+        putPictureFrame(bgrMat);
+        // 绘制
+        if (mPreview) {
+            mPreview->drawFrame(bgrMat.data, bgrMat.cols, bgrMat.rows);
+        }
+        // 如果是需要预览回调
+        if (hasPreviewDataListener() && mIsPreviewCallRunning.load()) {
+            stream_frame_t *callbackFrame = allocate_bgr_stream_frame(bgrMat, mPreview
+                                                                              ? mPreview->getRotation()
+                                                                              : 0);
+            if (callbackFrame) {
+                putPreviewCallFrames(callbackFrame);
+            }
+        }
+    }
+    if (mPreview) {
+        mPreview->releaseOpenGL();
     }
 }
 
 void CameraStreamUsbImpl::thread_func_preview_call() {
-    LOG_D("=====开启循环捕获线程数据");
-    LOG_D("=====mIsRunning：：：%d", mIsPreviewCallRunning.load());
+    LOG_D("CameraStreamUsbImpl", "=====开启循环捕获线程数据");
+    LOG_D("CameraStreamUsbImpl", "=====mIsRunning：：：%d", mIsPreviewCallRunning.load());
     JNIEnv *env = nullptr;
     while (mIsPreviewCallRunning.load()) {
         // 等待获取预览的数据
@@ -273,9 +303,7 @@ void CameraStreamUsbImpl::thread_func_preview_call() {
         }
         uint32_t width = pFrame->width;   // 数据宽度
         uint32_t height = pFrame->height;
-
         // 发送到录制的线程去进行录制，（路线线程会重新复制一次数据，不需担心后续内存释放问题）
-        putRecordFrames(pFrame);
         {
             std::lock_guard<std::mutex> lock(previewMutex);
             if (!previewListener) {
@@ -284,13 +312,14 @@ void CameraStreamUsbImpl::thread_func_preview_call() {
             }
         }
         // 格式化数据格式
-        std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, width, height, previewFormat);
+        std::vector<uint8_t> outFrame = ImgUtils::format(pFrame->data, width, height,
+                                                         previewFormat);
         // 释放源数据
         free_stream(pFrame);
         if (outFrame.empty()) {
             continue;
         }
-        if (theVM && !env) {
+        if (mIsPreviewCallRunning && !env) {
             theVM->AttachCurrentThread(&env, nullptr);
         }
         // 释放源数据
@@ -300,7 +329,7 @@ void CameraStreamUsbImpl::thread_func_preview_call() {
             if (buf) {
                 env->CallVoidMethod(previewListener, onFrameMethod, width, height, buf);
                 if (env->ExceptionCheck()) {
-                    LOG_D("ExceptionCheck");
+                    LOG_D("CameraStreamUsbImpl", "ExceptionCheck");
                     env->ExceptionDescribe();
                 }
                 env->ExceptionClear();

@@ -2,18 +2,16 @@ package com.rain.uvc.demo.base.fragment
 
 import android.app.Dialog
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
-import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatDialogFragment
 import androidx.databinding.DataBindingUtil
 import androidx.databinding.ViewDataBinding
-import androidx.lifecycle.lifecycleScope
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
+import androidx.core.graphics.drawable.toDrawable
 
 /**
  *  Created by 15921 on 2022/7/29 11:59
@@ -39,7 +37,7 @@ abstract class BaseDialogFragment<VB : ViewDataBinding> : AppCompatDialogFragmen
 		val dialog = super.onCreateDialog(savedInstanceState)
 		dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
 		dialog.window?.run {
-			setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+			setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
 		}
 		return dialog
 	}

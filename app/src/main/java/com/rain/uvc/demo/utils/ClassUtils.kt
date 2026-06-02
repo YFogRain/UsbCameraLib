@@ -1,6 +1,8 @@
 package com.rain.uvc.demo.utils
 
 import android.app.Activity
+import android.content.Context
+import android.content.res.Configuration
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -15,15 +17,28 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.coroutineScope
 import androidx.viewbinding.ViewBinding
-import com.rain.uvc.demo.base.fragment.BaseFragment
 import com.rain.uvc.demo.base.activity.BaseActivity
 import com.rain.uvc.demo.base.activity.BaseDataBindActivity
-import com.rain.uvc.demo.base.activity.BaseMviActivity
 import com.rain.uvc.demo.base.fragment.BaseDataBindFragment
+import com.rain.uvc.demo.base.fragment.BaseFragment
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 
 val appLifeScope by lazy { ProcessLifecycleOwner.get().lifecycle.coroutineScope }
+
+/**
+ * 判断是否是横屏
+ */
+fun Context.isLandscape(): Boolean {
+	return this.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+}
+
+/**
+ * 判断是否是横屏
+ */
+fun Fragment.isLandscape(): Boolean {
+	return this.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+}
 
 //fragment中使用视图绑定对于的协程方法
 val Fragment.viewLifeScope: LifecycleCoroutineScope
@@ -97,10 +112,6 @@ fun Activity.findBaseGenericType(isViewModel: Boolean): Type? {
 	val superclass = this.javaClass.superclass
 	Log.d("ClassUtilsTag", "superclass:$superclass")
 	if (superclass == BaseDataBindActivity::class.java) {
-		val actualTypeArguments = genericSuperclass.actualTypeArguments
-		return if (isViewModel) actualTypeArguments[1] else actualTypeArguments[0]
-	}
-	if (superclass == BaseMviActivity::class.java) {
 		val actualTypeArguments = genericSuperclass.actualTypeArguments
 		return if (isViewModel) actualTypeArguments[1] else actualTypeArguments[0]
 	}

@@ -13,46 +13,11 @@
         android:label="HomeSplashFragment"
         tools:layout="@layout/fg_camera_select">
         <!-- 跳转到打开相机 -->
-
-        <action
-            android:id="@+id/camera_to_native1"
-            app:destination="@id/camera_native1" />
-
-        <action
-            android:id="@+id/camera_to_native2"
-            app:destination="@id/camera_native2" />
-
         <action
             android:id="@+id/camera_to_cpp"
             app:destination="@id/camera_cpp" />
-
-        <action
-            android:id="@+id/camera_to_usb"
-            app:destination="@id/camera_usb" />
     </fragment>
 
-    <fragment
-        android:id="@+id/camera_native1"
-        android:name="com.rain.uvc.demo.camera.genesis.camera1.Camera1Fragment"
-        android:label="camera api"
-        tools:layout="@layout/fg_camera">
-        <argument
-            android:name="cameraId"
-            android:defaultValue="0"
-            app:argType="integer" />
-    </fragment>
-
-    <fragment
-        android:id="@+id/camera_native2"
-        android:name="com.rain.uvc.demo.camera.genesis.camera2.Camera2Fragment"
-        android:label="camera api"
-        tools:layout="@layout/fg_camera_2">
-        <argument
-            android:name="cameraId"
-            android:defaultValue="0"
-            app:argType="string"
-            app:nullable="false" />
-    </fragment>
 
     <fragment
         android:id="@+id/camera_cpp"
@@ -69,10 +34,4 @@
             app:argType="android.hardware.usb.UsbDevice"
             app:nullable="true" />
     </fragment>
-
-    <fragment
-        android:id="@+id/camera_usb"
-        android:name="com.rain.uvc.demo.camera.usb.CameraUsbFragment"
-        android:label="native层usb相机"
-        tools:layout="@layout/fg_camera_usb" />
 </navigation>

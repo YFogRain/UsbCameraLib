@@ -18,8 +18,8 @@
 #include <thread>
 #include <atomic>
 #include <android/native_window.h>
-#include "video_record.h"
 #include <filesystem>
+#include "gl_preview.h"
 
 #define MAX_FRAME 2
 
@@ -40,6 +40,7 @@ static inline void free_stream(stream_frame_t *frame) {
         }
         free(frame);
     }
+    frame = nullptr;
 }
 
 class ICameraStream {
@@ -50,23 +51,9 @@ public:
     virtual bool stopPreview() = 0;                                     // 开启预览
     virtual bool setPreviewSize(int width, int height, int format) = 0; // 设置预览分辨率
 
-    void releaseWindows() {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (mPreviewWindow) {
-            ANativeWindow_release(mPreviewWindow);
-            mPreviewWindow = nullptr;
-        }
-    };
-
     void releasePreviewFunc() {
         std::lock_guard<std::mutex> lock(previewFuncMutex);
-        if (previewListener && theVM) {
-            JNIEnv *env = nullptr;
-            if (theVM->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_OK) {
-                // 在析构函数中删除全局引用
-                env->DeleteGlobalRef(previewListener);  // 删除全局引用
-            }
-        }
+        deleteGlobalRef(theVM, previewListener);
         theVM = nullptr;
         previewListener = nullptr;
         onFrameMethod = nullptr;
@@ -77,6 +64,9 @@ public:
         previewFormat = format;
         this->theVM = vm;
         if (env->IsSameObject(previewListener, listener)) {
+            if (listener) {
+                env->DeleteGlobalRef(listener);
+            }
             return true;
         }
         onFrameMethod = nullptr;
@@ -85,142 +75,147 @@ public:
         }
         previewListener = listener;
         if (!listener) {
-            LOG_E("监听设置失败，listener为null");
-            return false;
+            return true;
         }
         jclass frameClass = env->GetObjectClass(listener);
         if (frameClass) {
             //宽高
-            onFrameMethod = env->GetMethodID(frameClass, "onFrame", "(IILjava/nio/ByteBuffer;)V");
+            onFrameMethod = env->GetMethodID(frameClass, "onFrame", "(Ljava/nio/ByteBuffer;II)V");
         }
         env->ExceptionClear();
         if (!onFrameMethod) {
             env->DeleteGlobalRef(listener);
             previewListener = nullptr;
-            LOG_E("设置监听失败");
+            theVM = nullptr;
             return false;
         }
         return true;
     }
 
-    bool setDisplaySurface(ANativeWindow *preview_window) {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (mPreviewWindow != preview_window) {
-            if (mPreviewWindow) {
-                ANativeWindow_release(mPreviewWindow);
-            }
-            mPreviewWindow = preview_window;
-            if (LIKELY(mPreviewWindow)) {
-                ANativeWindow_setBuffersGeometry(mPreviewWindow, previewWidth, previewHeight, UVC_FORMAT_FRAME_WINDOW);
-            }
-            ImgUtils::setDisplayTransformState(mPreviewWindow, mDisplayTransformState);
+    /**
+    * 添加surface目标
+    * @param targetId 目标ID
+    * @param window 窗口
+    * @param surfaceType surface类型
+    * @return 是否添加成功
+    */
+    bool addSurfaceTarget(std::string targetId, ANativeWindow *window, GLTargetType surfaceType) {
+        if (!window || targetId.empty() || !mPreview) { // 检查是否可以添加
+            return false;
         }
-        return true;
-    };
-
-    bool setDisplayTransform(int state) {
-        LOG_D("当前的设备方向:触发设置方向");
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        mDisplayTransformState = state;
-        return ImgUtils::setDisplayTransformState(mPreviewWindow, mDisplayTransformState);;
+        return mPreview->addSurfaceTarget(targetId, window, surfaceType);
     }
 
-    int getDisplayTransformState() { return mDisplayTransformState; }
+    /**
+       * 移除surface目标
+       * @param targetId 目标ID
+       * @return 是否移除成功
+       */
+    bool removeSurfaceTarget(std::string targetId) {
+        if (targetId.empty() || !mPreview) {
+            return false;
+        }
+        return mPreview->removeSurfaceTarget(targetId);
+    }
 
-    std::string getCurrentPreviewSize() {
-        return std::to_string(previewWidth) + ":" + std::to_string(previewHeight) + ":" + std::to_string(previewFormat);
+
+    /**
+     * 启动录制：仅标记状态与 PTS 起点，底层 captureThread 会在 drawFrame 时将帧时间戳带入 GL。
+     */
+    virtual bool startRecord() {
+        if (mPreview && isRunningPreview()) {
+            return mPreview->startRecord();
+        }
+        return false;
+    }
+
+    /**
+     * 停止录制。
+     */
+    virtual bool stopRecord() {
+        if (mPreview && isRunningPreview()) {
+            mPreview->stopRecord();
+            return true;
+        }
+        return false;
+    }
+
+    bool setDisplayOrientation(int orientation) {
+        if (mPreview) {
+            mPreview->setRotation(orientation);
+            return true;
+        }
+        return false;
+    }
+
+    // 设置拍照镜像
+    bool setJpegMirrorState(bool isMirror) {
+        if (mPreview) {
+            mPreview->setMirror(isMirror);
+            return true;
+        }
+        return false;
+    }
+
+    int getDisplayOrientation() const {
+        if (mPreview) {
+            return mPreview->getRotation();
+        }
+        return 0;
+    }
+
+    int getJpegMirrorState() const {
+        if (mPreview) {
+            return mPreview->getMirrorState();
+        }
+        return 0;
+    }
+
+    std::string getCurrentPreviewSize() const {
+        return std::to_string(previewWidth) + ":" + std::to_string(previewHeight);
     }
 
     virtual bool isRunningPreview() = 0;
 
-    bool startRecord(const std::string &fileName) {
-        bool isPrepare =
-                mVideoRecord->prepare(previewWidth, previewHeight, mDisplayTransformState, previewFps, fileName);
-        LOG_D("准备录制结果:%s", isPrepare ? "成功" : "失败");
-        if (!isPrepare) {
-            return false;
+    std::vector<uint8_t> takePicture() {
+        if (!isRunningPreview()) { // 如果没有父文件夹，且没有开始预览，则返回空
+            return {};
         }
-        return mVideoRecord->startRecord();
-    };
-
-    void stopRecord() { mVideoRecord->stopRecord(); };
-
-    void setRecordParentPath(const std::string &parentPath) { mVideoRecord->setParentPath(parentPath); };
-
-    std::string getRecordPath() { return mVideoRecord->getRecordPath(); };
-
-    void setRecordFormat(int format) {
-        record_format videoFormat;
-        switch (format) {
-            case RECORD_FORMAT_MP4V:
-                videoFormat = mp4v;
-                break;
-            case RECORD_FORMAT_AVC:
-                videoFormat = avc;
-                break;
-            case RECORD_FORMAT_VID:
-                videoFormat = vid;
-                break;
-            case RECORD_FORMAT_DIVX:
-                videoFormat = divx;
-                break;
-            default:
-                videoFormat = mjpeg;
-                break;
-        }
-        mVideoRecord->setRecordFormat(videoFormat);
-    };
-
-    std::string takePicture(const std::string &parentPath, const std::string &fileName) {
-        if (parentPath.empty() || !isRunningPreview()) { // 如果没有父文件夹，且没有开始预览，则返回空
-            LOG_E("没有打开预览");
-            return std::string{};
-        }
-        try { // 创建父类文件夹
-            std::filesystem::create_directories(parentPath);
-        } catch (const std::exception &e) {
-            LOG_E("创建父文件夹失败:%s", e.what());
-            return std::string{};
-        }
-        std::string saveFileName = fileName;
-        if (saveFileName.empty()) {
-            saveFileName = "img_" + VideoRecord::formatTime("%Y%m%d_%H_%M%S%f", VideoRecord::getCurrentTime());
-        };
-        saveFileName = saveFileName + ".jpeg";
-
-        std::string fullPath;
-        if (parentPath.back() == '/') {
-            fullPath = parentPath + saveFileName;
-        } else {
-            fullPath = parentPath + "/" + saveFileName;
-        }
-        LOG_D("图像保存地址:%s", fullPath.c_str());
         // 1. 读取流
         stream_frame_t *frame = waitPictureFrame();
         if (!frame) {
-            LOG_E("未获取到图片帧");
-            return nullptr;
+            return {};
         }
-        bool isSaveSuccess = ImgUtils::writeMjpeg(frame->data, frame->width, frame->height, frame->rotation, fullPath);
-        LOG_D("保存图像结果:%s", isSaveSuccess ? "成功" : "失败");
+        auto isMirror = mPreview != nullptr && mPreview->getMirrorState();
+        auto result = ImgUtils::bgr2Mjpeg(frame->data, frame->width, frame->height, frame->rotation,
+                                          isMirror);
+        // 2. 释放资源
         // 2. 释放资源
         free_stream(frame);
-        if (isSaveSuccess) {
-            return fullPath;
-        }
-        return nullptr;
+        return result;
     };
 protected:
     JavaVM *theVM = nullptr; //回调对应全局应该保存的东西
     jobject previewListener = nullptr; //回调的对象
     jmethodID onFrameMethod = nullptr; //回调的方法
-    VideoRecord *mVideoRecord = nullptr;       // 录制的对象
-    int mDisplayTransformState;                // 预览方向
-
-    std::mutex surfaceMutex;     // 窗口操作锁，单线程操作当前指定窗口
     std::mutex previewFuncMutex; // 预览回调锁
 
-    std::string mSurfaceId;
+
+    static void deleteGlobalRef(JavaVM *vm, jobject listener) {
+        if (!vm || !listener) {
+            return;
+        }
+        JNIEnv *env = nullptr;
+        if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_OK) {
+            env->DeleteGlobalRef(listener);
+        } else if (vm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+            env->DeleteGlobalRef(listener);
+            vm->DetachCurrentThread();
+        }
+    }
+
+    GLPreview *mPreview = nullptr;
+
     int previewWidth = 640;
     int previewHeight = 480;
     int previewFormat = PREVIEW_FORMAT_BGR; // 预览宽高,预览类型
@@ -230,60 +225,6 @@ protected:
     std::condition_variable pictureCond;
     std::atomic<bool> mIsPictureRunning{false}; // 当前是否拍照状态
     stream_frame *pictureFrame = nullptr;       // 拍照的数据
-
-    void drawFrame(uint8_t *data, size_t dataSize, int w, int h) {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (!mPreviewWindow || !data || dataSize <= 0 || w == 0 || h == 0) {
-            return;
-        }
-        ANativeWindow_Buffer buffer;
-        // 锁定缓冲区以获取可以写入的内存区域
-        if (ANativeWindow_lock(mPreviewWindow, &buffer, nullptr) == 0) {
-            auto *dst = (uint8_t *) buffer.bits;
-            // 将RGB数据复制到RGBA图像，并设置alpha值为255
-            for (int i = 0, j = 0; i < w * h; ++i, j += 4) {
-                dst[j] = data[i * 3 + 2];     // R
-                dst[j + 1] = data[i * 3 + 1]; // G
-                dst[j + 2] = data[i * 3]; // B
-                dst[j + 3] = 0xFF;                 // A
-            }
-            // 解锁缓冲区
-            ANativeWindow_unlockAndPost(mPreviewWindow);
-        }
-    };
-
-    void changeWindowSize(int width, int height) {
-        std::lock_guard<std::mutex> lock(surfaceMutex);
-        if (LIKELY(mPreviewWindow)) {
-            ANativeWindow_setBuffersGeometry(mPreviewWindow, width, height, UVC_FORMAT_FRAME_WINDOW);
-        }
-    };
-
-    void putRecordFrames(stream_frame_t *inFrame) {
-        if (!mVideoRecord || !mVideoRecord->isRecording()) {
-            return;
-        }
-        if (!inFrame || !mVideoRecord->checkFrames(inFrame->width, inFrame->height)) {
-            return;
-        }
-        record_frame_t *outFrame = (record_frame_t *) malloc(sizeof(*outFrame));
-        if (!outFrame) {
-            return;
-        }
-        outFrame->width = inFrame->width;
-        outFrame->height = inFrame->height;
-        outFrame->rotation = inFrame->rotation;
-        outFrame->format = inFrame->format;
-        outFrame->data_size = inFrame->data_size;
-        outFrame->data = (uint8_t *) malloc(inFrame->data_size);
-        if (!outFrame->data) {
-            free_record_frame(outFrame);
-            return;
-        }
-        //  复制数据
-        memcpy(outFrame->data, inFrame->data, inFrame->data_size);
-        mVideoRecord->putFrame(outFrame);
-    }
 
     // 复制一份frame
     static stream_frame_t *allocate_stream_frame(stream_frame_t *inFrame) {
@@ -303,14 +244,15 @@ protected:
         return outFrame;
     };
 
+    // 数据转为bgr格式
     static stream_frame_t *any2Bgr(stream_frame_t *inFrame) {
         stream_frame *outFrame = allocate_stream_frame(inFrame);
         if (!outFrame) {
             return nullptr;
         }
         outFrame->format = PREVIEW_FORMAT_BGR;
-        cv::Mat outImg =
-                ImgUtils::any2Bgr(inFrame->data, inFrame->data_size, inFrame->width, inFrame->height, inFrame->format);
+        cv::Mat outImg = ImgUtils::any2Bgr(inFrame->data, inFrame->data_size, inFrame->width,
+                                           inFrame->height, inFrame->format);
         if (outImg.empty()) {
             free_stream(outFrame);
             return nullptr;
@@ -323,13 +265,15 @@ protected:
         return outFrame;
     };
 
+    // 格式化输出的类型
     static stream_frame_t *format(stream_frame_t *inFrame, int outFormat) {
         stream_frame *outFrame = allocate_stream_frame(inFrame);
         if (!outFrame) {
             return nullptr;
         }
         outFrame->format = outFormat;
-        std::vector<uint8_t> outImg = ImgUtils::format(inFrame->data, inFrame->width, inFrame->height, outFormat);
+        std::vector<uint8_t> outImg = ImgUtils::format(inFrame->data, inFrame->width,
+                                                       inFrame->height, outFormat);
         if (outImg.empty()) {
             free_stream(outFrame);
             return nullptr;
@@ -340,14 +284,59 @@ protected:
         return outFrame;
     };
 
+    static stream_frame_t *allocate_bgr_stream_frame(const cv::Mat &inImg, int rotation) {
+        if (inImg.empty() || !inImg.data) {
+            return nullptr;
+        }
+        stream_frame *outFrame = (stream_frame *) malloc(sizeof(*outFrame));
+        if (!outFrame) {
+            return nullptr;
+        }
+        outFrame->width = inImg.cols;
+        outFrame->height = inImg.rows;
+        outFrame->format = PREVIEW_FORMAT_BGR;
+        outFrame->rotation = rotation;
+        outFrame->data_size = inImg.total() * inImg.elemSize();
+        outFrame->data = (uint8_t *) malloc(outFrame->data_size);
+        if (!outFrame->data) {
+            free_stream(outFrame);
+            return nullptr;
+        }
+        std::memcpy(outFrame->data, inImg.data, outFrame->data_size);
+        return outFrame;
+    }
+
+    bool hasPreviewDataListener() {
+        std::lock_guard<std::mutex> lock(previewFuncMutex);
+        return previewListener && onFrameMethod;
+    }
+
     void putPictureFrame(stream_frame_t *inFrame) {
         std::lock_guard<std::mutex> lock(pictureMutex);
-        if (mIsPictureRunning.load() && !pictureFrame) {
+        if (mIsPictureRunning.load() && !pictureFrame && inFrame && inFrame->data &&
+            inFrame->data_size > 0) {
             stream_frame *outFrame = allocate_stream_frame(inFrame);
             if (outFrame) {
                 outFrame->data_size = inFrame->data_size;
                 outFrame->data = (uint8_t *) malloc(outFrame->data_size);
-                std::memcpy(outFrame->data, inFrame->data, inFrame->data_size);
+                if (outFrame->data) {
+                    std::memcpy(outFrame->data, inFrame->data, outFrame->data_size);
+                    pictureFrame = outFrame;
+                } else {
+                    free_stream(outFrame);
+                }
+            }
+        }
+        pictureCond.notify_one();
+    }
+
+    // 发送一帧图像到拍照的回调
+    void putPictureFrame(const cv::Mat &inImg) {
+        std::lock_guard<std::mutex> lock(pictureMutex);
+        if (mIsPictureRunning.load() && !pictureFrame && !inImg.empty() && inImg.data) {
+            stream_frame *outFrame = allocate_bgr_stream_frame(
+                    inImg, mPreview ? mPreview->getRotation() : 0);
+            if (outFrame && outFrame->data) {
                 pictureFrame = outFrame;
             }
         }
@@ -375,9 +364,6 @@ protected:
             pictureFrame = nullptr;
         }
     }
-
-private:
-    ANativeWindow *mPreviewWindow = nullptr; // 预览的窗口
 };
 
 #endif // UVCCAMERA_I_CAMERA_STREAM_H

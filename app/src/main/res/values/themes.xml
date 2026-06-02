@@ -6,4 +6,71 @@
     </style>
 
     <style name="Theme.UsbCameraLib" parent="Base.Theme.UsbCameraLib" />
+
+    <style name="Theme.LoadingDialog" parent="Theme.Material3.DayNight.Dialog">
+        <!--        <item name="android:windowIsTranslucent">true</item>-->
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+        <item name="android:configChanges">orientation|keyboardHidden</item>
+    </style>
+
+    <style name="Theme.FullscreenDialog" parent="Theme.Material3.DayNight.NoActionBar">
+
+        <!-- ❗关键：关闭浮动窗口 -->
+        <item name="android:windowIsFloating">false</item>
+
+        <!-- 背景透明 -->
+        <item name="android:windowBackground">@android:color/transparent</item>
+
+        <!-- 遮罩 -->
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+
+        <!-- 状态栏 & 导航栏 -->
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:navigationBarColor">@android:color/white</item>
+    </style>
+
+    <!-- 底部导航栏的样式 -->
+    <style name="Theme.BaseBottomSheetDialog" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="enableEdgeToEdge">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+        <item name="bottomSheetStyle">@style/Widget.NineWell.BottomSheet</item>
+    </style>
+
+    <style name="Widget.CameraSettings.Slider" parent="">
+        <item name="android:padding">0dp</item>
+        <item name="android:stepSize">1</item>
+        <item name="android:value">0</item>
+        <item name="android:valueFrom">0</item>
+        <item name="android:valueTo">100</item>
+        <item name="haloColor">@android:color/transparent</item>
+        <item name="labelBehavior">floating</item>
+        <item name="thumbColor">@color/white</item>
+        <item name="thumbElevation">2dp</item>
+        <item name="thumbHeight">10dp</item>
+        <item name="thumbRadius">5dp</item>
+        <item name="thumbStrokeColor">@android:color/transparent</item>
+        <item name="thumbStrokeWidth">0dp</item>
+        <item name="thumbTrackGapSize">0dp</item>
+        <item name="thumbWidth">10dp</item>
+        <item name="tickVisible">false</item>
+        <item name="trackColorActive">#51A0FD</item>
+        <item name="trackColorInactive">#F5F7F9</item>
+        <item name="trackHeight">4dp</item>
+        <item name="trackStopIndicatorSize">0dp</item>
+    </style>
+
+    <style name="Widget.NineWell.BottomSheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <!--        <item name="android:background">@drawable/dialog_bottom_bg</item>-->
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="paddingBottomSystemWindowInsets">false</item>
+        <item name="paddingTopSystemWindowInsets">false</item>
+        <item name="marginLeftSystemWindowInsets">false</item>
+        <item name="marginRightSystemWindowInsets">false</item>
+        <item name="gestureInsetBottomIgnored">false</item>
+    </style>
 </resources>

@@ -2,14 +2,21 @@ package com.rain.uvc.demo.utils
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
 import android.content.res.Configuration
+import android.graphics.SurfaceTexture
 import android.hardware.usb.UsbDevice
 import android.opengl.GLSurfaceView
+import android.os.Build
 import android.util.Log
+import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.TextureView
+import android.view.WindowManager
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /**
@@ -64,6 +71,55 @@ suspend fun <T : SurfaceView> T.loadCreatedState(): Boolean {
             }
         }
     }.getOrNull() ?: this@loadCreatedState.isSurfaceCreated()
+}
+/**
+ * 等待surface组件创建完毕回调
+ */
+suspend fun TextureView.awaitAvailable(): Boolean {
+	if (this.isAvailable) return true
+	return withTimeoutOrNull(5_000L) {
+		suspendCancellableCoroutine { continuation ->
+			val listener = object : TextureView.SurfaceTextureListener {
+				override fun onSurfaceTextureAvailable(
+					surface: SurfaceTexture,
+					width: Int,
+					height: Int
+				) {
+					this@awaitAvailable.surfaceTextureListener = null
+					if (continuation.isActive) continuation.resume(true)
+				}
+				
+				override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = false
+				override fun onSurfaceTextureSizeChanged(
+					surface: SurfaceTexture,
+					width: Int,
+					height: Int
+				) = Unit
+				
+				override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
+			}
+			continuation.invokeOnCancellation {
+				if (surfaceTextureListener === listener) {
+					surfaceTextureListener = null
+				}
+			}
+			this@awaitAvailable.surfaceTextureListener = listener
+			// 🔑 防止 race：设置 listener 后再检查一次
+			if (isAvailable && continuation.isActive) {
+				surfaceTextureListener = null
+				continuation.resume(true)
+			}
+		}
+	} ?: true
+}
+
+fun Context.loadRotation(): Int {
+	return when {
+		// Android 11+ 推荐使用 Context.display
+		Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> this.display.rotation
+		this is Activity -> this.windowManager.defaultDisplay.rotation
+		else -> (this.getSystemService(Context.WINDOW_SERVICE) as? WindowManager)?.defaultDisplay?.rotation ?: Surface.ROTATION_0
+	}
 }
 
 object Common{

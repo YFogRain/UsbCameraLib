@@ -23,7 +23,7 @@ import java.util.Locale
  * @createTime: 2025/2/19
  * @des
  */
-class HomeSelectAdapter() : RecyclerView.Adapter<HomeSelectGroupHolder>() {
+class HomeSelectAdapter : RecyclerView.Adapter<HomeSelectGroupHolder>() {
 	
 	private var mItemChildClickListener: ((groupPosition: Int, childPosition: Int) -> Unit)? = null
 	private var cameraDevices: MutableList<HomeSelectMode>? = null
@@ -58,7 +58,7 @@ class HomeSelectAdapter() : RecyclerView.Adapter<HomeSelectGroupHolder>() {
 		return homeSelectGroupHolder
 	}
 	
-	override fun getItemCount(): Int = cameraDevices?.size ?: 0
+	override fun getItemCount(): Int = (cameraDevices?.size ?: 0)
 	
 	override fun onBindViewHolder(holder: HomeSelectGroupHolder, position: Int) {
 		val homeSelectMode = cameraDevices?.getOrNull(position) ?: return
@@ -102,7 +102,7 @@ class HomeSelectGroupHolder(val mBinding: ItemHomeSelectGroupBinding) : ViewHold
 	
 	fun setData(mode: HomeSelectMode) {
 		mBinding.setVariable(BR.homeSelectMode, mode)
-		adapter.setData(mode.devices)
+		adapter.setItems(mode.devices)
 		mBinding.executePendingBindings()
 	}
 	

@@ -1,437 +1,688 @@
-# UvcCamera
-
-### 简介
-
-uvc摄像头预览操作程序
-
-1. 支持无界面/有界面预览
-2. 支持设置分辨率/曝光度等参数
-3. 使用设备为OpenHarmony
-
-### 软件架构
-
-当前为dev版本
-
-## 使用说明
-
-### 操作基础类 `CameraUvcManager`
-
-#### `debuggable`
-
-debug模式开关，打开后会有基础日志输出
-
-* `status`:需要设置的debug状态
-* `return`:设置结果
-
-```java
-public static boolean debuggable(boolean status);
-```
-
-#### `getUvcDevices`
-
-获取当前设备上的usb摄像头列表
-
-* `return`:usb设备列表，如果不存在则返回null或者空
-
-```java
-public static List<UsbDevice> getCameraDevices();
-```
-
-#### `getDeviceForId`
-
-根据传入的vId和pId获取对应的usb设备
-
-* `vId`:usb设备的VendorId
-* `pId`:usb设备的ProductId
-* `return`:返回对应的usb设备
-
-```java
-public static UsbDevice getDeviceForId(int vId, int pId);
-```
-
-#### `checkDeviceUvc`
-
-检查当前设备是否是uvc摄像头设备
-
-* `usbDevice`:当前的usb设备对象
-
-```java
-public static boolean checkDeviceUvc(UsbDevice usbDevice);
-```
-
-#### 打开摄像头
-
-需要检查摄像头权限，同时申请usb临时权限，使用videoPath类型的，需要保证应用有video的访问权限
-
-##### 异步
-
-* `usbDevice`:需要打开的usb设备
-* `timeout`:超时时间
-* `listener`:结果回调
-
-```java
-public static void openCamera(UsbDevice usbDevice, long timeout, ICameraOpenListener listener);
-```
-
-##### 同步
-
-同步打开需要在子线程操作，防止因超时导致ANR,
-存在默认10s超时的同名方法
-
-* `usbDevice`:需要打开的usb设备
-* `timeout`:超时时间
-* `return`:返回摄像头操作对象
-* `throws`:打开失败后抛出异常，异常信息展示对应的错误信息
-
-```java
-public static CameraDevice openCameraSync(UsbDevice usbDevice, long timeout) throws UvcCameraAccessException;
-```
-
-#### 取消正在执行的开启任务
-
-执行后，可退出当前所有正在执行的任务，一般在页面或应用退出前调用
-
-```java
-public static void cancel();
-```
-
-### `CameraDevice` 摄像头操作类说明
-
-包含所有摄像头可使用的操作对象
-支持，参数设置，设置预览，设置分辨率等
-部分参数需要停止预览后再设置
-
-#### 关闭摄像头
-
-摄像头关闭后重新打开需要使用`CameraUvcManager`重新初始化
-
-* `return`: 返回关闭结果
-
-```java
-public boolean close();
-```
-
-#### 设置预览控件
-
-当前支持三种设置方式
-
-```java
-public abstract boolean setDisplaySurface(Surface surface);
-```
-
-```java
-public abstract boolean setDisplaySurface(SurfaceView view);
-```
-
-```java
-public abstract boolean setDisplaySurface(TextureView view);
-```
-
-#### 设置使用分辨率
-
-支持格式YUY2/MJPEG
-通过`getSupportParameters`可获取当前设备支持的分辨率格式,宽,高。
-
-* `width`:宽
-* `height`:高
-* `formatState`:当前使用的预览格式
-
-```java
-public abstract setPreviewSize(int width, int height, CameraPreviewFormat formatState);
-```
-
-#### 设置预览监听
-
-回调监听设置，返回值为`ByteBuffer`对象
-
-* `listener`:预览的数据回调，只有在有数据的情况下才会回调
-* `format`:回调使用的格式，目前仅支持 `BGR`、 `NV21`、 `RGBA`;
-
-```java
-public boolean setPreviewListener(IFrameListener listener, CameraDataFormat format);
-```
-
-#### 开启预览
-
-开启预览，建议在打开后同步的子线程使用，一般开启预览不会超过2s
-
-* `return`:返回开启结果
-
-```java
-public boolean startPreview();
-```
-
-#### 关闭预览
-
-停止预览操作
-
-```java
-public boolean stopPreview();
-```
-
-#### 参数设置
-
-支持设置自动曝光/曝光度/分辨率/预览图形变换规则等参数
-
-* `key`:支持获取的参数key,仅支持使用`CameraParameter`类常量参数
-* `value`:需要设置的值
-* `return`:返回对应的值，根据key的具体类型来
-
-```java
-public <T> boolean setParameter(CameraParameter.Key<T> key, T value);
-```
-
-#### 参数获取
-
-获取当前key对应的参数值，如果返回null，则说明不支持
-
-* `key`: 支持获取的参数key,仅支持使用`CameraParameter`类常量参数
-* `return`:返回对应的值，根据key的具体类型来
-
-```java
-public <T> T getParameter(CameraParameter.Key<T> key);
-```
-
-#### 获取参数范围
-
-可获取分辨率列表，支持的曝光度范围，亮度范围，等,
-如果返回`null`或者空，则说明不支持
-
-* `key`: 支持获取的参数key,仅支持使用`CameraSupportParameters`类常量参数
-* `return`:返回对应的值，根据key的具体类型来
-
-```java
-public <T> T getSupportedParameter(CameraSupportParameters.Key<T> key);
-```
-
-#### 设置usb断开监听
-
-* `listener`:在usb设备被移除的监听回调
-
-```java
-public void setDetachedCloseListener(IDetachedCloseListener listener);
-```
-
-#### 预览状态
-
-获取当前的预览状态信息
-
-* `return`: 返回`true`表示正在预览
-
-```java
-public boolean cameraIsPreviewing();
-```
-
-### 枚举/类
-
-内置枚举/类说明
-
-#### `CameraDataFormat`
-
-预览监听返回的数据类型。
-目前只支持 `BGR`、`RGBA`、`NV21`
-
-#### `CameraPreviewFormat`
-
-预览分辨率使用的格式类型，根据分辨率列表返回值确定
-目前支持`MJPEG`、`YUY2`
-
-#### `IntRange`
-
-使用`getSupportParameters`时，当前返回值为范围值时使用，返回最大值和最小值
-`min`:最小值
-`max`:最大值
-
-#### `DisplayTransformState`
-
-对应当前`surface`窗口变化支持的类型
-
-* `TRANSFORM_IDENTITY`:无变化
-* `TRANSFORM_MIRROR_HORIZONTAL`:水平镜像
-* `TRANSFORM_MIRROR_VERTICAL`:垂直镜像
-* `TRANSFORM_ROTATE_90`:旋转90度
-* `TRANSFORM_ROTATE_180`:旋转180度
-* `TRANSFORM_ROTATE_270`:旋转270度
-* `TRANSFORM_FLIP_H_ROTATE_90`:旋转90度+水平镜像
-* `TRANSFORM_FLIP_H_ROTATE_180`:旋转180度+水平镜像
-* `TRANSFORM_FLIP_H_ROTATE_270`:旋转270度+水平镜像
-* `TRANSFORM_FLIP_V_ROTATE_90`:旋转90度+垂直镜像
-* `TRANSFORM_FLIP_V_ROTATE_180`:旋转180度+垂直镜像
-* `TRANSFORM_FLIP_V_ROTATE_270`:旋转270度+垂直镜像
-
-#### `CameraParameter`
-
-目前支持设置/获取的参数信息
-
-* `AUTO_EXPOSURE`: 自动曝光状态
-* `EXPOSURE`: 曝光度值
-* `BRIGHTNESS`: 亮度值
-* `CONTRAST`: 对比度值
-* `GAIN`: 增益值
-* `SATURATION`: 饱和度
-* `ZOOM`: 缩放大小
-* `DISPLAY_TRANSFORM`: 窗口变化支持的类型，见`DisplayTransformState`
-* `PREVIEW_SIZE`: 分辨率信息
-* `FOCUS`:焦距
-* `AUTO_FOCUS`:自动聚焦
-* `IRIS`:光圈
-* `AUTO_HUE`:自动设置色值
-* `HUE`:色值
-* `AUTO_WHITE_BALANCE`:自动化白平衡
-* `WHITE_BALANCE`:白平衡
-* `SCENE_MODE`:场景模式
-* `PRIVACY`:隐私模式
-
-#### `CameraSupportParameters`
-
-获取支持的参数范围
-
-* `AUTO_EXPOSURE`:是否支持自动曝光
-* `EXPOSURE`:曝光度范围，为null或者 最大值 = 最小值时，表示不支持
-* `BRIGHTNESS`:亮度范围，为null或者 最大值 = 最小值时，表示不支持
-* `CONTRAST`:对比度范围，为null或者 最大值 = 最小值时，表示不支持
-* `GAIN`:增益值范围，为null或者 最大值 = 最小值时，表示不支持
-* `SATURATION`:饱和度范围，为null或者 最大值 = 最小值时，表示不支持
-* `ZOOM`:缩放范围，为null或者 最大值 = 最小值时，表示不支持
-* `PREVIEW_SIZE`:支持的分辨率列表
-* `FOCUS`:焦距范围，为null或者 最大值 = 最小值时，表示不支持
-* `AUTO_FOCUS`:是否支持自动聚焦
-* `IRIS`:光圈范围，为null或者 最大值 = 最小值时，表示不支持
-* `AUTO_HUE`:是否支持自动设置色值
-* `HUE`:色值范围，为null或者 最大值 = 最小值时，表示不支持
-* `AUTO_WHITE_BALANCE`:是否支持自动化白平衡
-* `WHITE_BALANCE`:白平衡范围，为null或者 最大值 = 最小值时，表示不支持
-* `SCENE_MODE`:场景模式范围，为null或者 最大值 = 最小值时，表示不支持
-* `PRIVACY`:是否支持隐私模式
-
-#### `CameraSize`
-
-分辨率信息
-
-* `width`: 宽度
-* `height`:高度
-* `format`:对应的分辨率，详见`CameraPreviewFormat`
-
-### 例:
-
-```kotlin
-
-class CameraActivity : AppCompatActivity() {
-	private lateinit var mBinding: ActivityCameraBinding
-	
-	private var mCameraDevice: ICameraDevice? = null
-	private var currentRotation = 0 //旋转角度
-	
-	private val permissionCall = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-		if (!it) {
-			Toast.makeText(this, "请检查摄像头权限", Toast.LENGTH_SHORT).show()
-			return@registerForActivityResult
-		}
-		openCamera()
-	}
-	
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		mBinding = DataBindingUtil.setContentView(this, R.layout.activty_camera)
-		mBinding.setLifecycleOwner(this)
-		initEvent()
-		//检查权限，如果没有，则需要申请，申请完成后再开启预览
-		if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-			permissionCall.launch(android.Manifest.permission.CAMERA)
-			return
-		}
-		//使用post，保证当前的surfaceView中创建surface完成
-		mBinding.surfaceView.post {
-			openCamera()
-		}
-	}
-	
-	override fun initEvent() {
-		mBinding.tvDisplay.singleClick {
-			currentRotation++
-			if (currentRotation > 11) {
-				currentRotation = 0
-			}
-			mCameraDevice?.setParameter(CameraParameter.DISPLAY_TRANSFORM, DisplayTransformState.orientationToState(currentRotation))
-		}
-	}
-	
-	override fun onStart() {
-		super.onStart()
-		mCameraDevice?.startPreview()
-	}
-	
-	override fun onStop() {
-		super.onStop()
-		mCameraDevice?.stopPreview()
-	}
-	
-	override fun onDestroy() {
-		super.onDestroy()
-		mCameraDevice?.close()
-		mCameraDevice = null
-	}
-	
-	private fun openCamera() {
-		//获取uvc摄像头列表
-		lifecycleScope.launch(Dispatchers.IO) {
-			val usbDevices = CameraUvcManager.getCameraDevices()
-			if (usbDevices.isNullOrEmpty()) return@launch
-			val cameraDevice = runCatching { CameraUvcManager.openCameraSync(usbDevices[0]) }.getOrNull()
-			if (cameraDevice == null) {//报错说明打开失败
-				return@launch
-			}
-			//赋值当前的对象
-			initParameter(cameraDevice)
-			//设置预览控件
-			cameraDevice.setDisplaySurface(mBinding.surfaceView)
-			//设置监听
-			cameraDevice.setPreviewListener { width: Int, height: Int, frame: ByteBuffer ->
-				Log.d("CameraActivity", "${width}*${height} : ${frame.capacity()}")
-			}
-			
-			cameraDevice.startPreview()
-			this@CameraActivity.mCameraDevice = cameraDevice
-		}
-	}
-	
-	private fun initParameter(cameraDevice: ICameraDevice) {
-		Log.d("CameraActivity", "曝光度列表:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.EXPOSURE))}")
-		Log.d("CameraActivity", "亮度列表:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.BRIGHTNESS))}")
-		Log.d("CameraActivity", "对比度列表:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.CONTRAST))}")
-		Log.d("CameraActivity", "增益值列表:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.GAIN))}")
-		Log.d("CameraActivity", "饱和度列表:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.SATURATION))}")
-		Log.d("CameraActivity", "分辨率列表:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.PREVIEW_SIZE))}")
-		
-		Log.d("CameraActivity", "当前自动曝光状态:${cameraDevice.getParameter(CameraParameter.AUTO_EXPOSURE)}")
-		Log.d("CameraActivity", "当前曝光度:${cameraDevice.getParameter(CameraParameter.EXPOSURE)}")
-		Log.d("CameraActivity", "当前亮度:${cameraDevice.getParameter(CameraParameter.BRIGHTNESS)}")
-		Log.d("CameraActivity", "当前增益值:${cameraDevice.getParameter(CameraParameter.GAIN)}")
-		Log.d("CameraActivity", "当前对比度:${cameraDevice.getParameter(CameraParameter.CONTRAST)}")
-		Log.d("CameraActivity", "当前饱和度:${cameraDevice.getParameter(CameraParameter.SATURATION)}")
-		
-		
-		Log.d("CameraActivity", "自动对焦支持:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.AUTO_FOCUS))}")
-		Log.d("CameraActivity", "焦距范围:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.FOCUS))}")
-		Log.d("CameraActivity", "光圈范围:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.IRIS))}")
-		Log.d("CameraActivity", "自动色值:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.AUTO_HUE))}")
-		Log.d("CameraActivity", "色值范围:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.HUE))}")
-		Log.d("CameraActivity", "自动白平衡:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.AUTO_WHITE_BALANCE))}")
-		Log.d("CameraActivity", "白平衡范围:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.WHITE_BALANCE))}")
-		Log.d("CameraActivity", "场景模式:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.SCENE_MODE))}")
-		Log.d("CameraActivity", "隐私模式支持:${GsonHelper.getHelper().modeToJson(cameraDevice.getSupportedParameter(CameraSupportParameters.PRIVACY))}")
-		
-		
-		Log.d("CameraActivity", "自动对焦状态:${cameraDevice.getParameter(CameraParameter.AUTO_FOCUS)}")
-		Log.d("CameraActivity", "焦距:${cameraDevice.getParameter(CameraParameter.FOCUS)}")
-		Log.d("CameraActivity", "光圈:${cameraDevice.getParameter(CameraParameter.IRIS)}")
-		Log.d("CameraActivity", "自动色值状态:${cameraDevice.getParameter(CameraParameter.AUTO_HUE)}")
-		Log.d("CameraActivity", "色值:${cameraDevice.getParameter(CameraParameter.HUE)}")
-		Log.d("CameraActivity", "自动白平衡状态:${cameraDevice.getParameter(CameraParameter.AUTO_WHITE_BALANCE)}")
-		Log.d("CameraActivity", "白平衡:${cameraDevice.getParameter(CameraParameter.WHITE_BALANCE)}")
-		Log.d("CameraActivity", "场景模式:${cameraDevice.getParameter(CameraParameter.SCENE_MODE)}")
-		Log.d("CameraActivity", "隐私模式状态:${cameraDevice.getParameter(CameraParameter.PRIVACY)}")
-	}
+# UsbCamera SDK 接入文档
+
+> Android USB UVC 摄像头开发套件 · 包名 `com.rain.uvc` · 版本 1.0
+
+---
+
+## 目录
+
+- [一、SDK 简介](#一sdk-简介)
+- [二、接入准备](#二接入准备)
+    - [2.1 引入依赖](#21-引入依赖)
+    - [2.2 权限声明](#22-权限声明)
+    - [2.3 设备要求](#23-设备要求)
+- [三、快速上手](#三快速上手)
+- [四、设备管理](#四设备管理)
+    - [4.1 设备发现](#41-设备发现)
+    - [4.2 打开设备](#42-打开设备)
+    - [4.3 关闭设备](#43-关闭设备)
+    - [4.4 热插拔监听](#44-热插拔监听)
+- [五、视频预览](#五视频预览)
+    - [5.1 设置预览画面](#51-设置预览画面)
+    - [5.2 设置分辨率](#52-设置分辨率)
+    - [5.3 开始/停止预览](#53-开始停止预览)
+    - [5.4 预览帧数据回调](#54-预览帧数据回调)
+    - [5.5 硬件按钮监听](#55-硬件按钮监听)
+- [六、拍照](#六拍照)
+- [七、视频录制](#七视频录制)
+    - [7.1 录制生命周期](#71-录制生命周期)
+    - [7.2 完整示例](#72-完整示例)
+    - [7.3 API 详解](#73-api-详解)
+- [八、参数控制](#八参数控制)
+    - [8.1 查询支持的参数范围](#81-查询支持的参数范围)
+    - [8.2 获取/设置参数](#82-获取设置参数)
+    - [8.3 参数列表](#83-参数列表)
+- [九、枚举类型说明](#九枚举类型说明)
+    - [UvcPreviewFormat - 预览解码格式](#uvcpreviewformat---预览解码格式)
+    - [UvcDataFormat - 帧回调数据格式](#uvcdataformat---帧回调数据格式)
+- [十、数据模型](#十数据模型)
+- [十一、错误处理](#十一错误处理)
+- [十二、注意事项与 FAQ](#十二注意事项与-faq)
+
+---
+
+## 一、SDK 简介
+
+UsbCamera SDK 是一套面向 Android 平台的 USB UVC 摄像头控制开发套件，提供从设备发现、预览、拍照、录像到参数调节的完整能力，帮助开发者快速接入 USB 外接摄像头。
+
+### 核心能力
+
+- **设备管理** — UVC 设备枚举、USB 权限自动申请、设备打开/关闭、热插拔监听
+- **视频预览** — 支持 Surface / TextureView / SurfaceView 三种方式渲染预览画面
+- **预览数据回调** — 可获取实时帧数据（支持 NV21、RGBA、RGB 等多种格式），用于算法分析
+- **拍照** — 一键抓取当前帧
+- **视频录制** — 支持 H.264 视频编码 + AAC 音频编码，输出 MP4 文件
+- **参数控制** — 亮度、对比度、曝光、白平衡、缩放、对焦、镜像、旋转等 17+ 项参数的查询与设置
+
+### 技术指标
+
+| 项目 | 说明 |
+|------|------|
+| 最低版本 | Android 6.0（API 23） |
+| 支持架构 | `arm64-v8a`、`armeabi-v7a` |
+| 开发语言 | Kotlin / Java 均可调用 |
+| 依赖要求 | Kotlin Coroutines（协程） |
+
+---
+
+## 二、接入准备
+
+### 2.1 引入依赖
+
+```groovy
+// build.gradle (app)
+dependencies {
+    implementation project(':libusbcamera')
+    // 或使用 aar 包
+    // implementation files('libs/libusbcamera-release.aar')
 }
 ```
 
+### 2.2 权限声明
+
+在你的 `AndroidManifest.xml` 中添加以下权限（SDK 已自动合并基础权限）：
+
+```xml
+<!-- 必需权限 -->
+<uses-permission android:name="android.permission.CAMERA" />
+
+<!-- 录制音频时需要 -->
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+```
+
+**权限说明：**
+
+| 权限 | 是否必需 | 说明 |
+|------|---------|------|
+| `CAMERA` | **必需** | 需在运行时动态申请，打开摄像头前必须已授权 |
+| `RECORD_AUDIO` | 可选 | 仅在录制视频且需要录音时使用 |
+| USB 设备访问权限 | 自动 | 由 SDK 内部自动弹窗申请，无需手动处理 |
+
+### 2.3 设备要求
+
+- Android 设备需支持 **USB Host** 模式
+- 外接摄像头需符合 **UVC（USB Video Class）** 协议标准
+
+---
+
+## 三、快速上手
+
+以下是一个最简完整流程示例（Kotlin）：
+
+```kotlin
+class CameraActivity : AppCompatActivity() {
+
+    private var camera: NativeUsbDevice? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_camera)
+        // 运行时申请 CAMERA 权限（略）
+    }
+
+    /** 第一步：发现并打开设备 */
+    fun openDevice() {
+        lifecycleScope.launch {
+            // 1. 发现 UVC 摄像头
+            val devices = CameraControlHelper.loadUvcDevices(this@CameraActivity)
+            val usbDevice = devices?.firstOrNull() ?: return@launch
+
+            // 2. 打开设备（内部自动申请 USB 权限）
+            val result = CameraControlHelper.openCamera(
+                this@CameraActivity, usbDevice, timeout = 10000
+            )
+            camera = result.getOrNull() ?: run {
+                Log.e("Camera", "打开失败: ${result.exceptionOrNull()?.message}")
+                return@launch
+            }
+
+            // 3. 设置预览画面
+            camera?.setDisplaySurface(findViewById<TextureView>(R.id.textureView))
+
+            // 4. 设置分辨率（先查询支持的分辨率再设置）
+            camera?.setPreviewSize(1280, 720, UvcPreviewFormat.MJPEG)
+
+            // 5. 开始预览
+            camera?.startPreview()
+        }
+    }
+
+    /** 关闭设备 */
+    fun closeDevice() {
+        camera?.stopPreview()
+        camera?.close()
+        camera = null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        closeDevice()
+    }
+}
+```
+
+**Java 调用说明：** `CameraControlHelper` 的静态方法均标注了 `@JvmStatic`，可直接通过 `CameraControlHelper.loadUvcDevices(context)` 调用。注意 `openCamera` 是挂起函数（suspend），Java 中需通过协程桥接调用。
+
+---
+
+## 四、设备管理
+
+### 4.1 设备发现
+
+#### 扫描 UVC 设备
+
+```kotlin
+val devices: List<UsbDevice>? = CameraControlHelper.loadUvcDevices(context)
+```
+
+扫描当前已连接的所有 UVC 摄像头设备。返回 `null` 表示 UsbManager 不可用，返回空列表表示未检测到设备。
+
+#### 扫描 V4L2 设备
+
+```kotlin
+val paths: Array<String>? = CameraControlHelper.loadV4L2Devices()
+```
+
+获取系统中可用的 V4L2 视频设备路径（如 `/dev/video0`）。
+
+#### 检查设备是否为 UVC 摄像头
+
+```kotlin
+val isUvc: Boolean = CameraControlHelper.checkDeviceUvc(usbDevice)
+```
+
+判断给定的 USB 设备是否是 UVC 摄像头类型。
+
+#### 根据厂商 ID / 产品 ID 查找设备
+
+```kotlin
+val device: UsbDevice? = CameraControlHelper.getDeviceForId(context, vendorId, productId)
+```
+
+当你已知目标设备的 vendorId 和 productId 时，可直接定位设备。
+
+### 4.2 打开设备
+
+#### 方式一：通过 UsbDevice 打开（推荐）
+
+```kotlin
+// suspend 函数，需在协程中调用
+val result: Result<NativeUsbDevice> = CameraControlHelper.openCamera(
+    context = context,
+    usbDevice = usbDevice,
+    timeout = 10000L   // USB 权限申请超时时间，默认 10 秒
+)
+```
+
+调用后 SDK 会自动弹出 USB 权限授权对话框。用户点击允许后，返回 `NativeUsbDevice` 实例。
+
+```kotlin
+// 处理结果
+result.onSuccess { camera ->
+    // 打开成功，camera 即为设备操作对象
+}.onFailure { error ->
+    // 打开失败，error.message 包含错误原因
+}
+```
+
+#### 方式二：通过 V4L2 路径打开
+
+```kotlin
+// suspend 函数，需在协程中调用
+val result: Result<NativeUsbDevice> = CameraControlHelper.openCamera(
+    context = context,
+    videoPath = "/dev/video0"
+)
+```
+
+> **重要：** `openCamera` 是 **suspend 挂起函数**，必须在协程作用域中调用（如 `lifecycleScope.launch { }`）。
+
+### 4.3 关闭设备
+
+```kotlin
+camera.close()
+```
+
+关闭摄像头并释放所有资源（停止预览、释放录制引擎、关闭 USB 连接、解注册广播）。调用后该实例不可复用。
+
+### 4.4 热插拔监听
+
+```kotlin
+camera.setDetachedCloseListener {
+    // USB 摄像头被物理拔出
+    // SDK 会自动关闭设备并触发此回调
+    // 建议在此更新 UI 状态
+    runOnUiThread {
+        Toast.makeText(this, "摄像头已断开", Toast.LENGTH_SHORT).show()
+    }
+}
+```
+
+当 USB 摄像头被拔出时，SDK 会自动执行关闭操作，随后触发此回调通知业务层。传入 `null` 可移除监听。
+
+---
+
+## 五、视频预览
+
+### 5.1 设置预览画面
+
+SDK 支持三种方式设置预览目标，选择其一即可：
+
+```kotlin
+// 方式一：TextureView（推荐，支持动画变换）
+camera.setDisplaySurface(textureView)
+
+// 方式二：SurfaceView（性能更好）
+camera.setDisplaySurface(surfaceView)
+
+// 方式三：直接传入 Surface 对象
+camera.setDisplaySurface(surface)
+```
+
+> **提示：** 预览过程中可以随时切换 Surface，SDK 会自动停止再恢复预览。
+
+### 5.2 设置分辨率
+
+```kotlin
+// 先查询设备支持的分辨率
+val supportSizes: Array<UvcCameraSupportSize>? =
+    camera.getSupportParameters(UvcSupportParameter.PREVIEW_SIZE)
+
+// 打印支持的分辨率
+supportSizes?.forEach { item ->
+    Log.d("Camera", "格式: ${item.format}, 分辨率列表:")
+    item.sizes.forEach { size ->
+        Log.d("Camera", "  ${size.width} x ${size.height}")
+    }
+}
+
+// 设置分辨率和解码格式
+val success: Boolean = camera.setPreviewSize(1280, 720, UvcPreviewFormat.MJPEG)
+```
+
+**参数说明：**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `width` | `Int` | 预览宽度（像素） |
+| `height` | `Int` | 预览高度（像素） |
+| `format` | `UvcPreviewFormat` | 解码格式，常用 `MJPEG` 或 `YUY2` |
+
+> **注意：** 必须在 `startPreview()` 之前调用。设置的分辨率必须是设备支持的值。
+
+### 5.3 开始/停止预览
+
+```kotlin
+// 开始预览
+val started: Boolean = camera.startPreview()
+
+// 停止预览
+val stopped: Boolean = camera.stopPreview()
+```
+
+### 5.4 预览帧数据回调
+
+如果需要获取实时帧数据（例如用于算法分析、人脸识别等），可设置帧数据监听：
+
+```kotlin
+// 设置帧回调，指定回调数据格式
+camera.setPreviewListener(object : IFrameListener {
+    override fun onFrame(frame: ByteBuffer, width: Int, height: Int) {
+        // frame: 帧数据（DirectByteBuffer，指向 native 内存）
+        // 在此回调中处理或拷贝数据
+        // 注意：不要持有 frame 引用，回调返回后 buffer 可能被复用
+    }
+}, UvcDataFormat.NV21)  // 可选：NV21、RGBA、RGB、BGR、YUY2、MJPEG
+
+// 移除帧回调
+camera.setPreviewListener(null)
+```
+
+> **注意：** `frame` 是指向 native 内存的 DirectByteBuffer，回调返回后可能被底层复用。如需保留数据，请在回调内完成拷贝。
+
+### 5.5 硬件按钮监听
+
+部分 USB 摄像头带有物理按钮，可通过以下方式监听：
+
+```kotlin
+camera.setButtonListener(object : IButtonListener {
+    override fun buttonClick(type: Int, state: Int) {
+        Log.d("Camera", "按钮事件: type=$type, state=$state")
+    }
+})
+```
+
+---
+
+## 六、拍照
+
+```kotlin
+// 预览中调用，抓取当前帧
+val photoData: ByteArray? = camera.takePicture()
+
+if (photoData != null) {
+    // 将帧数据保存为图片文件
+    val file = File(getExternalFilesDir(null), "photo_${System.currentTimeMillis()}.jpg")
+    file.writeBytes(photoData)
+    Log.d("Camera", "拍照成功: ${file.absolutePath}")
+}
+```
+
+> 必须在预览状态下调用，返回当前帧的原始数据。
+
+---
+
+## 七、视频录制
+
+### 7.1 录制生命周期
+
+录制功能需要严格按照以下顺序调用：
+
+1. 调用 `prepareRecord(fps)` 初始化录制管线 **（必须在 startPreview 之前）**
+2. 调用 `startPreview()` 开始预览
+3. 调用 `startRecord()` 开始录制
+4. 调用 `stopRecord()` 停止录制并获取文件路径
+5. 可多次重复 3-4 步进行多段录制
+6. 调用 `releaseRecord()` 释放录制资源
+
+### 7.2 完整示例
+
+```kotlin
+// ====== 1. 初始化录制（在 startPreview 之前）======
+val prepared = camera.prepareRecord(fps = 30)
+if (!prepared) {
+    Log.e("Camera", "录制初始化失败")
+    return
+}
+
+// ====== 2. 开始预览 ======
+camera.startPreview()
+
+// ====== 3. 开始录制 ======
+val recording = camera.startRecord(
+    context = this,
+    outputPath = null,       // null 则自动生成路径
+    useAudio = true,         // 是否录制音频（需 RECORD_AUDIO 权限）
+    fps = 30                 // 录制帧率
+)
+
+// ====== 4. 停止录制 ======
+lifecycleScope.launch {
+    val filePath: String? = camera.stopRecord()  // suspend 函数
+    if (filePath != null) {
+        Log.d("Camera", "录制完成: $filePath")
+    }
+}
+
+// ====== 5. 释放录制资源 ======
+camera.releaseRecord()
+```
+
+### 7.3 API 详解
+
+#### `prepareRecord(fps: Int): Boolean`
+
+初始化录制管线，将录制用的 Surface 绑定到 native 渲染管线。此方法决定了 GPU 渲染路径（FBO 通路），一旦调用后在整个预览周期内固定不变。
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `fps` | `Int` | 目标录制帧率 |
+
+> **必须在 `startPreview()` 之前调用**，预览中或录制中调用会直接返回 `false`。
+
+#### `startRecord(context, outputPath?, useAudio, fps): Boolean`
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `context` | `Context` | - | Android Context |
+| `outputPath` | `String?` | `null` | 输出文件路径。为 null 时自动保存到 `{filesDir}/Video/Video_{时间戳}.mp4` |
+| `useAudio` | `Boolean` | `false` | 是否录制音频 |
+| `fps` | `Int` | `30` | 录制帧率 |
+
+必须在预览状态下调用。返回 `true` 表示录制已启动。
+
+#### `suspend stopRecord(): String?`
+
+停止录制并等待文件写入完成。返回录制文件的绝对路径，如果当前未在录制则返回 `null`。
+
+> **suspend 函数**，需在协程中调用。
+
+#### `releaseRecord()`
+
+释放所有录制资源（包括绑定到 native 管线的 Surface）。调用后如需重新录制，需重新走 `prepareRecord` -> `startPreview` 流程。
+
+---
+
+## 八、参数控制
+
+SDK 提供统一的参数查询与设置接口，支持 17+ 项 UVC 标准参数。
+
+### 8.1 查询支持的参数范围
+
+```kotlin
+// 查询亮度的可调范围
+val range: IntRange? = camera.getSupportParameters(UvcSupportParameter.BRIGHTNESS)
+if (range != null) {
+    Log.d("Camera", "亮度范围: ${range.first} ~ ${range.last}")
+}
+
+// 查询是否支持自动曝光
+val hasAutoExposure: Boolean? =
+    camera.getSupportParameters(UvcSupportParameter.AUTO_EXPOSURE)
+
+// 查询支持的分辨率
+val sizes: Array<UvcCameraSupportSize>? =
+    camera.getSupportParameters(UvcSupportParameter.PREVIEW_SIZE)
+```
+
+### 8.2 获取/设置参数
+
+```kotlin
+// 获取当前亮度
+val brightness: Int? = camera.getParameter(UvcCameraParameter.BRIGHTNESS)
+
+// 设置亮度为 60
+camera.setParameter(UvcCameraParameter.BRIGHTNESS, 60)
+
+// 开启自动曝光
+camera.setParameter(UvcCameraParameter.AUTO_EXPOSURE, true)
+
+// 设置预览旋转 90 度
+camera.setParameter(UvcCameraParameter.ORIENTATION, 90)
+
+// 开启镜像
+camera.setParameter(UvcCameraParameter.MIRROR, true)
+
+// 获取当前分辨率
+val currentSize: UvcCameraSize? = camera.getParameter(UvcCameraParameter.PREVIEW_SIZE)
+```
+
+### 8.3 参数列表
+
+| 参数 Key | 值类型 | 查询范围类型 | 说明 |
+|----------|--------|-------------|------|
+| `BRIGHTNESS` | `Int` | `IntRange` | 亮度 |
+| `CONTRAST` | `Int` | `IntRange` | 对比度 |
+| `SATURATION` | `Int` | `IntRange` | 饱和度 |
+| `HUE` | `Int` | `IntRange` | 色调 |
+| `GAIN` | `Int` | `IntRange` | 增益 |
+| `EXPOSURE` | `Int` | `IntRange` | 曝光值 |
+| `ZOOM` | `Int` | `IntRange` | 缩放级别 |
+| `FOCUS` | `Int` | `IntRange` | 焦距 |
+| `IRIS` | `Int` | `IntRange` | 光圈 |
+| `WHITE_BALANCE` | `Int` | `IntRange` | 白平衡色温 |
+| `AUTO_EXPOSURE` | `Boolean` | `Boolean` | 自动曝光开关 |
+| `AUTO_FOCUS` | `Boolean` | `Boolean` | 自动对焦开关 |
+| `AUTO_HUE` | `Boolean` | `Boolean` | 自动色调开关 |
+| `AUTO_WHITE_BALANCE` | `Boolean` | `Boolean` | 自动白平衡开关 |
+| `PRIVACY` | `Boolean` | `Boolean` | 隐私模式（遮盖镜头） |
+| `ORIENTATION` | `Int` | - | 预览旋转角度（度数） |
+| `MIRROR` | `Boolean` | - | 水平镜像 |
+| `PREVIEW_SIZE` | `UvcCameraSize` | `Array<UvcCameraSupportSize>` | 预览分辨率 |
+
+> **提示：** 不是所有 USB 摄像头都支持全部参数。调用 `getSupportParameters()` 返回 `null` 表示该参数不被当前设备支持。设置不支持的参数会返回 `false`。
+
+---
+
+## 九、枚举类型说明
+
+### UvcPreviewFormat - 预览解码格式
+
+用于 `setPreviewSize()` 的 `format` 参数，指定摄像头的采集格式。
+
+| 枚举值 | 编码 | 说明 |
+|--------|------|------|
+| `UvcPreviewFormat.MJPEG` | 6 | Motion JPEG 压缩格式（推荐，高分辨率首选） |
+| `UvcPreviewFormat.YUY2` | 1 | YUY2 未压缩格式（低延迟） |
+| `UvcPreviewFormat.NV21` | 2 | NV21 格式 |
+| `UvcPreviewFormat.NV12` | 3 | NV12 格式 |
+| `UvcPreviewFormat.RGB` | 5 | RGB 格式 |
+| `UvcPreviewFormat.BGR` | 0 | BGR 格式 |
+| `UvcPreviewFormat.JPEG` | 7 | JPEG 格式 |
+| `UvcPreviewFormat.YUV420SP` | 8 | YUV 4:2:0 Semi-Planar |
+
+### UvcDataFormat - 帧回调数据格式
+
+用于 `setPreviewListener()`，指定回调中帧数据的输出格式。
+
+| 枚举值 | 编码 | 说明 |
+|--------|------|------|
+| `UvcDataFormat.NV21` | 2 | NV21 格式（默认值，Android 标准格式） |
+| `UvcDataFormat.RGBA` | 4 | RGBA 格式 |
+| `UvcDataFormat.RGB` | 5 | RGB 格式 |
+| `UvcDataFormat.BGR` | 0 | BGR 格式（OpenCV 常用） |
+| `UvcDataFormat.YUY2` | 1 | YUY2 格式 |
+| `UvcDataFormat.MJPEG` | 6 | MJPEG 原始数据 |
+
+---
+
+## 十、数据模型
+
+### UvcCameraSize
+
+```kotlin
+// com.rain.uvc.mode.UvcCameraSize
+data class UvcCameraSize(
+    val width: Int,    // 宽度（像素）
+    val height: Int    // 高度（像素）
+)
+```
+
+表示摄像头分辨率或预览尺寸。
+
+### UvcCameraSupportSize
+
+```kotlin
+// com.rain.uvc.mode.UvcCameraSupportSize
+data class UvcCameraSupportSize(
+    val format: UvcPreviewFormat,       // 格式类型
+    val sizes: List<UvcCameraSize>     // 该格式下支持的分辨率列表
+)
+```
+
+表示某种格式下支持的所有分辨率。通过 `getSupportParameters(UvcSupportParameter.PREVIEW_SIZE)` 获取。
+
+### IFrameListener
+
+```java
+// com.rain.uvc.listener.IFrameListener
+public interface IFrameListener {
+    /**
+     * @param frame  帧数据（DirectByteBuffer）
+     * @param width  帧宽度
+     * @param height 帧高度
+     */
+    void onFrame(ByteBuffer frame, int width, int height);
+}
+```
+
+预览帧数据回调接口。
+
+### IButtonListener
+
+```java
+// com.rain.uvc.listener.IButtonListener
+public interface IButtonListener {
+    /**
+     * @param type  按钮类型标识
+     * @param state 按钮状态（按下/释放）
+     */
+    void buttonClick(int type, int state);
+}
+```
+
+USB 摄像头硬件按钮事件回调接口。
+
+---
+
+## 十一、错误处理
+
+`openCamera()` 返回 `Result` 类型，可能的失败原因：
+
+| 异常类型 | 场景 | 建议处理 |
+|----------|------|---------|
+| `IllegalAccessException` | CAMERA 权限未授予 | 引导用户到设置页授权 |
+| `IllegalAccessException` | USB 临时权限申请失败（用户拒绝或超时） | 提示用户重试 |
+| `IllegalStateException` | 获取 USB 驱动信息失败 | 检查设备是否正常连接 |
+| `IllegalStateException` | 打开 USB 设备驱动失败 | 设备可能被其他应用占用 |
+| `IllegalStateException` | USB 设备 native 层打开失败 | 设备不兼容或驱动异常 |
+
+```kotlin
+val result = CameraControlHelper.openCamera(context, usbDevice)
+result.onFailure { error ->
+    when (error) {
+        is IllegalAccessException -> {
+            // 权限问题
+            Log.e("Camera", "权限错误: ${error.message}")
+        }
+        is IllegalStateException -> {
+            // 设备问题
+            Log.e("Camera", "设备错误: ${error.message}")
+        }
+    }
+}
+```
+
+---
+
+## 十二、注意事项与 FAQ
+
+### 1. 线程与协程
+
+- `openCamera()` 和 `stopRecord()` 是 **suspend 函数**，需要在协程中调用
+- 其余方法（如 `startPreview()`、`setParameter()`）可在任意线程调用
+- `IFrameListener.onFrame()` 回调在 **native 线程**中执行，如需更新 UI 请切换到主线程
+
+### 2. 录制的调用时序
+
+- `prepareRecord()` **必须**在 `startPreview()` 之前调用，否则 FBO 渲染路径无法正确建立
+- 在预览过程中可以多次 `startRecord()` / `stopRecord()` 进行多段录制
+- 如果不需要录制功能，无需调用 `prepareRecord()`，预览将使用更轻量的直绘路径
+
+### 3. Surface 生命周期
+
+- 使用 `TextureView` 时，请确保 `surfaceTexture` 已就绪后再调用 `setDisplaySurface()`
+- 建议监听 `TextureView.SurfaceTextureListener`，在 `onSurfaceTextureAvailable` 中设置
+- SDK 内部会管理 Surface 的释放，开发者无需手动释放
+
+### 4. 帧数据内存安全
+
+- `IFrameListener.onFrame()` 的 `ByteBuffer` 是 DirectBuffer，指向 native 内存
+- 回调返回后 buffer **可能被底层复用**，如需保留数据请在回调内完成拷贝
+- 避免在回调中执行耗时操作，以免阻塞帧数据管线
+
+### 5. 设备生命周期管理
+
+- 建议在 `Activity.onDestroy()` 或 `Fragment.onDestroyView()` 中调用 `close()` 释放资源
+- `close()` 调用后 `NativeUsbDevice` 实例不可复用，需重新 `openCamera()`
+- 设备被物理拔出后 SDK 会自动关闭，通过 `setDetachedCloseListener` 获取通知
+
+### 6. 常见问题
+
+| 问题 | 解答 |
+|------|------|
+| 设置分辨率失败 | 请先通过 `getSupportParameters(UvcSupportParameter.PREVIEW_SIZE)` 查询支持的分辨率，确保设置的值在支持列表中 |
+| 设置参数返回 false | 该参数可能不被当前摄像头支持，先用 `getSupportParameters()` 确认是否支持 |
+| 预览黑屏 | 检查是否正确设置了 Surface，以及分辨率是否匹配设备支持的值 |
+| 录制文件为空 | 确保 `prepareRecord()` 在 `startPreview()` 之前调用 |
+| 多个摄像头同时使用 | 每个摄像头对应一个独立的 `NativeUsbDevice` 实例，可同时操作 |

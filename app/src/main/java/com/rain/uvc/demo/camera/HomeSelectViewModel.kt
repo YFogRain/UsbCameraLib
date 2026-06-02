@@ -3,10 +3,11 @@ package com.rain.uvc.demo.camera
 import android.content.Context
 import android.hardware.Camera
 import android.hardware.camera2.CameraManager
+import android.util.Log
 import androidx.lifecycle.viewModelScope
-import com.rain.uvc.CameraUvcManager
+import com.rain.uvc.CameraControlHelper
 import com.rain.uvc.demo.base.viewModel.BaseViewModel
-import com.rain.uvc.provider.OverallContext
+import com.rain.uvc.demo.provider.OverallContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -21,7 +22,12 @@ class HomeSelectViewModel : BaseViewModel() {
 	
 	val adapter by lazy { HomeSelectAdapter() }
 	
+	init {
+		loadDevice()
+	}
+	
 	fun loadDevice() {
+		Log.d("HomeSelectViewModel","加载数据～～")
 		//获取相机参数的所有信息
 		adapter.clear()
 		viewModelScope.launch(Dispatchers.IO) {
@@ -29,9 +35,6 @@ class HomeSelectViewModel : BaseViewModel() {
 			val deviceList = mutableListOf<HomeSelectMode>()
 			deviceList.add(loadCamera1())
 			deviceList.add(loadCamera2())
-			deviceList.add(HomeSelectMode("双目相机", mutableListOf()).also {
-				it.devices.add(HomeDeviceMode("双目相机", CameraDeviceMode.OTHER))
-			})
 			deviceList.add(loadCameraUsb())
 			deviceList.add(loadLocale())
 			deviceList.add(loadCameraV4L2())
@@ -71,21 +74,29 @@ class HomeSelectViewModel : BaseViewModel() {
 	
 	private fun loadCameraUsb(): HomeSelectMode {
 		val homeSelectMode = HomeSelectMode("USB相机", mutableListOf())
-		val cameraDevices = CameraUvcManager.getCameraDevices()
+		val cameraDevices = CameraControlHelper.loadUvcDevices(OverallContext.baseContext)
 		if (cameraDevices.isNullOrEmpty()) return homeSelectMode
 		
 		cameraDevices.forEach {
-			homeSelectMode.devices.add(HomeDeviceMode(it.productName ?: "UVC相机:${it.vendorId}-${it.productId}", CameraDeviceMode.USB(it)))
+			homeSelectMode.devices.add(
+				HomeDeviceMode(
+					"UVC相机:${it.vendorId}-${it.productId}", CameraDeviceMode.USB(it)
+				)
+			)
 		}
 		return homeSelectMode
 	}
 	
 	private fun loadCameraV4L2(): HomeSelectMode {
 		val homeSelectMode = HomeSelectMode("V4L2相机", mutableListOf())
-		val v4L2Devices = CameraUvcManager.getV4L2Devices()
+		val v4L2Devices = CameraControlHelper.loadV4L2Devices()
 		if (v4L2Devices.isNullOrEmpty()) return homeSelectMode
 		v4L2Devices.forEach {
-			homeSelectMode.devices.add(HomeDeviceMode(it.split("/").last(), CameraDeviceMode.V4L2(it)))
+			homeSelectMode.devices.add(
+				HomeDeviceMode(
+					it.split("/").last(), CameraDeviceMode.V4L2(it)
+				)
+			)
 		}
 		return homeSelectMode
 	}
