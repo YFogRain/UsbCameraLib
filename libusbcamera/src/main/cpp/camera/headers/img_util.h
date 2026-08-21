@@ -7,7 +7,6 @@
 
 #include "libuvc/libuvc.h"
 #include "opencv2/core/mat.hpp"
-#include "i_camera_factory.h"
 
 class ImgUtils {
 

@@ -292,7 +292,7 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 		// 如果未初始化成功，则直接return
 		if (videoSurface == null || !UvcNativeBridge.nativeAddSurfaceTarget(
 				nativeId, TARGET_RECORD, true, videoSurface
-				)) {
+			)) {
 			mRecorderEngine.releaseVideo()
 			return false
 		}
@@ -357,7 +357,7 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 		mRecordStartedState.set(true)
 		return true
 	}
-
+	
 	private fun resolveRecordSize(): Pair<Int, Int> {
 		val normalizedRotation = normalizeRotation(
 			getParameter(UvcCameraParameter.ORIENTATION) ?: 0
@@ -368,7 +368,7 @@ class NativeUsbDevice internal constructor(context: Context, nativeId: Long, val
 			mPreviewWidth to mPreviewHeight
 		}
 	}
-
+	
 	private fun normalizeRotation(rotation: Int): Int {
 		val normalized = rotation % 360
 		return if (normalized < 0) normalized + 360 else normalized

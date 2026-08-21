@@ -88,7 +88,6 @@ int CameraStreamUsbImpl::prepare_preview(uvc_stream_ctrl_t *ctrl) {
     if (ret != UVC_SUCCESS) {
         return ret;
     }
-    previewFps = 10000000 / ctrl->dwFrameInterval;
     LOG_D("CameraStreamUsbImpl", "当前设置的fps为:%d", 10000000 / ctrl->dwFrameInterval);
     // 获取当前预览流需要设置的宽高等数据
     uvc_frame_desc_t *frameDesc = uvc_get_frame_desc(mDeviceHandle, ctrl);

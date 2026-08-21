@@ -12,6 +12,7 @@ import android.os.Build
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * @author yuan
@@ -27,7 +28,7 @@ object UsbPermissionHelper {
 	 */
 	@SuppressLint("UnspecifiedRegisterReceiverFlag")
 	suspend fun requestPermission(context: Context, usbDevice: UsbDevice, usbManager: UsbManager, timeoutMs: Long): Boolean {
-		return withTimeoutOrNull(timeoutMs) {
+		return withTimeoutOrNull(timeoutMs.milliseconds) {
 			suspendCancellableCoroutine { continuation ->
 				val usbReceiver = object : BroadcastReceiver() {
 					override fun onReceive(context: Context, intent: Intent?) {

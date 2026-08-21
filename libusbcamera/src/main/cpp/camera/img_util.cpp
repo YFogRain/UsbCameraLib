@@ -8,7 +8,6 @@
 #include "opencv2/imgcodecs.hpp"
 #include "Log.h"
 #include "camera_constants.h"
-#include "android/native_window.h"
 #include "fstream"
 
 cv::Mat

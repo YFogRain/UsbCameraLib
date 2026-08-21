@@ -268,7 +268,7 @@ bool GLRender::initVertices() {
     glBindVertexArray(glContext.vao);
     glBindBuffer(GL_ARRAY_BUFFER, glContext.vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) 0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *) nullptr);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
                           (void *) (2 * sizeof(float)));
@@ -345,7 +345,7 @@ void GLRender::destroyFbo() {
     }
 }
 
-bool GLRender::createOutputSurface(OutputSurfaceTarget &target) {
+bool GLRender::createOutputSurface(OutputSurfaceTarget &target) const {
     if (!target.window) {
         return false;
     }
@@ -381,7 +381,7 @@ bool GLRender::createOutputSurface(OutputSurfaceTarget &target) {
     return true;
 }
 
-void GLRender::destroyOutputSurface(OutputSurfaceTarget &target, bool releaseWindow) {
+void GLRender::destroyOutputSurface(OutputSurfaceTarget &target, bool releaseWindow) const {
     if (target.surface != EGL_NO_SURFACE && glContext.eglDisplay != EGL_NO_DISPLAY) {
         eglDestroySurface(glContext.eglDisplay, target.surface);
         target.surface = EGL_NO_SURFACE;

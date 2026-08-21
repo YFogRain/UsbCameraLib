@@ -51,7 +51,6 @@ bool CameraStreamV4l2Impl::startPreview() {
     } else {
         frameWidth = previewWidth;
         frameHeight = previewHeight;
-        previewFps = 30;
     }
     v4l2_streamparm streamparm{};
     streamparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -59,14 +58,7 @@ bool CameraStreamV4l2Impl::startPreview() {
         if (streamparm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME) {
             int num = streamparm.parm.capture.timeperframe.numerator;
             int denom = streamparm.parm.capture.timeperframe.denominator;
-            if (num != 0) {
-                previewFps = denom / num;
-            } else {
-                previewFps = 30; // fallback
-            }
         }
-    } else {
-        previewFps = 30; // fallback
     }
     LOG_D("CameraDeviceV4L2Impl", "当前使用的分辨率信息:%d*%d ,format:%d", frameWidth, frameHeight,
           frameFormat);
@@ -93,7 +85,6 @@ bool CameraStreamV4l2Impl::startPreview() {
 }
 
 bool CameraStreamV4l2Impl::stopPreview() {
-    previewFps = 30;
     LOG_D("CameraDeviceV4L2Impl", "停止预览开始");
     LOG_D("CameraDeviceV4L2Impl", "mIsRunning:%d", mIsCaptureRunning.load());
     if (mIsCaptureRunning.load()) {
@@ -137,7 +128,7 @@ bool CameraStreamV4l2Impl::stopPreview() {
 
 bool CameraStreamV4l2Impl::prepare_mmap() {
     // 请求缓冲区，
-    struct v4l2_requestbuffers req;
+    struct v4l2_requestbuffers req{};
     memset(&req, 0, sizeof(req));
     req.count = 4;
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;

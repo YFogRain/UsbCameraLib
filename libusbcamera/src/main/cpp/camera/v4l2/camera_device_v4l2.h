@@ -29,13 +29,11 @@ private:
 
     CameraStreamV4l2Impl *mCameraStream;
 
-    int getFormatType(uint8_t descriptorSubtype);
-
     ICameraStream *getUserStream() override { return mCameraStream; }
 
-    int loadTypeToId(int type);
+    static int loadTypeToId(int type);
 
-    int loadValueToPutValue(int type, int value);
+    static int loadValueToPutValue(int type, int value);
 };
 
 #endif // UVCCAMERA_CAMERA_DEVICE_V4L2_H

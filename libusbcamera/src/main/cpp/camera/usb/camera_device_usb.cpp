@@ -87,7 +87,6 @@ bool CameraDeviceUsbImpl::setParameter(int type, int value) {
     uvc_error_t ret = UVC_ERROR_IO;
     switch (type) {
         case CAMERA_PARAMETER_AUTO_EXPOSURE:
-
             ret = uvc_set_ae_mode(mDeviceHandle,
                                   value == 1 ? UVC_AE_MODE_APERTURE_PRIORITY : UVC_AE_MODE_MANUAL);
             break;
@@ -159,6 +158,7 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
         case CAMERA_PARAMETER_EXPOSURE:
             uint32_t exposure;
             if (uvc_get_exposure_abs(mDeviceHandle, &exposure, UVC_GET_CUR) == UVC_SUCCESS) {
+                LOG_D("CameraDeviceUsbImpl", "获取到的曝光度值 = %d", exposure);
                 return static_cast<int>(exposure);
             }
             break;
@@ -213,6 +213,7 @@ std::variant<std::monostate, int, std::string> CameraDeviceUsbImpl::getParameter
         case CAMERA_PARAMETER_AUTO_HUE:
             uint8_t autoHue;
             if (uvc_get_hue_auto(mDeviceHandle, &autoHue, UVC_GET_CUR) == UVC_SUCCESS) {
+                LOG_D("CameraDeviceUsbImpl", "获取自动色调模式成功 %d", autoHue);
                 return autoHue == 1 ? 1 : 0;
             }
             break;

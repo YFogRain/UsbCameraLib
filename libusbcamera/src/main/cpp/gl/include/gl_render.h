@@ -130,9 +130,9 @@ private:
     void destroyFbo();
 
     // 创建 / 销毁单个输出 surface
-    bool createOutputSurface(OutputSurfaceTarget &target);
+    bool createOutputSurface(OutputSurfaceTarget &target) const;
 
-    void destroyOutputSurface(OutputSurfaceTarget &target, bool releaseWindow);
+    void destroyOutputSurface(OutputSurfaceTarget &target, bool releaseWindow) const;
 
     // 初始化当前输出 target 对应的 surface
     bool syncOutputSurfaces();

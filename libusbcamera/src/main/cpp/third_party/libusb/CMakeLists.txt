@@ -18,7 +18,6 @@ add_library(usb100 SHARED
 target_include_directories(usb100 PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/os"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../log"
         "${CMAKE_CURRENT_SOURCE_DIR}/../../log"
 )
 

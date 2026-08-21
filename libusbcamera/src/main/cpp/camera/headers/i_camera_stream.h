@@ -20,6 +20,7 @@
 #include <android/native_window.h>
 #include <filesystem>
 #include "gl_preview.h"
+#include "jni.h"
 
 #define MAX_FRAME 2
 
@@ -99,7 +100,7 @@ public:
     * @param surfaceType surface类型
     * @return 是否添加成功
     */
-    bool addSurfaceTarget(std::string targetId, ANativeWindow *window, GLTargetType surfaceType) {
+    bool addSurfaceTarget(const std::string& targetId, ANativeWindow *window, GLTargetType surfaceType) {
         if (!window || targetId.empty() || !mPreview) { // 检查是否可以添加
             return false;
         }
@@ -111,7 +112,7 @@ public:
        * @param targetId 目标ID
        * @return 是否移除成功
        */
-    bool removeSurfaceTarget(std::string targetId) {
+    bool removeSurfaceTarget(const std::string& targetId) {
         if (targetId.empty() || !mPreview) {
             return false;
         }
@@ -219,7 +220,6 @@ protected:
     int previewWidth = 640;
     int previewHeight = 480;
     int previewFormat = PREVIEW_FORMAT_BGR; // 预览宽高,预览类型
-    int previewFps = 30;                    // 预览的fps
 
     std::mutex pictureMutex; // 拍照使用的锁对象
     std::condition_variable pictureCond;
@@ -241,27 +241,6 @@ protected:
         outFrame->rotation = inFrame->rotation;
         outFrame->data_size = 0;
         outFrame->data = nullptr;
-        return outFrame;
-    };
-
-    // 数据转为bgr格式
-    static stream_frame_t *any2Bgr(stream_frame_t *inFrame) {
-        stream_frame *outFrame = allocate_stream_frame(inFrame);
-        if (!outFrame) {
-            return nullptr;
-        }
-        outFrame->format = PREVIEW_FORMAT_BGR;
-        cv::Mat outImg = ImgUtils::any2Bgr(inFrame->data, inFrame->data_size, inFrame->width,
-                                           inFrame->height, inFrame->format);
-        if (outImg.empty()) {
-            free_stream(outFrame);
-            return nullptr;
-        }
-        size_t len = outImg.total() * outImg.elemSize();
-        outFrame->data = (uint8_t *) malloc(len);
-        outFrame->data_size = len;
-        std::memcpy(outFrame->data, outImg.data, len);
-        // 因为要保证内存数据有效，这里必须进行一次内存复制
         return outFrame;
     };
 

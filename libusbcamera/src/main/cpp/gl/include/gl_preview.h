@@ -29,8 +29,7 @@ public:
     void drawFrame(uint8_t *data, int width, int height);
 
     // 添加surface,仅支持RGBA的格式（录制、预览）
-    bool
-    addSurfaceTarget(const std::string &targetId, ANativeWindow *window, GLTargetType surfaceType) {
+    bool addSurfaceTarget(const std::string &targetId, ANativeWindow *window, GLTargetType surfaceType) {
         return mRender.addTarget(targetId, window, surfaceType);
     };
 
@@ -38,11 +37,6 @@ public:
     bool removeSurfaceTarget(const std::string &targetId) {
         return mRender.removeTarget(targetId);
     };
-
-    // 是否存在surface
-    bool hasSurfaceTarget(GLTargetType surfaceType) const {
-        return mRender.hasTarget(surfaceType);
-    }
 
     // 启动录制
     bool startRecord() {

@@ -58,7 +58,7 @@ void GLPreview::release() {
 
 void GLPreview::drawFrame(uint8_t *data, int width, int height) {
     if (!data) {
-        LOG_E("GLPreview", "drawFrame data is null");
+        LOG_E("GLPreview", "需要绘制的数据为null");
         return;
     }
     bool needUpdateMatrix = false;
@@ -71,11 +71,11 @@ void GLPreview::drawFrame(uint8_t *data, int width, int height) {
             return;
         }
         if (width != mWidth || height != mHeight) {
-            LOG_I("GLPreview", "frame size changed, rebuild GL: in=%d x %d, preview=%d x %d",
+            LOG_I("GLPreview", "frame分辨率更新 : in=%d x %d, preview=%d x %d",
                   width, height, mWidth, mHeight);
             mRender.releaseOpenGL();
             if (!mRender.init(width, height)) {
-                LOG_E("GLPreview", "re-init failed after size change: %d x %d", width, height);
+                LOG_E("GLPreview", "初始化openGL失败 : %d x %d", width, height);
                 mWidth = 0;
                 mHeight = 0;
                 mInitialized = false;
@@ -95,10 +95,11 @@ void GLPreview::drawFrame(uint8_t *data, int width, int height) {
             }
         }
     }
-    if (needUpdateMatrix) {
+    if (needUpdateMatrix) { // 更新矩阵
         mRender.updateMatrix(mirrorState, rotation);
     }
     const int64_t ptsNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
+    // 执行绘制
     mRender.renderFrame(data, width, height, ptsNs);
 }
