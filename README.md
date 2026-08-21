@@ -1,6 +1,8 @@
 # UsbCamera SDK 接入文档
 
-> Android USB UVC 摄像头开发套件 · 包名 `com.rain.uvc` · 版本 1.0
+> Android USB UVC 摄像头开发套件 · 包名 `com.rain.uvc` · 当前版本 `1.0.0`
+>
+> 依赖坐标：`io.github.yfograin:uvc:1.0.0`（Maven Central）
 
 ---
 
@@ -8,9 +10,10 @@
 
 - [一、SDK 简介](#一sdk-简介)
 - [二、接入准备](#二接入准备)
-    - [2.1 引入依赖](#21-引入依赖)
-    - [2.2 权限声明](#22-权限声明)
-    - [2.3 设备要求](#23-设备要求)
+    - [2.1 引入依赖（Maven 仓库）](#21-引入依赖maven-仓库)
+    - [2.2 混淆配置](#22-混淆配置)
+    - [2.3 权限声明](#23-权限声明)
+    - [2.4 设备要求](#24-设备要求)
 - [三、快速上手](#三快速上手)
 - [四、设备管理](#四设备管理)
     - [4.1 设备发现](#41-设备发现)
@@ -38,6 +41,7 @@
 - [十、数据模型](#十数据模型)
 - [十一、错误处理](#十一错误处理)
 - [十二、注意事项与 FAQ](#十二注意事项与-faq)
+- [十三、版本说明](#十三版本说明)
 
 ---
 
@@ -58,27 +62,179 @@ UsbCamera SDK 是一套面向 Android 平台的 USB UVC 摄像头控制开发套
 
 | 项目 | 说明 |
 |------|------|
+| 当前版本 | `1.0.0` |
+| 依赖坐标 | `io.github.yfograin:uvc:1.0.0` |
 | 最低版本 | Android 6.0（API 23） |
 | 支持架构 | `arm64-v8a`、`armeabi-v7a` |
 | 开发语言 | Kotlin / Java 均可调用 |
 | 依赖要求 | Kotlin Coroutines（协程） |
 
+> 完整的版本记录、版本号规则与升级建议见 [十三、版本说明](#十三版本说明)。
+
 ---
 
 ## 二、接入准备
 
-### 2.1 引入依赖
+### 2.1 引入依赖（Maven 仓库）
+
+SDK 已发布至 **Maven Central**，无需手动下载 aar 文件，直接通过 Gradle 坐标引入即可。
+
+| 项目 | 值 |
+|------|-----|
+| groupId | `io.github.yfograin` |
+| artifactId | `uvc` |
+| 当前版本 | `1.0.0` |
+| 托管仓库 | Maven Central |
+| 完整坐标 | `io.github.yfograin:uvc:1.0.0` |
+
+#### 第一步：配置仓库地址
+
+Maven Central 为标准仓库，多数工程已默认包含。若你的工程启用了集中式仓库管理（`FAIL_ON_PROJECT_REPOS`），请确认 `settings.gradle` 中含有 `mavenCentral()`：
 
 ```groovy
-// build.gradle (app)
-dependencies {
-    implementation project(':libusbcamera')
-    // 或使用 aar 包
-    // implementation files('libs/libusbcamera-release.aar')
+// settings.gradle（Groovy DSL）
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
 ```
 
-### 2.2 权限声明
+```kotlin
+// settings.gradle.kts（Kotlin DSL）
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+```
+
+> **国内网络加速：** 如拉取缓慢，可在 `mavenCentral()` 之前加入镜像仓库：
+>
+> ```groovy
+> maven { url = "https://maven.aliyun.com/repository/public" }
+> ```
+
+#### 第二步：添加依赖
+
+**方式一：Groovy DSL**
+
+```groovy
+// app/build.gradle
+dependencies {
+    implementation 'io.github.yfograin:uvc:1.0.0'
+}
+```
+
+**方式二：Kotlin DSL**
+
+```kotlin
+// app/build.gradle.kts
+dependencies {
+    implementation("io.github.yfograin:uvc:1.0.0")
+}
+```
+
+**方式三：Version Catalog（推荐，便于多模块统一版本）**
+
+```toml
+# gradle/libs.versions.toml
+[versions]
+uvc = "1.0.0"
+
+[libraries]
+uvc = { module = "io.github.yfograin:uvc", version.ref = "uvc" }
+```
+
+```groovy
+// app/build.gradle
+dependencies {
+    implementation libs.uvc
+}
+```
+
+> **协程依赖（重要）：** SDK 内部以 `implementation` 方式引入协程，**不会**向接入方暴露编译期 API。由于 `openCamera()`、`stopRecord()` 是 suspend 函数，请在 App 中自行声明协程依赖：
+>
+> ```groovy
+> implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+> ```
+
+#### 第三步：ABI 配置
+
+SDK 内置 native 动态库，仅提供 `arm64-v8a` 与 `armeabi-v7a` 两个架构。如需控制安装包体积，可在 App 侧显式声明：
+
+```groovy
+// app/build.gradle
+android {
+    defaultConfig {
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
+    }
+}
+```
+
+> **注意：** 不提供 `x86` / `x86_64` 版本，无法在标准 Android 模拟器上运行，请使用支持 USB Host 的真机调试。
+
+#### 备选方案：源码依赖
+
+如需调试或二次开发 SDK 源码，也可将模块以源码方式引入：
+
+```groovy
+// settings.gradle
+include ':libusbcamera'
+
+// app/build.gradle
+dependencies {
+    implementation project(':libusbcamera')
+}
+```
+
+### 2.2 混淆配置
+
+**接入方无需任何额外配置。**
+
+SDK 已通过 `consumerProguardFiles` 将混淆规则内置在 AAR 中，Gradle 会在构建 App 时自动合并生效。即使开启 `minifyEnabled true`，也不需要手动往 App 的 `proguard-rules.pro` 添加任何规则。
+
+SDK 的 native 层采用 JNI 静态注册（按类名 + 方法名查找），且预览帧、按钮事件由 native 层通过方法名反向回调 Java 层。随包下发的规则已完整覆盖这些不可混淆的关键面：
+
+```proguard
+# JNI 桥接类：native 方法名不可混淆，否则 UnsatisfiedLinkError
+-keep class com.rain.uvc.bridge.UvcNativeBridge {
+    native <methods>;
+}
+
+# 数据模型与预览格式
+-keep class com.rain.uvc.mode.** { *; }
+-keep class com.rain.uvc.parameters.UvcPreviewFormat { *; }
+-keep class com.rain.uvc.parameters.UvcPreviewFormat* { *; }
+
+# native 反向回调的接口
+-keep interface com.rain.uvc.listener.IFrameListener
+-keep interface com.rain.uvc.listener.IButtonListener
+
+-keepnames class * implements com.rain.uvc.listener.IFrameListener
+-keepnames class * implements com.rain.uvc.listener.IButtonListener
+
+# 保留回调方法名供 JNI GetMethodID 查找
+-keepclassmembers class * implements com.rain.uvc.listener.IFrameListener {
+    public void onFrame(java.nio.ByteBuffer, int, int);
+}
+
+-keepclassmembers class * implements com.rain.uvc.listener.IButtonListener {
+    public void buttonClick(int, int);
+}
+```
+
+> **说明：** 上述规则仅供了解，**无需复制到你的工程中**。规则会随 AAR 自动下发，你实现的 `IFrameListener` / `IButtonListener` 子类也在保留范围内。
+>
+> 如使用**源码依赖**方式接入，规则同样通过模块的 `consumerProguardFiles` 生效。
+
+### 2.3 权限声明
 
 在你的 `AndroidManifest.xml` 中添加以下权限（SDK 已自动合并基础权限）：
 
@@ -98,7 +254,7 @@ dependencies {
 | `RECORD_AUDIO` | 可选 | 仅在录制视频且需要录音时使用 |
 | USB 设备访问权限 | 自动 | 由 SDK 内部自动弹窗申请，无需手动处理 |
 
-### 2.3 设备要求
+### 2.4 设备要求
 
 - Android 设备需支持 **USB Host** 模式
 - 外接摄像头需符合 **UVC（USB Video Class）** 协议标准
@@ -686,3 +842,52 @@ result.onFailure { error ->
 | 预览黑屏 | 检查是否正确设置了 Surface，以及分辨率是否匹配设备支持的值 |
 | 录制文件为空 | 确保 `prepareRecord()` 在 `startPreview()` 之前调用 |
 | 多个摄像头同时使用 | 每个摄像头对应一个独立的 `NativeUsbDevice` 实例，可同时操作 |
+| 依赖拉取不到 | 确认 `settings.gradle` 中包含 `mavenCentral()`，参见 [2.1 引入依赖](#21-引入依赖maven-仓库) |
+| 模拟器上启动崩溃 | SDK 仅提供 arm 架构 native 库，请使用真机调试 |
+| 混淆后回调不触发 | SDK 已随包下发混淆规则（见 [2.2 混淆配置](#22-混淆配置)）。若仍异常，请检查是否自定义了 `-dontusemixedcaseclassnames` 等全局规则覆盖了 keep，或查看 `build/outputs/mapping/release/configuration.txt` 确认规则已合并 |
+
+---
+
+## 十三、版本说明
+
+### 版本号规则
+
+SDK 遵循语义化版本规范 `主版本.次版本.修订号`：
+
+| 位 | 含义 | 升级影响 |
+|----|------|---------|
+| 主版本 | 存在不兼容的 API 变更 | 需按迁移说明调整代码 |
+| 次版本 | 向后兼容的能力新增 | 可直接升级 |
+| 修订号 | 向后兼容的问题修复 | 可直接升级 |
+
+### 版本记录
+
+#### 1.0.0（首个正式版）
+
+- 首次发布至 Maven Central，坐标 `io.github.yfograin:uvc:1.0.0`
+- **设备管理**：UVC 设备枚举、V4L2 设备枚举、USB 权限自动申请、设备打开/关闭、热插拔自动回收
+- **视频预览**：支持 `Surface` / `TextureView` / `SurfaceView` 三种渲染目标，支持预览中动态切换
+- **预览回调**：`IFrameListener` 支持 NV21 / RGBA / RGB / BGR / YUY2 / MJPEG 六种输出格式
+- **拍照**：`takePicture()` 抓取当前帧
+- **视频录制**：H.264 视频编码 + AAC 音频编码，输出 MP4；支持单次预览内多段录制
+- **参数控制**：亮度、对比度、饱和度、色调、增益、曝光、缩放、对焦、光圈、白平衡、隐私模式、旋转、镜像等 18 项参数的查询与设置
+- **硬件按钮**：`IButtonListener` 监听摄像头物理按键
+- **开箱即用**：内置 consumer ProGuard 规则，开启混淆无需额外配置
+
+### 兼容性说明
+
+| 项目 | 支持范围 |
+|------|---------|
+| Android 版本 | Android 6.0（API 23）及以上 |
+| 编译 SDK | compileSdk 36 |
+| CPU 架构 | `arm64-v8a`、`armeabi-v7a` |
+| Java 编译级别 | Java 17 |
+| Kotlin | 2.2.20（协程 1.10.2） |
+| 运行时传递依赖 | `androidx.appcompat`、`kotlinx-coroutines-android`（以 runtime 作用域写入 POM） |
+
+### 升级建议
+
+- 升级前请查阅本节版本记录，确认是否包含不兼容变更
+- 建议通过 Version Catalog 统一管理版本号，避免多模块依赖版本冲突
+- 主版本升级时，SDK 将在版本记录中同步提供迁移说明
+- 不建议在同一工程中同时使用 Maven 依赖与源码依赖，以免 native 库重复打包
