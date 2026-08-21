@@ -72,7 +72,8 @@ dependencies {
     implementation libs.material
     implementation libs.activity.ktx
     implementation libs.gson
-    implementation project(":libusbcamera")
+//    implementation project(":libusbcamera")
+    implementation "io.github.yfograin:uvc:1.0.0"
 //    implementation project(":camera_uvc")
     implementation libs.okio
     implementation libs.glide

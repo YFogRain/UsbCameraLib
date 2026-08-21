@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.lib)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.maven.publish)
 }
 
 android {
@@ -37,6 +38,47 @@ android {
         cmake{
             path = "src/main/cpp/CMakeLists.txt"
             version = "4.1.2"
+        }
+    }
+}
+
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
+
+    coordinates(
+            "io.github.yfograin",
+            "uvc",
+            "1.0.0"
+    )
+
+    pom {
+        name = "UsbCameraLib"
+        description = "Android USB UVC camera library"
+        inceptionYear = "2026"
+        url = "https://github.com/YFogRain/UsbCameraLib"
+
+        licenses {
+            license {
+                // 按项目实际许可证填写，不要直接照抄
+                name = "The Apache License, Version 2.0"
+                url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                distribution = "repo"
+            }
+        }
+
+        developers {
+            developer {
+                id = "YFogRain"
+                name = "YFogRain"
+                url = "https://github.com/YFogRain"
+            }
+        }
+
+        scm {
+            url = "https://github.com/YFogRain/UsbCameraLib"
+            connection = "scm:git:https://github.com/YFogRain/UsbCameraLib.git"
+            developerConnection = "scm:git:ssh://git@github.com/YFogRain/UsbCameraLib.git"
         }
     }
 }
